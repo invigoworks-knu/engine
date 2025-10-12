@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  mysql-db:
+    image: mysql:latest
+    container_name: engine-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: eth_simulation_db
+      TZ: Asia/Seoul
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: engine-rabbitmq
+    environment:
+      TZ: Asia/Seoul
+    ports:
+      - "5672:5672"
+      - "15672:15672"
