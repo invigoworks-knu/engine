@@ -3,41 +3,29 @@
 version: '3.8'
 
 services:
-  # 1. Spring Boot App 서비스
   app:
-    # 현재 디렉토리의 Dockerfile을 사용해 이미지를 빌드
     build: .
-    # 컨테이너 이름
     container_name: eth-engine-app
-    # DB가 먼저 준비된 후에 앱을 실행
     depends_on:
       - db
-    # 로컬 8080 포트와 컨테이너 8080 포트를 연결
     ports:
       - "8080:8080"
-    # 앱에 전달할 환경 변수 (DB 접속 정보)
     environment:
-      - MYSQL_USER=eth_user
-      - MYSQL_PASSWORD=eth_pass
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
 
-  # 2. MySQL DB 서비스
   db:
-    # MySQL 8.0 이미지 사용
     image: mysql:8.0
     container_name: eth-engine-db
-    # DDL의 DB 이름과 동일하게 설정
     environment:
       - MYSQL_DATABASE=eth_engine_db
-      - MYSQL_ROOT_PASSWORD=root_password
-      - MYSQL_USER=eth_user
-      - MYSQL_PASSWORD=eth_pass
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     ports:
-      # 로컬 3306 포트와 컨테이너 3306 포트 연결
       - "3306:3306"
     volumes:
-      # DB 데이터를 로컬에 저장 (컨테이너가 삭제돼도 데이터 유지)
       - db-data:/var/lib/mysql
 
 volumes:
-  # 위에서 사용한 db-data 볼륨을 정의
   db-data:
