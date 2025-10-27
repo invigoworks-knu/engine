@@ -1,6 +1,5 @@
-# Dockerfile
-
 # --- 1단계: 프로젝트 빌드 (JDK 17 사용) ---
+# gradle 8.14.3 버전에 맞춘 gradle:8.14.3-jdk17 사용
 FROM gradle:8.14.3-jdk17 AS build
 WORKDIR /app
 
@@ -19,7 +18,9 @@ RUN gradle bootJar -x test
 
 # --- 2단계: 실제 실행 (JRE 17 사용) ---
 # 더 가벼운 JRE(Java 실행 환경) 이미지 사용
-FROM openjdk:17-jre-slim
+# ⭐️ eclipse-temurin이 현재 Java 컨테이너의 표준입니다.
+FROM eclipse-temurin:17-jre-jammy
+
 WORKDIR /app
 
 # 1단계(build)에서 생성된 .jar 파일을 복사
