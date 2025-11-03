@@ -24,9 +24,9 @@ public class UpbitApiClient {
      * @return
      */
     public Flux<UpbitDayCandleDto> fetchDayCandles(String market, int count) {
+        String fullUrl = UPBIT_API_URL + "/candles/days";
         return webClient.get()
-            .uri(uriBuilder -> uriBuilder
-                .path(UPBIT_API_URL + "/candles/days")
+            .uri(fullUrl, uriBuilder -> uriBuilder
                 .queryParam("market", market)
                 .queryParam("count", count)
                 .build())
