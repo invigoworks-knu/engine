@@ -1,15 +1,18 @@
 services:
+  # 1. Spring Boot App 서비스
   app:
     build: .
     container_name: eth-engine-app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
 
+  # 2. MySQL DB 서비스
   db:
     image: mysql:8.0
     container_name: eth-engine-db
@@ -22,6 +25,11 @@ services:
       - "3306:3306"
     volumes:
       - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   db-data:
