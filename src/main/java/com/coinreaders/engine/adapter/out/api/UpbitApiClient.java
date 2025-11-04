@@ -21,15 +21,23 @@ public class UpbitApiClient {
      * Upbit에서 일봉(Day Candle) 데이터를 가져옵니다.
      * @param market (예: "KRW-ETH")
      * @param count (가져올 개수, 최대 200)
+     * @param to (조회 마지막 캔들 시각. e.g., "2025-11-03T09:00:00". null이면 현재시각)
      * @return
      */
-    public Flux<UpbitDayCandleDto> fetchDayCandles(String market, int count) {
+    public Flux<UpbitDayCandleDto> fetchDayCandles(String market, int count, String to) {
         String fullUrl = UPBIT_API_URL + "/candles/days";
+
         return webClient.get()
-            .uri(fullUrl, uriBuilder -> uriBuilder
-                .queryParam("market", market)
-                .queryParam("count", count)
-                .build())
+            .uri(fullUrl, uriBuilder -> {
+                uriBuilder.queryParam("market", market)
+                    .queryParam("count", count);
+
+                // 'to' 파라미터가 있으면 쿼리에 추가
+                if (to != null && !to.isEmpty()) {
+                    uriBuilder.queryParam("to", to);
+                }
+                return uriBuilder.build();
+            })
             .retrieve()
             .bodyToFlux(UpbitDayCandleDto.class);
     }
