@@ -1,4 +1,3 @@
-// src/main/java/com/coinreaders/engine/adapter/in/web/DataPipelineController.java
 package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.DataPipelineService;
@@ -9,7 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Slf4j // ⭐️ 로깅을 위해 추가
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/data")
 @RequiredArgsConstructor
@@ -35,7 +34,7 @@ public class DataPipelineController {
             dataPipelineService.loadAllHistoricalOhlcv("KRW-ETH", "2017-11-09");
             return ResponseEntity.ok("All historical data initialization completed successfully.");
         } catch (Exception e) {
-            log.error("Failed to load all historical data", e); // ⭐️ 예외 로깅 추가
+            log.error("Failed to load all historical data", e);
             return ResponseEntity.internalServerError().body("Failed to load data: " + e.getMessage());
         }
     }
