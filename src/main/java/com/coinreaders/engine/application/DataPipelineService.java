@@ -30,14 +30,14 @@ public class DataPipelineService {
     public void initializeDayCandles(String market, int count) {
         log.info("Starting to initialize {} day candles for market: {}", count, market);
         // 1. Upbit API를 통해 데이터 호출 (Outbound Adapter)
-        upbitApiClient.fetchDayCandles(market, count, null) // 'to'는 null
+        upbitApiClient.fetchDayCandles(market, count, null)
             // 2. DTO를 Entity로 변환 (Application 로직)
             .map(this::mapDtoToEntity) // DTO -> Entity 변환 로직 분리
             // 3. DB에 저장 (Outbound Port -> Adapter)
             .doOnNext(historicalOhlcvRepository::save)
             .doOnComplete(() -> log.info("Successfully saved {} day candles for market: {}", count, market))
             .doOnError(e -> log.error("Failed to fetch or save day candles", e))
-            .subscribe(); // 비동기(Flux) 작업을 구독(실행)
+            .subscribe();
     }
 
     /**
@@ -54,17 +54,19 @@ public class DataPipelineService {
         log.info("기존 historical_ohlcv 테이블 데이터를 삭제했습니다.");
 
         final LocalDate stopDate = LocalDate.parse(stopDateStr);
-        String lastFetchedDateStr = null; // 'to' 파라미터로 사용
+        String lastFetchedDateStr = null;
         long totalCount = 0;
 
         while (true) {
             log.info("API 호출: {} 캔들 ({} 이전)", BATCH_SIZE, lastFetchedDateStr);
 
+            boolean isFirstBatch = (lastFetchedDateStr == null);
+
             // 2. API 호출을 동기식(blocking)으로 변경하여 루프 제어
             List<UpbitApiClient.UpbitDayCandleDto> candles = upbitApiClient
                 .fetchDayCandles(market, BATCH_SIZE, lastFetchedDateStr)
                 .collectList()
-                .block(); // Flux -> List로 동기 변환
+                .block();
 
             if (candles == null || candles.isEmpty()) {
                 log.info("API가 더 이상 데이터를 반환하지 않습니다. 중지.");
@@ -73,8 +75,17 @@ public class DataPipelineService {
 
             // 3. DTO -> Entity 변환 및 리스트에 추가
             List<HistoricalOhlcv> ohlcvList = new ArrayList<>();
-            for (UpbitApiClient.UpbitDayCandleDto dto : candles) {
+
+            int startIndex = isFirstBatch ? 0 : 1;
+
+            for (int i = startIndex; i < candles.size(); i++) {
+                UpbitApiClient.UpbitDayCandleDto dto = candles.get(i);
                 ohlcvList.add(mapDtoToEntity(dto));
+            }
+
+            if (ohlcvList.isEmpty()) {
+                log.info("새로 저장할 캔들이 없습니다. (중복 캔들만 수신됨). 적재를 중지합니다.");
+                break;
             }
 
             // 4. DB에 일괄 저장 (Batch Insert)
@@ -82,8 +93,8 @@ public class DataPipelineService {
             totalCount += ohlcvList.size();
 
             // 5. 다음 'to' 파라미터 설정 (가져온 데이터 중 가장 오래된 날짜)
-            UpbitApiClient.UpbitDayCandleDto lastCandle = candles.get(candles.size() - 1);
-            lastFetchedDateStr = lastCandle.getCandleDateTimeKst(); // "2025-11-03T09:00:00"
+            UpbitApiClient.UpbitDayCandleDto lastCandleInFullList = candles.get(candles.size() - 1);
+            lastFetchedDateStr = lastCandleInFullList.getCandleDateTimeKst();
 
             // 6. 중지 날짜 확인 (KST 날짜의 T09:00:00이므로 T 이전의 날짜 부분만 파싱)
             LocalDateTime lastFetchedKst = LocalDateTime.parse(lastFetchedDateStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
