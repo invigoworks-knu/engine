@@ -40,4 +40,16 @@ public class HistoricalAiPrediction extends BaseTimeEntity {
     @Column(precision = 10, scale = 4)
     private BigDecimal predictedChangePercent;
 
+    private HistoricalAiPrediction(String market, LocalDateTime candleDateTimeKst, String aiModelVersion, String predictedDirection, BigDecimal predictedProbability) {
+        this.market = market;
+        this.candleDateTimeKst = candleDateTimeKst;
+        this.aiModelVersion = aiModelVersion;
+        this.predictedDirection = predictedDirection;
+        this.predictedProbability = predictedProbability;
+    }
+
+    public static HistoricalAiPrediction of(String market, LocalDateTime candleDateTimeKst, String aiModelVersion, String predictedDirection, BigDecimal predictedProbability) {
+        return new HistoricalAiPrediction(market, candleDateTimeKst, aiModelVersion, predictedDirection, predictedProbability);
+    }
+
 }
