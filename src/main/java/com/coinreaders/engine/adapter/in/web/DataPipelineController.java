@@ -1,6 +1,7 @@
 package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.DataPipelineService;
+import com.coinreaders.engine.application.AiPredictionDataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DataPipelineController {
 
     private final DataPipelineService dataPipelineService;
+    private final AiPredictionDataService aiPredictionDataService;
 
     /**
      * (UC-009) Upbit API로 최신 일봉 200개를 적재합니다. (실거래/최신화용)
@@ -36,6 +38,24 @@ public class DataPipelineController {
         } catch (Exception e) {
             log.error("Failed to load all historical data", e);
             return ResponseEntity.internalServerError().body("Failed to load data: " + e.getMessage());
+        }
+    }
+
+    /**
+     * (UC-001) CSV 파일로 AI 예측 데이터를 적재합니다. (GRU - Fold 8 고정)
+     */
+    @PostMapping("/init-ai-predictions")
+    public ResponseEntity<String> initializeAiPredictions() {
+        try {
+            aiPredictionDataService.loadAiPredictionsFromCsv(
+                "GRU-f8",
+                "data/GRU_fold_8_predictions.csv"
+            );
+
+            return ResponseEntity.ok("AI Prediction data (GRU-f8) initialization completed successfully.");
+        } catch (Exception e) {
+            log.error("Failed to load AI prediction data", e);
+            return ResponseEntity.internalServerError().body("Failed to load AI data: " + e.getMessage());
         }
     }
 }
