@@ -77,7 +77,8 @@ public class BacktestService {
             filteredPredictions,
             request.getInitialCapital(),
             kellyCalc.kellyFraction,
-            foldConfig
+            foldConfig,
+            request.getPositionSizePercent()
         );
 
         // 6. Buy & Hold 백테스팅
@@ -109,16 +110,18 @@ public class BacktestService {
      * Fold 1~7 연속 백테스팅
      * 각 fold의 최종 자본이 다음 fold의 초기 자본이 됨
      * Fold 간 1개월 간격은 현금 보유로 처리
+     * @param positionSizePercent null이면 Kelly 자동 계산 사용, 값이 있으면 고정 비율 사용 (0~100)
      */
     @Transactional
     public SequentialBacktestResponse runSequentialBacktest(
         Integer startFold,
         Integer endFold,
         BigDecimal initialCapital,
-        BigDecimal confidenceThreshold
+        BigDecimal confidenceThreshold,
+        BigDecimal positionSizePercent
     ) {
-        log.info("연속 백테스팅 시작: Fold {} ~ {}, InitialCapital={}, ConfidenceThreshold={}",
-            startFold, endFold, initialCapital, confidenceThreshold);
+        log.info("연속 백테스팅 시작: Fold {} ~ {}, InitialCapital={}, ConfidenceThreshold={}, PositionSizePercent={}",
+            startFold, endFold, initialCapital, confidenceThreshold, positionSizePercent);
 
         BigDecimal kellyCapital = initialCapital;
         BigDecimal buyHoldCapital = initialCapital;
@@ -129,7 +132,7 @@ public class BacktestService {
             log.info("연속 백테스팅 - Fold {} 실행 중...", foldNumber);
 
             // 각 fold 백테스팅 실행
-            BacktestRequest request = new BacktestRequest(foldNumber, kellyCapital, confidenceThreshold);
+            BacktestRequest request = new BacktestRequest(foldNumber, kellyCapital, confidenceThreshold, positionSizePercent);
             BacktestResponse response = runBacktest(request);
 
             // Kelly 전략 결과
@@ -274,18 +277,30 @@ public class BacktestService {
 
     /**
      * Kelly 전략 백테스팅
+     * @param positionSizePercent null이면 Kelly 자동 계산 사용, 값이 있으면 고정 비율 사용 (0~100)
      */
     private BacktestResponse.KellyStrategyResult runKellyStrategy(
         List<CsvPredictionData> predictions,
         BigDecimal initialCapital,
         BigDecimal kellyFraction,
-        FoldConfig foldConfig
+        FoldConfig foldConfig,
+        BigDecimal positionSizePercent
     ) {
         BigDecimal capital = initialCapital;
         List<BigDecimal> capitalHistory = new ArrayList<>();
         capitalHistory.add(capital);
 
         List<TradeResult> tradeResults = new ArrayList<>();
+
+        // 포지션 비율 결정: custom % 우선, 없으면 Kelly 사용
+        BigDecimal positionFraction = (positionSizePercent != null)
+            ? positionSizePercent.divide(new BigDecimal("100"), SCALE, ROUNDING)
+            : kellyFraction;
+
+        log.info("포지션 사이즈 전략: {} (Kelly={}, Custom={})",
+            positionSizePercent != null ? "고정 " + positionSizePercent + "%" : "Kelly Criterion",
+            kellyFraction.multiply(new BigDecimal("100")),
+            positionSizePercent);
 
         for (CsvPredictionData prediction : predictions) {
             LocalDate tradeDate = prediction.getDate();
@@ -302,8 +317,8 @@ public class BacktestService {
             BigDecimal entryPrice = ohlcv.getOpeningPrice(); // 시가
             BigDecimal exitPrice = ohlcv.getTradePrice();     // 종가
 
-            // 포지션 크기 = 자본 × 켈리 비율
-            BigDecimal positionSize = capital.multiply(kellyFraction).setScale(SCALE, ROUNDING);
+            // 포지션 크기 = 자본 × 포지션 비율 (Kelly 또는 사용자 지정)
+            BigDecimal positionSize = capital.multiply(positionFraction).setScale(SCALE, ROUNDING);
 
             if (positionSize.compareTo(BigDecimal.ZERO) <= 0) {
                 continue; // 거래 안 함
