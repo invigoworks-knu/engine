@@ -26,7 +26,7 @@ public class BacktestController {
      * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.5)
      * @return Kelly vs Buy & Hold 비교 결과
      */
-    @PostMapping("/run")
+    @GetMapping("/run")
     public ResponseEntity<BacktestResponse> runBacktest(
         @RequestParam Integer foldNumber,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
