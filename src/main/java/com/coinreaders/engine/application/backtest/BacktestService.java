@@ -1,9 +1,8 @@
 package com.coinreaders.engine.application.backtest;
 
-import com.coinreaders.engine.application.AiPredictionDataService;
 import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
-import com.coinreaders.engine.domain.entity.AiPredictionData;
+import com.coinreaders.engine.application.backtest.dto.CsvPredictionData;
 import com.coinreaders.engine.domain.entity.BacktestResult;
 import com.coinreaders.engine.domain.entity.BacktestTrade;
 import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
@@ -27,7 +26,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class BacktestService {
 
-    private final AiPredictionDataService predictionService;
+    private final CsvPredictionLoaderService csvLoader;
     private final HistoricalOhlcvRepository ohlcvRepository;
     private final BacktestResultRepository resultRepository;
     private final BacktestTradeRepository tradeRepository;
@@ -52,11 +51,11 @@ public class BacktestService {
         // 1. Fold 설정 조회
         FoldConfig foldConfig = FoldConfig.getFold(request.getFoldNumber());
 
-        // 2. AI 예측 데이터 로드
-        List<AiPredictionData> allPredictions = loadPredictions(request.getFoldNumber());
+        // 2. AI 예측 데이터 로드 (CSV에서 직접 로드)
+        List<CsvPredictionData> allPredictions = csvLoader.loadGruPredictions(request.getFoldNumber());
 
         // 3. Confidence >= threshold 필터링 (상승 예측만)
-        List<AiPredictionData> filteredPredictions = allPredictions.stream()
+        List<CsvPredictionData> filteredPredictions = allPredictions.stream()
             .filter(p -> p.getPredDirection() == 1) // 상승 예측만
             .filter(p -> p.getConfidence().compareTo(request.getConfidenceThreshold()) >= 0) // Confidence >= 0.5
             .collect(Collectors.toList());
@@ -106,23 +105,12 @@ public class BacktestService {
     }
 
     /**
-     * AI 예측 데이터 로드
-     */
-    private List<AiPredictionData> loadPredictions(int foldNumber) {
-        if (foldNumber == 8) {
-            return predictionService.getTestPredictions(); // Fold 8 (테스트)
-        } else {
-            return predictionService.getTrainingPredictions(foldNumber); // Fold 1~7 (훈련)
-        }
-    }
-
-    /**
      * 켈리 비율 계산
      * F = W - (1-W) / R
      * W: 승률
      * R: 평균 수익 / 평균 손실 비율
      */
-    private KellyCalculation calculateKellyFraction(List<AiPredictionData> predictions) {
+    private KellyCalculation calculateKellyFraction(List<CsvPredictionData> predictions) {
         if (predictions.isEmpty()) {
             return new KellyCalculation(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
         }
@@ -131,7 +119,7 @@ public class BacktestService {
         List<BigDecimal> wins = new ArrayList<>();
         List<BigDecimal> losses = new ArrayList<>();
 
-        for (AiPredictionData pred : predictions) {
+        for (CsvPredictionData pred : predictions) {
             BigDecimal actualReturn = pred.getActualReturn();
 
             // 수수료 차감
@@ -186,7 +174,7 @@ public class BacktestService {
      * Kelly 전략 백테스팅
      */
     private BacktestResponse.KellyStrategyResult runKellyStrategy(
-        List<AiPredictionData> predictions,
+        List<CsvPredictionData> predictions,
         BigDecimal initialCapital,
         BigDecimal kellyFraction,
         FoldConfig foldConfig
@@ -197,7 +185,7 @@ public class BacktestService {
 
         List<TradeResult> tradeResults = new ArrayList<>();
 
-        for (AiPredictionData prediction : predictions) {
+        for (CsvPredictionData prediction : predictions) {
             LocalDate tradeDate = prediction.getDate();
 
             // 업비트 OHLCV 데이터 조회
