@@ -54,13 +54,13 @@ public class BacktestService {
         // 2. AI 예측 데이터 로드 (CSV에서 직접 로드)
         List<CsvPredictionData> allPredictions = csvLoader.loadGruPredictions(request.getFoldNumber());
 
-        // 3. Confidence >= threshold 필터링 (상승 예측만)
+        // 3. 상승 예측 & 상승 확률 >= threshold 필터링
         List<CsvPredictionData> filteredPredictions = allPredictions.stream()
             .filter(p -> p.getPredDirection() == 1) // 상승 예측만
-            .filter(p -> p.getConfidence().compareTo(request.getConfidenceThreshold()) >= 0) // Confidence >= 0.5
+            .filter(p -> p.getPredProbaUp().compareTo(request.getConfidenceThreshold()) >= 0) // 상승 확률 >= 0.5
             .collect(Collectors.toList());
 
-        log.info("전체 예측: {}건, 필터링 후 (상승 & Confidence>={}): {}건",
+        log.info("전체 예측: {}건, 필터링 후 (상승 예측 & 상승확률>={}): {}건",
             allPredictions.size(), request.getConfidenceThreshold(), filteredPredictions.size());
 
         if (filteredPredictions.isEmpty()) {
