@@ -54,6 +54,33 @@ public class BacktestController {
     }
 
     /**
+     * Fold 1~7 연속 백테스팅 API
+     * 각 fold의 최종 자본이 다음 fold의 초기 자본이 됨
+     *
+     * @param startFold 시작 Fold (기본값: 1)
+     * @param endFold 종료 Fold (기본값: 7)
+     * @param initialCapital 초기 자본 (기본값: 10000)
+     * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.5)
+     * @return Fold별 결과 및 전체 요약
+     */
+    @GetMapping("/run-sequential")
+    public ResponseEntity<com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse> runSequentialBacktest(
+        @RequestParam(required = false, defaultValue = "1") Integer startFold,
+        @RequestParam(required = false, defaultValue = "7") Integer endFold,
+        @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
+        @RequestParam(required = false, defaultValue = "0.5") BigDecimal confidenceThreshold
+    ) {
+        log.info("연속 백테스팅 API 호출: Fold {} ~ {}, initialCapital={}, confidenceThreshold={}",
+            startFold, endFold, initialCapital, confidenceThreshold);
+
+        var response = backtestService.runSequentialBacktest(
+            startFold, endFold, initialCapital, confidenceThreshold
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Fold 정보 조회 API
      */
     @GetMapping("/fold/{foldNumber}")

@@ -3,6 +3,7 @@ package com.coinreaders.engine.application.backtest;
 import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.CsvPredictionData;
+import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
 import com.coinreaders.engine.domain.entity.BacktestResult;
 import com.coinreaders.engine.domain.entity.BacktestTrade;
 import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
@@ -101,6 +102,107 @@ public class BacktestService {
             .buyHoldStrategy(buyHoldResult)
             .alpha(alpha)
             .winner(winner)
+            .build();
+    }
+
+    /**
+     * Fold 1~7 연속 백테스팅
+     * 각 fold의 최종 자본이 다음 fold의 초기 자본이 됨
+     * Fold 간 1개월 간격은 현금 보유로 처리
+     */
+    @Transactional
+    public SequentialBacktestResponse runSequentialBacktest(
+        Integer startFold,
+        Integer endFold,
+        BigDecimal initialCapital,
+        BigDecimal confidenceThreshold
+    ) {
+        log.info("연속 백테스팅 시작: Fold {} ~ {}, InitialCapital={}, ConfidenceThreshold={}",
+            startFold, endFold, initialCapital, confidenceThreshold);
+
+        BigDecimal kellyCapital = initialCapital;
+        BigDecimal buyHoldCapital = initialCapital;
+        List<SequentialBacktestResponse.FoldResult> foldResults = new ArrayList<>();
+        int totalKellyTrades = 0;
+
+        for (int foldNumber = startFold; foldNumber <= endFold; foldNumber++) {
+            log.info("연속 백테스팅 - Fold {} 실행 중...", foldNumber);
+
+            // 각 fold 백테스팅 실행
+            BacktestRequest request = new BacktestRequest(foldNumber, kellyCapital, confidenceThreshold);
+            BacktestResponse response = runBacktest(request);
+
+            // Kelly 전략 결과
+            BigDecimal kellyFinalCapital = response.getKellyStrategy().getFinalCapital();
+            BigDecimal kellyReturnPct = response.getKellyStrategy().getTotalReturnPct();
+
+            // Buy & Hold 전략 결과 (연속 적용)
+            // Buy & Hold는 각 fold에서 독립적으로 계산된 수익률을 현재 자본에 적용
+            BigDecimal buyHoldReturnPct = response.getBuyHoldStrategy().getTotalReturnPct();
+            BigDecimal buyHoldFinalCapital = buyHoldCapital
+                .multiply(BigDecimal.ONE.add(buyHoldReturnPct.divide(new BigDecimal("100"), SCALE, ROUNDING)))
+                .setScale(SCALE, ROUNDING);
+
+            // Fold 결과 저장
+            FoldConfig foldConfig = FoldConfig.getFold(foldNumber);
+            foldResults.add(SequentialBacktestResponse.FoldResult.builder()
+                .foldNumber(foldNumber)
+                .regime(foldConfig.getRegime())
+                .dateRange(foldConfig.getStartDate() + " ~ " + foldConfig.getEndDate())
+                .kellyInitialCapital(kellyCapital)
+                .kellyFinalCapital(kellyFinalCapital)
+                .kellyReturnPct(kellyReturnPct)
+                .buyHoldInitialCapital(buyHoldCapital)
+                .buyHoldFinalCapital(buyHoldFinalCapital)
+                .buyHoldReturnPct(buyHoldReturnPct)
+                .alpha(response.getAlpha())
+                .winner(response.getWinner())
+                .build());
+
+            // 다음 fold의 초기 자본 업데이트
+            kellyCapital = kellyFinalCapital;
+            buyHoldCapital = buyHoldFinalCapital;
+            totalKellyTrades += response.getKellyStrategy().getTotalTrades();
+
+            log.info("Fold {} 완료: Kelly={}원, B&H={}원",
+                foldNumber, kellyFinalCapital, buyHoldFinalCapital);
+        }
+
+        // 전체 수익률 계산
+        BigDecimal kellyTotalReturnPct = kellyCapital.divide(initialCapital, SCALE, ROUNDING)
+            .subtract(BigDecimal.ONE)
+            .multiply(new BigDecimal("100"));
+
+        BigDecimal buyHoldTotalReturnPct = buyHoldCapital.divide(initialCapital, SCALE, ROUNDING)
+            .subtract(BigDecimal.ONE)
+            .multiply(new BigDecimal("100"));
+
+        BigDecimal totalAlpha = kellyTotalReturnPct.subtract(buyHoldTotalReturnPct);
+
+        log.info("연속 백테스팅 완료: Kelly {}% ({}원), B&H {}% ({}원), Alpha {}%",
+            kellyTotalReturnPct, kellyCapital, buyHoldTotalReturnPct, buyHoldCapital, totalAlpha);
+
+        return SequentialBacktestResponse.builder()
+            .initialCapital(initialCapital)
+            .finalCapital(kellyCapital)
+            .totalReturnPct(kellyTotalReturnPct)
+            .startFold(startFold)
+            .endFold(endFold)
+            .kellyComparison(SequentialBacktestResponse.StrategyComparison.builder()
+                .initialCapital(initialCapital)
+                .finalCapital(kellyCapital)
+                .totalReturnPct(kellyTotalReturnPct)
+                .totalTrades(totalKellyTrades)
+                .totalAlpha(totalAlpha)
+                .build())
+            .buyHoldComparison(SequentialBacktestResponse.StrategyComparison.builder()
+                .initialCapital(initialCapital)
+                .finalCapital(buyHoldCapital)
+                .totalReturnPct(buyHoldTotalReturnPct)
+                .totalTrades(endFold - startFold + 1) // B&H는 각 fold당 1회 거래
+                .totalAlpha(BigDecimal.ZERO)
+                .build())
+            .foldResults(foldResults)
             .build();
     }
 
