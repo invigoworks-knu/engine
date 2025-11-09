@@ -1,0 +1,448 @@
+package com.coinreaders.engine.application.backtest;
+
+import com.coinreaders.engine.application.AiPredictionDataService;
+import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
+import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
+import com.coinreaders.engine.domain.entity.AiPredictionData;
+import com.coinreaders.engine.domain.entity.BacktestResult;
+import com.coinreaders.engine.domain.entity.BacktestTrade;
+import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
+import com.coinreaders.engine.domain.repository.BacktestResultRepository;
+import com.coinreaders.engine.domain.repository.BacktestTradeRepository;
+import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class BacktestService {
+
+    private final AiPredictionDataService predictionService;
+    private final HistoricalOhlcvRepository ohlcvRepository;
+    private final BacktestResultRepository resultRepository;
+    private final BacktestTradeRepository tradeRepository;
+
+    // 상수 정의 (업비트 기준)
+    private static final String MARKET = "KRW-ETH";
+    private static final BigDecimal UPBIT_FEE_RATE = new BigDecimal("0.0005"); // 0.05% (편도)
+    private static final BigDecimal ROUND_TRIP_FEE = UPBIT_FEE_RATE.multiply(new BigDecimal("2")); // 0.1% (양방향)
+    private static final BigDecimal SLIPPAGE = new BigDecimal("0.0005"); // 0.05% (슬리피지)
+    private static final BigDecimal TOTAL_COST = ROUND_TRIP_FEE.add(SLIPPAGE); // 0.15%
+    private static final int SCALE = 8; // 소수점 자릿수
+    private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
+
+    /**
+     * 백테스팅 실행 (Kelly vs Buy & Hold 비교)
+     */
+    @Transactional
+    public BacktestResponse runBacktest(BacktestRequest request) {
+        log.info("백테스팅 시작: Fold={}, InitialCapital={}, ConfidenceThreshold={}",
+            request.getFoldNumber(), request.getInitialCapital(), request.getConfidenceThreshold());
+
+        // 1. Fold 설정 조회
+        FoldConfig foldConfig = FoldConfig.getFold(request.getFoldNumber());
+
+        // 2. AI 예측 데이터 로드
+        List<AiPredictionData> allPredictions = loadPredictions(request.getFoldNumber());
+
+        // 3. Confidence >= threshold 필터링 (상승 예측만)
+        List<AiPredictionData> filteredPredictions = allPredictions.stream()
+            .filter(p -> p.getPredDirection() == 1) // 상승 예측만
+            .filter(p -> p.getConfidence().compareTo(request.getConfidenceThreshold()) >= 0) // Confidence >= 0.5
+            .collect(Collectors.toList());
+
+        log.info("전체 예측: {}건, 필터링 후 (상승 & Confidence>={}): {}건",
+            allPredictions.size(), request.getConfidenceThreshold(), filteredPredictions.size());
+
+        if (filteredPredictions.isEmpty()) {
+            throw new IllegalStateException("필터링된 예측 데이터가 없습니다. Confidence 기준을 낮춰주세요.");
+        }
+
+        // 4. 켈리 비율 계산 (전체 예측 데이터 기반)
+        KellyCalculation kellyCalc = calculateKellyFraction(filteredPredictions);
+        log.info("켈리 계산 결과: F={}, W={}, R={}", kellyCalc.kellyFraction, kellyCalc.winRate, kellyCalc.winLossRatio);
+
+        // 5. Kelly 전략 백테스팅
+        BacktestResponse.KellyStrategyResult kellyResult = runKellyStrategy(
+            filteredPredictions,
+            request.getInitialCapital(),
+            kellyCalc.kellyFraction,
+            foldConfig
+        );
+
+        // 6. Buy & Hold 백테스팅
+        BacktestResponse.BuyHoldResult buyHoldResult = runBuyAndHoldStrategy(
+            foldConfig,
+            request.getInitialCapital()
+        );
+
+        // 7. 결과 비교
+        BigDecimal alpha = kellyResult.getTotalReturnPct().subtract(buyHoldResult.getTotalReturnPct());
+        String winner = alpha.compareTo(BigDecimal.ZERO) > 0 ? "KELLY" : "BUY_AND_HOLD";
+
+        log.info("백테스팅 완료: Kelly {}%, B&H {}%, Alpha {}%, Winner={}",
+            kellyResult.getTotalReturnPct(), buyHoldResult.getTotalReturnPct(), alpha, winner);
+
+        return BacktestResponse.builder()
+            .foldNumber(foldConfig.getFoldNumber())
+            .regime(foldConfig.getRegime())
+            .startDate(foldConfig.getStartDate())
+            .endDate(foldConfig.getEndDate())
+            .kellyStrategy(kellyResult)
+            .buyHoldStrategy(buyHoldResult)
+            .alpha(alpha)
+            .winner(winner)
+            .build();
+    }
+
+    /**
+     * AI 예측 데이터 로드
+     */
+    private List<AiPredictionData> loadPredictions(int foldNumber) {
+        if (foldNumber == 8) {
+            return predictionService.getTestPredictions(); // Fold 8 (테스트)
+        } else {
+            return predictionService.getTrainingPredictions(foldNumber); // Fold 1~7 (훈련)
+        }
+    }
+
+    /**
+     * 켈리 비율 계산
+     * F = W - (1-W) / R
+     * W: 승률
+     * R: 평균 수익 / 평균 손실 비율
+     */
+    private KellyCalculation calculateKellyFraction(List<AiPredictionData> predictions) {
+        if (predictions.isEmpty()) {
+            return new KellyCalculation(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+
+        // 1. 승/패 구분 (actual_return 기반)
+        List<BigDecimal> wins = new ArrayList<>();
+        List<BigDecimal> losses = new ArrayList<>();
+
+        for (AiPredictionData pred : predictions) {
+            BigDecimal actualReturn = pred.getActualReturn();
+
+            // 수수료 차감
+            BigDecimal netReturn = actualReturn.subtract(TOTAL_COST);
+
+            if (netReturn.compareTo(BigDecimal.ZERO) > 0) {
+                wins.add(netReturn);
+            } else {
+                losses.add(netReturn.abs());
+            }
+        }
+
+        // 2. 승률 (W)
+        BigDecimal winRate = new BigDecimal(wins.size())
+            .divide(new BigDecimal(predictions.size()), SCALE, ROUNDING);
+
+        // 3. 평균 수익 / 평균 손실 (R)
+        BigDecimal avgWin = wins.isEmpty() ? BigDecimal.ZERO :
+            wins.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(new BigDecimal(wins.size()), SCALE, ROUNDING);
+
+        BigDecimal avgLoss = losses.isEmpty() ? BigDecimal.ZERO :
+            losses.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(new BigDecimal(losses.size()), SCALE, ROUNDING);
+
+        BigDecimal winLossRatio = avgLoss.compareTo(BigDecimal.ZERO) == 0 ?
+            BigDecimal.ZERO :
+            avgWin.divide(avgLoss, SCALE, ROUNDING);
+
+        // 4. 켈리 공식: F = W - (1-W) / R
+        BigDecimal kellyFraction;
+        if (winLossRatio.compareTo(BigDecimal.ZERO) == 0) {
+            kellyFraction = BigDecimal.ZERO;
+        } else {
+            BigDecimal oneMinusW = BigDecimal.ONE.subtract(winRate);
+            kellyFraction = winRate.subtract(oneMinusW.divide(winLossRatio, SCALE, ROUNDING));
+        }
+
+        // 켈리 값이 음수면 0으로 (투자하지 않음)
+        // 켈리 값이 1 초과면 1로 제한 (레버리지 없음)
+        kellyFraction = kellyFraction.max(BigDecimal.ZERO).min(BigDecimal.ONE);
+
+        log.info("켈리 계산: 승={}, 패={}, 승률={}, 평균승={}, 평균패={}, 손익비={}, 켈리={}",
+            wins.size(), losses.size(), winRate, avgWin, avgLoss, winLossRatio, kellyFraction);
+
+        return new KellyCalculation(kellyFraction, winRate, winLossRatio);
+    }
+
+    /**
+     * Kelly 전략 백테스팅
+     */
+    private BacktestResponse.KellyStrategyResult runKellyStrategy(
+        List<AiPredictionData> predictions,
+        BigDecimal initialCapital,
+        BigDecimal kellyFraction,
+        FoldConfig foldConfig
+    ) {
+        BigDecimal capital = initialCapital;
+        List<BigDecimal> capitalHistory = new ArrayList<>();
+        capitalHistory.add(capital);
+
+        List<TradeResult> tradeResults = new ArrayList<>();
+
+        for (AiPredictionData prediction : predictions) {
+            LocalDate tradeDate = prediction.getDate();
+
+            // 업비트 OHLCV 데이터 조회
+            HistoricalOhlcv ohlcv = ohlcvRepository.findByMarketAndDate(MARKET, tradeDate)
+                .orElse(null);
+
+            if (ohlcv == null) {
+                log.warn("거래 불가: {} - OHLCV 데이터 없음", tradeDate);
+                continue;
+            }
+
+            BigDecimal entryPrice = ohlcv.getOpeningPrice(); // 시가
+            BigDecimal exitPrice = ohlcv.getTradePrice();     // 종가
+
+            // 포지션 크기 = 자본 × 켈리 비율
+            BigDecimal positionSize = capital.multiply(kellyFraction).setScale(SCALE, ROUNDING);
+
+            if (positionSize.compareTo(BigDecimal.ZERO) <= 0) {
+                continue; // 거래 안 함
+            }
+
+            // 가격 수익률
+            BigDecimal priceReturn = exitPrice.divide(entryPrice, SCALE, ROUNDING)
+                .subtract(BigDecimal.ONE);
+
+            // 순 수익률 (수수료 + 슬리피지 차감)
+            BigDecimal netReturn = priceReturn.subtract(TOTAL_COST);
+
+            // 손익
+            BigDecimal profit = positionSize.multiply(netReturn).setScale(SCALE, ROUNDING);
+            capital = capital.add(profit);
+            capitalHistory.add(capital);
+
+            // 거래 결과 저장
+            tradeResults.add(new TradeResult(
+                tradeDate,
+                entryPrice,
+                exitPrice,
+                netReturn.multiply(new BigDecimal("100")), // %로 변환
+                profit,
+                capital,
+                prediction.getPredDirection(),
+                prediction.getConfidence(),
+                positionSize
+            ));
+        }
+
+        // 통계 계산
+        int totalTrades = tradeResults.size();
+        int winTrades = (int) tradeResults.stream()
+            .filter(t -> t.profit.compareTo(BigDecimal.ZERO) > 0)
+            .count();
+        int lossTrades = totalTrades - winTrades;
+
+        BigDecimal winRate = totalTrades == 0 ? BigDecimal.ZERO :
+            new BigDecimal(winTrades).divide(new BigDecimal(totalTrades), 4, ROUNDING)
+                .multiply(new BigDecimal("100"));
+
+        List<BigDecimal> wins = tradeResults.stream()
+            .filter(t -> t.profit.compareTo(BigDecimal.ZERO) > 0)
+            .map(t -> t.returnPct)
+            .collect(Collectors.toList());
+
+        List<BigDecimal> lossesAbs = tradeResults.stream()
+            .filter(t -> t.profit.compareTo(BigDecimal.ZERO) <= 0)
+            .map(t -> t.returnPct.abs())
+            .collect(Collectors.toList());
+
+        BigDecimal avgWin = wins.isEmpty() ? BigDecimal.ZERO :
+            wins.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(new BigDecimal(wins.size()), 4, ROUNDING);
+
+        BigDecimal avgLoss = lossesAbs.isEmpty() ? BigDecimal.ZERO :
+            lossesAbs.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(new BigDecimal(lossesAbs.size()), 4, ROUNDING);
+
+        BigDecimal winLossRatio = avgLoss.compareTo(BigDecimal.ZERO) == 0 ?
+            BigDecimal.ZERO :
+            avgWin.divide(avgLoss, 4, ROUNDING);
+
+        BigDecimal totalReturnPct = capital.divide(initialCapital, SCALE, ROUNDING)
+            .subtract(BigDecimal.ONE)
+            .multiply(new BigDecimal("100"));
+
+        BigDecimal maxDrawdown = calculateMaxDrawdown(capitalHistory);
+
+        return BacktestResponse.KellyStrategyResult.builder()
+            .initialCapital(initialCapital)
+            .finalCapital(capital)
+            .totalReturnPct(totalReturnPct)
+            .totalTrades(totalTrades)
+            .winTrades(winTrades)
+            .lossTrades(lossTrades)
+            .winRate(winRate)
+            .avgWin(avgWin)
+            .avgLoss(avgLoss)
+            .winLossRatio(winLossRatio)
+            .kellyFraction(kellyFraction.multiply(new BigDecimal("100"))) // %로 변환
+            .maxDrawdown(maxDrawdown)
+            .build();
+    }
+
+    /**
+     * Buy & Hold 전략 백테스팅
+     */
+    private BacktestResponse.BuyHoldResult runBuyAndHoldStrategy(
+        FoldConfig foldConfig,
+        BigDecimal initialCapital
+    ) {
+        // 시작일과 종료일의 OHLCV 데이터 조회
+        HistoricalOhlcv startOhlcv = ohlcvRepository.findByMarketAndDate(MARKET, foldConfig.getStartDate())
+            .orElseThrow(() -> new IllegalStateException(
+                "시작일 OHLCV 데이터 없음: " + foldConfig.getStartDate()));
+
+        HistoricalOhlcv endOhlcv = ohlcvRepository.findByMarketAndDate(MARKET, foldConfig.getEndDate())
+            .orElseThrow(() -> new IllegalStateException(
+                "종료일 OHLCV 데이터 없음: " + foldConfig.getEndDate()));
+
+        BigDecimal entryPrice = startOhlcv.getOpeningPrice(); // 시작일 시가
+        BigDecimal exitPrice = endOhlcv.getTradePrice();      // 종료일 종가
+
+        // B&H는 1회 매수 + 1회 매도만 (수수료 0.1%)
+        BigDecimal bhFee = new BigDecimal("0.001"); // 0.1% (양방향)
+
+        BigDecimal priceReturn = exitPrice.divide(entryPrice, SCALE, ROUNDING)
+            .subtract(BigDecimal.ONE);
+
+        BigDecimal netReturn = priceReturn.subtract(bhFee);
+
+        BigDecimal finalCapital = initialCapital.multiply(BigDecimal.ONE.add(netReturn))
+            .setScale(SCALE, ROUNDING);
+
+        BigDecimal totalReturnPct = netReturn.multiply(new BigDecimal("100"));
+
+        // B&H 최대 낙폭 계산 (기간 중 모든 OHLCV 데이터 필요)
+        List<HistoricalOhlcv> periodOhlcv = ohlcvRepository.findByMarketAndDateRange(
+            MARKET, foldConfig.getStartDate(), foldConfig.getEndDate());
+
+        BigDecimal maxDrawdown = calculateBuyHoldMaxDrawdown(periodOhlcv, entryPrice);
+
+        return BacktestResponse.BuyHoldResult.builder()
+            .initialCapital(initialCapital)
+            .finalCapital(finalCapital)
+            .totalReturnPct(totalReturnPct)
+            .entryPrice(entryPrice)
+            .exitPrice(exitPrice)
+            .maxDrawdown(maxDrawdown)
+            .build();
+    }
+
+    /**
+     * 최대 낙폭(MDD) 계산
+     */
+    private BigDecimal calculateMaxDrawdown(List<BigDecimal> capitalHistory) {
+        if (capitalHistory.size() < 2) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal peak = capitalHistory.get(0);
+        BigDecimal maxDrawdown = BigDecimal.ZERO;
+
+        for (BigDecimal capital : capitalHistory) {
+            if (capital.compareTo(peak) > 0) {
+                peak = capital;
+            }
+
+            BigDecimal drawdown = peak.subtract(capital)
+                .divide(peak, 4, ROUNDING)
+                .multiply(new BigDecimal("100"));
+
+            if (drawdown.compareTo(maxDrawdown) > 0) {
+                maxDrawdown = drawdown;
+            }
+        }
+
+        return maxDrawdown;
+    }
+
+    /**
+     * Buy & Hold 최대 낙폭 계산 (기간 중 가격 변동 기준)
+     */
+    private BigDecimal calculateBuyHoldMaxDrawdown(List<HistoricalOhlcv> ohlcvList, BigDecimal entryPrice) {
+        if (ohlcvList.size() < 2) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal peak = entryPrice;
+        BigDecimal maxDrawdown = BigDecimal.ZERO;
+
+        for (HistoricalOhlcv ohlcv : ohlcvList) {
+            BigDecimal currentPrice = ohlcv.getTradePrice(); // 종가
+
+            if (currentPrice.compareTo(peak) > 0) {
+                peak = currentPrice;
+            }
+
+            BigDecimal drawdown = peak.subtract(currentPrice)
+                .divide(peak, 4, ROUNDING)
+                .multiply(new BigDecimal("100"));
+
+            if (drawdown.compareTo(maxDrawdown) > 0) {
+                maxDrawdown = drawdown;
+            }
+        }
+
+        return maxDrawdown;
+    }
+
+    // 내부 클래스: 켈리 계산 결과
+    private static class KellyCalculation {
+        BigDecimal kellyFraction;
+        BigDecimal winRate;
+        BigDecimal winLossRatio;
+
+        KellyCalculation(BigDecimal kellyFraction, BigDecimal winRate, BigDecimal winLossRatio) {
+            this.kellyFraction = kellyFraction;
+            this.winRate = winRate;
+            this.winLossRatio = winLossRatio;
+        }
+    }
+
+    // 내부 클래스: 거래 결과
+    private static class TradeResult {
+        LocalDate tradeDate;
+        BigDecimal entryPrice;
+        BigDecimal exitPrice;
+        BigDecimal returnPct;
+        BigDecimal profit;
+        BigDecimal capital;
+        Integer predDirection;
+        BigDecimal confidence;
+        BigDecimal positionSize;
+
+        TradeResult(LocalDate tradeDate, BigDecimal entryPrice, BigDecimal exitPrice,
+                    BigDecimal returnPct, BigDecimal profit, BigDecimal capital,
+                    Integer predDirection, BigDecimal confidence, BigDecimal positionSize) {
+            this.tradeDate = tradeDate;
+            this.entryPrice = entryPrice;
+            this.exitPrice = exitPrice;
+            this.returnPct = returnPct;
+            this.profit = profit;
+            this.capital = capital;
+            this.predDirection = predDirection;
+            this.confidence = confidence;
+            this.positionSize = positionSize;
+        }
+    }
+}
