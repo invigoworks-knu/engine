@@ -42,17 +42,53 @@ public class DataPipelineController {
     }
 
     /**
-     * (UC-001) CSV 파일로 AI 예측 데이터를 적재합니다. (GRU - Fold 8 고정)
+     * (UC-001) CSV 파일로 AI 예측 데이터를 적재합니다. (GRU - Fold 8 전용, 264개 데이터)
      */
     @PostMapping("/init-ai-predictions")
     public ResponseEntity<String> initializeAiPredictions() {
         try {
             aiPredictionDataService.loadAiPredictionsFromCsv(
                 "GRU-f8",
-                "data/GRU_fold_8_predictions.csv"
+                "data/fold8_GRU_predictions.csv"
             );
 
-            return ResponseEntity.ok("AI Prediction data (GRU-f8) initialization completed successfully.");
+            return ResponseEntity.ok("AI Prediction data (GRU-f8) initialization completed successfully. (264 records)");
+        } catch (Exception e) {
+            log.error("Failed to load AI prediction data", e);
+            return ResponseEntity.internalServerError().body("Failed to load AI data: " + e.getMessage());
+        }
+    }
+
+    /**
+     * (UC-001) CSV 파일로 AI 예측 데이터를 적재합니다. (GRU - 모든 Fold 1-8)
+     * Fold 1-7: 각 120개 데이터
+     * Fold 8: 264개 데이터
+     */
+    @PostMapping("/init-ai-predictions-all")
+    public ResponseEntity<String> initializeAllAiPredictions() {
+        try {
+            int totalRecords = 0;
+
+            // Fold 1-7: 각각 120개 데이터
+            for (int fold = 1; fold <= 7; fold++) {
+                String modelVersion = "GRU-f" + fold;
+                String filePath = "data/fold" + fold + "_GRU_predictions.csv";
+                aiPredictionDataService.loadAiPredictionsFromCsv(modelVersion, filePath);
+                totalRecords += 120;
+                log.info("Loaded {} successfully (120 records)", modelVersion);
+            }
+
+            // Fold 8: 264개 데이터
+            aiPredictionDataService.loadAiPredictionsFromCsv(
+                "GRU-f8",
+                "data/fold8_GRU_predictions.csv"
+            );
+            totalRecords += 264;
+            log.info("Loaded GRU-f8 successfully (264 records)");
+
+            return ResponseEntity.ok(
+                String.format("All AI Prediction data (GRU-f1~f8) initialization completed. Total %d records loaded.", totalRecords)
+            );
         } catch (Exception e) {
             log.error("Failed to load AI prediction data", e);
             return ResponseEntity.internalServerError().body("Failed to load AI data: " + e.getMessage());

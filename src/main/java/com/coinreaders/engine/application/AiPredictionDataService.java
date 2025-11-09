@@ -51,8 +51,13 @@ public class AiPredictionDataService {
             // 5. 데이터 행 반복 처리
             while ((nextLine = reader.readNext()) != null) {
                 String dateStr = nextLine[0];
-                String predDirection = Integer.parseInt(nextLine[1]) == 1 ? "UP" : "DOWN";
-                BigDecimal probability = new BigDecimal(nextLine[3]);
+                int predDirectionValue = Integer.parseInt(nextLine[3]); // pred_direction 컬럼 사용
+                String predDirection = predDirectionValue == 1 ? "UP" : "DOWN";
+
+                // pred_direction에 따라 해당하는 확률값 사용
+                BigDecimal probability = predDirectionValue == 1
+                    ? new BigDecimal(nextLine[4])  // pred_proba_up
+                    : new BigDecimal(nextLine[5]); // pred_proba_down
 
                 LocalDateTime candleDateTimeKst = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
                     .atTime(9, 0, 0);
