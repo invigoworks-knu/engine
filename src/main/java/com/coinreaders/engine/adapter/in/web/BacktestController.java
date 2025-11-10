@@ -46,8 +46,8 @@ public class BacktestController {
         if (initialCapital.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest().body("initialCapital must be positive");
         }
-        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 1");
+        if (confidenceThreshold.compareTo(new BigDecimal("0.5")) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
+            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0.5 and 1.0 (long-only strategy requires pred_proba_up >= 0.5)");
         }
         if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
             return ResponseEntity.badRequest().body("positionSizePercent must be between 0 and 100");
@@ -103,8 +103,8 @@ public class BacktestController {
         if (initialCapital.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest().body("initialCapital must be positive");
         }
-        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 1");
+        if (confidenceThreshold.compareTo(new BigDecimal("0.5")) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
+            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0.5 and 1.0 (long-only strategy requires pred_proba_up >= 0.5)");
         }
         if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
             return ResponseEntity.badRequest().body("positionSizePercent must be between 0 and 100");
