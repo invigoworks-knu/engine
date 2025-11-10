@@ -2,9 +2,12 @@ package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.DataPipelineService;
 import com.coinreaders.engine.application.AiPredictionDataService;
+import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
+import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,6 +20,38 @@ public class DataPipelineController {
 
     private final DataPipelineService dataPipelineService;
     private final AiPredictionDataService aiPredictionDataService;
+    private final HistoricalOhlcvRepository ohlcvRepository;
+    private final HistoricalAiPredictionRepository aiPredictionRepository;
+
+    /**
+     * 데이터 적재 상태 확인 API
+     */
+    @GetMapping("/status")
+    public ResponseEntity<DataStatus> getDataStatus() {
+        try {
+            // OHLCV 데이터 개수 확인
+            long ohlcvCount = ohlcvRepository.count();
+
+            // AI 예측 데이터 개수 확인
+            long aiPredictionCount = aiPredictionRepository.count();
+
+            // 데이터 적재 여부 판단 (임계값 기준)
+            boolean ohlcvLoaded = ohlcvCount >= 2000; // 최소 2000개 이상
+            boolean aiPredictionsLoaded = aiPredictionCount >= 1000; // 최소 1000개 이상 (전체는 1104개)
+
+            DataStatus status = new DataStatus(
+                ohlcvLoaded,
+                aiPredictionsLoaded,
+                ohlcvCount,
+                aiPredictionCount
+            );
+
+            return ResponseEntity.ok(status);
+        } catch (Exception e) {
+            log.error("Failed to get data status", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 
     /**
      * (UC-009) Upbit API로 최신 일봉 200개를 적재합니다. (실거래/최신화용)
@@ -33,6 +68,15 @@ public class DataPipelineController {
     @PostMapping("/init-ohlcv-all")
     public ResponseEntity<String> initializeAllHistoricalOhlcv() {
         try {
+            // 중복 적재 방지: 이미 충분한 데이터가 있는지 확인
+            long existingCount = ohlcvRepository.count();
+            if (existingCount >= 2000) {
+                log.info("OHLCV 데이터가 이미 적재되어 있습니다. ({}건)", existingCount);
+                return ResponseEntity.ok(
+                    String.format("OHLCV 데이터가 이미 적재되어 있습니다. (총 %d건)", existingCount)
+                );
+            }
+
             dataPipelineService.loadAllHistoricalOhlcv("KRW-ETH", "2017-11-09");
             return ResponseEntity.ok("All historical data initialization completed successfully.");
         } catch (Exception e) {
@@ -103,6 +147,15 @@ public class DataPipelineController {
     @PostMapping("/init-ai-predictions-all")
     public ResponseEntity<String> initializeAllAiPredictions() {
         try {
+            // 중복 적재 방지: 이미 충분한 데이터가 있는지 확인
+            long existingCount = aiPredictionRepository.count();
+            if (existingCount >= 1000) {
+                log.info("AI 예측 데이터가 이미 적재되어 있습니다. ({}건)", existingCount);
+                return ResponseEntity.ok(
+                    String.format("AI 예측 데이터가 이미 적재되어 있습니다. (총 %d건)", existingCount)
+                );
+            }
+
             int totalRecords = 0;
 
             // Fold 1-7: 각각 120개 데이터
@@ -130,4 +183,14 @@ public class DataPipelineController {
             return ResponseEntity.internalServerError().body("Failed to load AI data: " + e.getMessage());
         }
     }
+
+    /**
+     * 데이터 적재 상태 DTO
+     */
+    public record DataStatus(
+        boolean ohlcvLoaded,
+        boolean aiPredictionsLoaded,
+        long ohlcvCount,
+        long aiPredictionCount
+    ) {}
 }

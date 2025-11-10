@@ -81,6 +81,52 @@
         .nav-tabs .nav-link.active {
             color: #764ba2;
         }
+        .data-init-section {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        .status-badge.loaded {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-badge.not-loaded {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .btn-data-init {
+            margin: 0.25rem;
+        }
+        .guide-section {
+            background: #fff9e6;
+            border-left: 4px solid #ffc107;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .guide-section h6 {
+            color: #856404;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        .guide-section ul {
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+        .tooltip-icon {
+            cursor: help;
+            color: #667eea;
+            margin-left: 0.3rem;
+        }
     </style>
 </head>
 <body>
@@ -91,6 +137,47 @@
                     <div class="header-section">
                         <h1><i class="fas fa-chart-line"></i> 켈리 기준 백테스팅 시스템</h1>
                         <p>ETH/KRW 암호화폐 거래 전략 백테스팅</p>
+                    </div>
+
+                    <!-- 데이터 초기화 섹션 -->
+                    <div class="data-init-section">
+                        <h5><i class="fas fa-database"></i> 데이터 초기화
+                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip" title="백테스팅을 실행하기 전에 데이터를 먼저 적재해야 합니다. 데이터는 한 번만 적재하면 됩니다."></i>
+                        </h5>
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <p class="mb-2">
+                                    <strong>OHLCV 데이터:</strong>
+                                    <span class="status-badge" id="ohlcvStatus">확인 중...</span>
+                                    <span id="ohlcvCount" class="text-muted small"></span>
+                                </p>
+                                <p class="mb-2">
+                                    <strong>AI 예측 데이터:</strong>
+                                    <span class="status-badge" id="aiStatus">확인 중...</span>
+                                    <span id="aiCount" class="text-muted small"></span>
+                                </p>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button class="btn btn-primary btn-data-init" onclick="loadOhlcvData()" id="btnOhlcv">
+                                    <i class="fas fa-download"></i> OHLCV 데이터 적재
+                                </button>
+                                <button class="btn btn-success btn-data-init" onclick="loadAiData()" id="btnAi">
+                                    <i class="fas fa-download"></i> AI 예측 데이터 적재
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 사용 가이드 -->
+                    <div class="guide-section">
+                        <h6><i class="fas fa-book"></i> 사용 가이드</h6>
+                        <ul>
+                            <li><strong>데이터 초기화:</strong> 최초 1회만 실행하면 됩니다. 데이터가 이미 적재되어 있으면 버튼을 눌러도 중복 적재되지 않습니다.</li>
+                            <li><strong>Fold 선택:</strong> Fold 1-7은 Training Set, Fold 8은 Test Set입니다. 먼저 Training Set으로 전략을 검증하세요.</li>
+                            <li><strong>필터 컬럼:</strong> confidence는 모델 확신도(0~0.5), pred_proba_up은 상승 확률(0~1)입니다.</li>
+                            <li><strong>필터 모드:</strong> 고정값은 절대값 기준, 백분위수는 데이터 분포의 상위 N%를 선택합니다.</li>
+                            <li><strong>포지션 크기:</strong> 비워두면 Kelly Criterion이 자동 계산됩니다. 리스크를 줄이려면 고정 비율(예: 50%)을 입력하세요.</li>
+                        </ul>
                     </div>
 
                     <!-- Fold 정보 카드 -->
@@ -253,6 +340,94 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // 페이지 로드 시 데이터 상태 확인
+        document.addEventListener('DOMContentLoaded', function() {
+            // Bootstrap tooltip 초기화
+            const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltips.forEach(tooltip => new bootstrap.Tooltip(tooltip));
+
+            // 데이터 상태 확인
+            checkDataStatus();
+        });
+
+        // 데이터 상태 확인
+        function checkDataStatus() {
+            fetch('/api/v1/data/status')
+                .then(response => response.json())
+                .then(data => {
+                    // OHLCV 상태 업데이트
+                    const ohlcvStatus = document.getElementById('ohlcvStatus');
+                    const ohlcvCount = document.getElementById('ohlcvCount');
+                    if (data.ohlcvLoaded) {
+                        ohlcvStatus.textContent = '적재 완료';
+                        ohlcvStatus.className = 'status-badge loaded';
+                        ohlcvCount.textContent = `(${data.ohlcvCount.toLocaleString()}건)`;
+                        document.getElementById('btnOhlcv').disabled = true;
+                    } else {
+                        ohlcvStatus.textContent = '미적재';
+                        ohlcvStatus.className = 'status-badge not-loaded';
+                        ohlcvCount.textContent = data.ohlcvCount > 0 ? `(${data.ohlcvCount.toLocaleString()}건)` : '';
+                    }
+
+                    // AI 예측 데이터 상태 업데이트
+                    const aiStatus = document.getElementById('aiStatus');
+                    const aiCount = document.getElementById('aiCount');
+                    if (data.aiPredictionsLoaded) {
+                        aiStatus.textContent = '적재 완료';
+                        aiStatus.className = 'status-badge loaded';
+                        aiCount.textContent = `(${data.aiPredictionCount.toLocaleString()}건)`;
+                        document.getElementById('btnAi').disabled = true;
+                    } else {
+                        aiStatus.textContent = '미적재';
+                        aiStatus.className = 'status-badge not-loaded';
+                        aiCount.textContent = data.aiPredictionCount > 0 ? `(${data.aiPredictionCount.toLocaleString()}건)` : '';
+                    }
+                })
+                .catch(error => {
+                    console.error('데이터 상태 확인 실패:', error);
+                    document.getElementById('ohlcvStatus').textContent = '확인 실패';
+                    document.getElementById('aiStatus').textContent = '확인 실패';
+                });
+        }
+
+        // OHLCV 데이터 적재
+        function loadOhlcvData() {
+            const btn = document.getElementById('btnOhlcv');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
+
+            fetch('/api/v1/data/init-ohlcv-all', { method: 'POST' })
+                .then(response => response.text())
+                .then(message => {
+                    alert(message);
+                    checkDataStatus(); // 상태 다시 확인
+                })
+                .catch(error => {
+                    alert('OHLCV 데이터 적재 실패: ' + error);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-download"></i> OHLCV 데이터 적재';
+                });
+        }
+
+        // AI 예측 데이터 적재
+        function loadAiData() {
+            const btn = document.getElementById('btnAi');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
+
+            fetch('/api/v1/data/init-ai-predictions-all', { method: 'POST' })
+                .then(response => response.text())
+                .then(message => {
+                    alert(message);
+                    checkDataStatus(); // 상태 다시 확인
+                })
+                .catch(error => {
+                    alert('AI 예측 데이터 적재 실패: ' + error);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-download"></i> AI 예측 데이터 적재';
+                });
+        }
+
         function updateColumnInput(formType) {
             const suffix = formType === 'single' ? '1' : '2';
             const confidenceRadio = document.getElementById('colConfidence' + suffix);
