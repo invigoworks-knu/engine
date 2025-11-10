@@ -4,6 +4,7 @@ import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.CsvPredictionData;
 import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
+import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
 import com.coinreaders.engine.domain.entity.BacktestResult;
 import com.coinreaders.engine.domain.entity.BacktestTrade;
 import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
@@ -55,14 +56,30 @@ public class BacktestService {
         // 2. AI 예측 데이터 로드 (CSV에서 직접 로드)
         List<CsvPredictionData> allPredictions = csvLoader.loadGruPredictions(request.getFoldNumber());
 
-        // 3. 상승 예측(pred_direction==1) + 신뢰도(confidence) 필터링 (파이썬 로직과 동일)
-        List<CsvPredictionData> filteredPredictions = allPredictions.stream()
+        // 3. 상승 예측만 먼저 필터링
+        List<CsvPredictionData> longOnlyPredictions = allPredictions.stream()
             .filter(p -> p.getPredDirection() == 1)  // 상승 예측만
-            .filter(p -> p.getConfidence().compareTo(request.getConfidenceThreshold()) >= 0)  // 신뢰도 필터
             .collect(Collectors.toList());
 
-        log.info("전체 예측: {}건, 필터링 후 (상승예측 + 신뢰도>={}): {}건",
-            allPredictions.size(), request.getConfidenceThreshold(), filteredPredictions.size());
+        // 4. 신뢰도 임계값 계산 (모드에 따라 다르게 처리)
+        BigDecimal actualThreshold;
+        if (request.getThresholdMode() == ThresholdMode.QUANTILE) {
+            // QUANTILE 모드: 백분위수 계산 (파이썬 방식)
+            actualThreshold = calculateQuantile(longOnlyPredictions, request.getConfidenceThreshold());
+            log.info("QUANTILE 모드: {}% 백분위수 = {}", request.getConfidenceThreshold(), actualThreshold);
+        } else {
+            // FIXED 모드: 입력값 그대로 사용
+            actualThreshold = request.getConfidenceThreshold();
+            log.info("FIXED 모드: 고정 임계값 = {}", actualThreshold);
+        }
+
+        // 5. 신뢰도로 필터링
+        List<CsvPredictionData> filteredPredictions = longOnlyPredictions.stream()
+            .filter(p -> p.getConfidence().compareTo(actualThreshold) >= 0)
+            .collect(Collectors.toList());
+
+        log.info("전체 예측: {}건, 상승예측: {}건, 필터링 후: {}건",
+            allPredictions.size(), longOnlyPredictions.size(), filteredPredictions.size());
 
         if (filteredPredictions.isEmpty()) {
             throw new IllegalStateException("필터링된 예측 데이터가 없습니다. Confidence 기준을 낮춰주세요.");
@@ -118,10 +135,11 @@ public class BacktestService {
         Integer endFold,
         BigDecimal initialCapital,
         BigDecimal confidenceThreshold,
+        ThresholdMode thresholdMode,
         BigDecimal positionSizePercent
     ) {
-        log.info("연속 백테스팅 시작: Fold {} ~ {}, InitialCapital={}, ConfidenceThreshold={}, PositionSizePercent={}",
-            startFold, endFold, initialCapital, confidenceThreshold, positionSizePercent);
+        log.info("연속 백테스팅 시작: Fold {} ~ {}, InitialCapital={}, ConfidenceThreshold={}, Mode={}, PositionSizePercent={}",
+            startFold, endFold, initialCapital, confidenceThreshold, thresholdMode, positionSizePercent);
 
         BigDecimal kellyCapital = initialCapital;
         BigDecimal buyHoldCapital = initialCapital;
@@ -132,7 +150,7 @@ public class BacktestService {
             log.info("연속 백테스팅 - Fold {} 실행 중...", foldNumber);
 
             // 각 fold 백테스팅 실행
-            BacktestRequest request = new BacktestRequest(foldNumber, kellyCapital, confidenceThreshold, positionSizePercent);
+            BacktestRequest request = new BacktestRequest(foldNumber, kellyCapital, confidenceThreshold, thresholdMode, positionSizePercent);
             BacktestResponse response = runBacktest(request);
 
             // Kelly 전략 결과
@@ -557,5 +575,47 @@ public class BacktestService {
             this.confidence = confidence;
             this.positionSize = positionSize;
         }
+    }
+
+    /**
+     * 백분위수 계산 (파이썬 quantile 함수와 동일한 로직)
+     *
+     * @param predictions 예측 데이터 리스트
+     * @param percentile 백분위수 (0~100, 예: 50 = 50번째 백분위, 75 = 75번째 백분위)
+     * @return 계산된 confidence 임계값
+     */
+    private BigDecimal calculateQuantile(List<CsvPredictionData> predictions, BigDecimal percentile) {
+        if (predictions.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        // 1. confidence 값들만 추출하여 정렬
+        List<BigDecimal> confidenceValues = predictions.stream()
+            .map(CsvPredictionData::getConfidence)
+            .sorted()
+            .collect(Collectors.toList());
+
+        // 2. 백분위수를 0~1 범위로 변환 (50 → 0.50)
+        BigDecimal percentileDecimal = percentile.divide(new BigDecimal("100"), 4, ROUNDING);
+
+        // 3. 인덱스 계산 (파이썬 numpy.quantile과 동일한 방식: linear interpolation)
+        int n = confidenceValues.size();
+        BigDecimal position = percentileDecimal.multiply(new BigDecimal(n - 1));
+        int lowerIndex = position.intValue();
+        int upperIndex = Math.min(lowerIndex + 1, n - 1);
+
+        // 4. 선형 보간 (linear interpolation)
+        BigDecimal lowerValue = confidenceValues.get(lowerIndex);
+        BigDecimal upperValue = confidenceValues.get(upperIndex);
+        BigDecimal fraction = position.subtract(new BigDecimal(lowerIndex));
+
+        BigDecimal result = lowerValue.add(
+            upperValue.subtract(lowerValue).multiply(fraction)
+        ).setScale(4, ROUNDING);
+
+        log.debug("Quantile 계산: {}% → 인덱스 {}/{} → 값 {}",
+            percentile, lowerIndex, upperIndex, result);
+
+        return result;
     }
 }
