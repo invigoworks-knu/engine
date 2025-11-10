@@ -37,7 +37,7 @@ public class WebViewController {
     public String backtest(
         @RequestParam Integer foldNumber,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
-        @RequestParam(required = false, defaultValue = "0.5") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
         @RequestParam(required = false) BigDecimal positionSizePercent,
         Model model
     ) {
@@ -51,8 +51,8 @@ public class WebViewController {
                 model.addAttribute("error", "Initial capital must be positive");
                 return "error";
             }
-            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-                model.addAttribute("error", "상승 확률 임계값은 0과 1 사이여야 합니다");
+            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
+                model.addAttribute("error", "신뢰도 임계값은 0과 0.5 사이여야 합니다");
                 return "error";
             }
             if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
@@ -85,7 +85,7 @@ public class WebViewController {
         @RequestParam(required = false, defaultValue = "1") Integer startFold,
         @RequestParam(required = false, defaultValue = "7") Integer endFold,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
-        @RequestParam(required = false, defaultValue = "0.5") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
         @RequestParam(required = false) BigDecimal positionSizePercent,
         Model model
     ) {
@@ -103,8 +103,8 @@ public class WebViewController {
                 model.addAttribute("error", "Initial capital must be positive");
                 return "error";
             }
-            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-                model.addAttribute("error", "상승 확률 임계값은 0과 1 사이여야 합니다");
+            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
+                model.addAttribute("error", "신뢰도 임계값은 0과 0.5 사이여야 합니다");
                 return "error";
             }
             if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {

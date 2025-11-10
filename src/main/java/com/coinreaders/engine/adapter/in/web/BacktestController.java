@@ -25,7 +25,7 @@ public class BacktestController {
      *
      * @param foldNumber Fold 번호 (1~8)
      * @param initialCapital 초기 자본 (기본값: 10000)
-     * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.5)
+     * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.1, 범위: 0~0.5)
      * @param positionSizePercent 포지션 크기 (0~100%), null이면 Kelly Criterion 자동 계산
      * @return Kelly vs Buy & Hold 비교 결과
      */
@@ -33,7 +33,7 @@ public class BacktestController {
     public ResponseEntity<?> runBacktest(
         @RequestParam Integer foldNumber,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
-        @RequestParam(required = false, defaultValue = "0.5") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
         @RequestParam(required = false) BigDecimal positionSizePercent
     ) {
         log.info("백테스팅 API 호출: foldNumber={}, initialCapital={}, confidenceThreshold={}, positionSizePercent={}",
@@ -46,8 +46,8 @@ public class BacktestController {
         if (initialCapital.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest().body("initialCapital must be positive");
         }
-        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 1");
+        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
+            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 0.5");
         }
         if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
             return ResponseEntity.badRequest().body("positionSizePercent must be between 0 and 100");
@@ -78,7 +78,7 @@ public class BacktestController {
      * @param startFold 시작 Fold (기본값: 1)
      * @param endFold 종료 Fold (기본값: 7)
      * @param initialCapital 초기 자본 (기본값: 10000)
-     * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.5)
+     * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.1, 범위: 0~0.5)
      * @param positionSizePercent 포지션 크기 (0~100%), null이면 Kelly Criterion 자동 계산
      * @return Fold별 결과 및 전체 요약
      */
@@ -87,7 +87,7 @@ public class BacktestController {
         @RequestParam(required = false, defaultValue = "1") Integer startFold,
         @RequestParam(required = false, defaultValue = "7") Integer endFold,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
-        @RequestParam(required = false, defaultValue = "0.5") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
         @RequestParam(required = false) BigDecimal positionSizePercent
     ) {
         log.info("연속 백테스팅 API 호출: Fold {} ~ {}, initialCapital={}, confidenceThreshold={}, positionSizePercent={}",
@@ -103,8 +103,8 @@ public class BacktestController {
         if (initialCapital.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest().body("initialCapital must be positive");
         }
-        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 1");
+        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
+            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 0.5");
         }
         if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
             return ResponseEntity.badRequest().body("positionSizePercent must be between 0 and 100");
