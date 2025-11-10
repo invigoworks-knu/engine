@@ -55,15 +55,12 @@ public class BacktestService {
         // 2. AI 예측 데이터 로드 (CSV에서 직접 로드)
         List<CsvPredictionData> allPredictions = csvLoader.loadGruPredictions(request.getFoldNumber());
 
-        // 3. 상승 예측 & 상승 확률 >= threshold 필터링
-        // 전략: 롱 포지션만 가능하므로 pred_proba_up >= 0.5 (상승 예측)만 거래
-        // confidenceThreshold는 0.5~1.0 범위에서 추가 필터링 수행
+        // 3. 상승 확률 >= threshold 필터링 (사용자 선택 존중)
         List<CsvPredictionData> filteredPredictions = allPredictions.stream()
-            .filter(p -> p.getPredDirection() == 1) // 상승 예측 (pred_proba_up >= 0.5)
-            .filter(p -> p.getPredProbaUp().compareTo(request.getConfidenceThreshold()) >= 0) // 추가 필터링
+            .filter(p -> p.getPredProbaUp().compareTo(request.getConfidenceThreshold()) >= 0)
             .collect(Collectors.toList());
 
-        log.info("전체 예측: {}건, 필터링 후 (상승예측 & 상승확률>={}): {}건",
+        log.info("전체 예측: {}건, 필터링 후 (상승확률>={}): {}건",
             allPredictions.size(), request.getConfidenceThreshold(), filteredPredictions.size());
 
         if (filteredPredictions.isEmpty()) {
@@ -157,6 +154,7 @@ public class BacktestService {
                 .kellyInitialCapital(kellyCapital)
                 .kellyFinalCapital(kellyFinalCapital)
                 .kellyReturnPct(kellyReturnPct)
+                .kellyTrades(response.getKellyStrategy().getTotalTrades())
                 .buyHoldInitialCapital(buyHoldCapital)
                 .buyHoldFinalCapital(buyHoldFinalCapital)
                 .buyHoldReturnPct(buyHoldReturnPct)

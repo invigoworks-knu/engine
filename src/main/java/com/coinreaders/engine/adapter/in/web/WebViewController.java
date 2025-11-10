@@ -51,8 +51,8 @@ public class WebViewController {
                 model.addAttribute("error", "Initial capital must be positive");
                 return "error";
             }
-            if (confidenceThreshold.compareTo(new BigDecimal("0.5")) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-                model.addAttribute("error", "Confidence threshold must be between 0.5 and 1.0 (long-only strategy)");
+            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
+                model.addAttribute("error", "상승 확률 임계값은 0과 1 사이여야 합니다");
                 return "error";
             }
             if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
@@ -103,8 +103,8 @@ public class WebViewController {
                 model.addAttribute("error", "Initial capital must be positive");
                 return "error";
             }
-            if (confidenceThreshold.compareTo(new BigDecimal("0.5")) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
-                model.addAttribute("error", "Confidence threshold must be between 0.5 and 1.0 (long-only strategy)");
+            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
+                model.addAttribute("error", "상승 확률 임계값은 0과 1 사이여야 합니다");
                 return "error";
             }
             if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {

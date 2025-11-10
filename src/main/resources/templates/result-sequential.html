@@ -192,13 +192,14 @@
                     <thead class="table-dark">
                         <tr>
                             <th>Fold</th>
-                            <th>Regime</th>
-                            <th>Period</th>
-                            <th>Kelly Return</th>
-                            <th>B&H Return</th>
+                            <th>레짐</th>
+                            <th>기간</th>
+                            <th>Kelly 수익률</th>
+                            <th>Kelly 거래</th>
+                            <th>B&H 수익률</th>
                             <th>Alpha</th>
                             <th>Winner</th>
-                            <th>Kelly Final</th>
+                            <th>Kelly 최종</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -213,6 +214,9 @@
                             <td><small>[[${fold.dateRange}]]</small></td>
                             <td th:class="${fold.kellyReturnPct >= 0 ? 'positive' : 'negative'}">
                                 <strong>[[${#numbers.formatDecimal(fold.kellyReturnPct, 1, 2)}]]%</strong>
+                            </td>
+                            <td>
+                                <strong>[[${fold.kellyTrades}]]건</strong>
                             </td>
                             <td th:class="${fold.buyHoldReturnPct >= 0 ? 'positive' : 'negative'}">
                                 [[${#numbers.formatDecimal(fold.buyHoldReturnPct, 1, 2)}]]%
