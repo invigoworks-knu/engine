@@ -127,9 +127,41 @@
             color: #667eea;
             margin-left: 0.3rem;
         }
+        /* 버튼 그룹 내 버튼 비율 50:50 */
+        .btn-group > .btn-check + .btn {
+            flex: 1;
+            width: 50%;
+        }
+        /* 토스트 알림 스타일 */
+        .toast {
+            min-width: 300px;
+        }
+        .toast-success {
+            background-color: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+        .toast-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
     </style>
 </head>
 <body>
+    <!-- 토스트 알림 컨테이너 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+        <div id="dataToast" class="toast" role="alert">
+            <div class="toast-header">
+                <i id="toastIcon" class="fas fa-check-circle me-2"></i>
+                <strong id="toastTitle" class="me-auto">알림</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage">
+                메시지
+            </div>
+        </div>
+    </div>
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10">
@@ -390,41 +422,93 @@
                 });
         }
 
+        // 토스트 알림 표시 함수
+        function showToast(title, message, isSuccess = true) {
+            const toast = document.getElementById('dataToast');
+            const toastIcon = document.getElementById('toastIcon');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastBody = toast.querySelector('.toast-body');
+
+            // 아이콘과 색상 설정
+            if (isSuccess) {
+                toastIcon.className = 'fas fa-check-circle me-2';
+                toastIcon.style.color = '#28a745';
+                toastBody.className = 'toast-body toast-success';
+            } else {
+                toastIcon.className = 'fas fa-exclamation-circle me-2';
+                toastIcon.style.color = '#dc3545';
+                toastBody.className = 'toast-body toast-error';
+            }
+
+            toastTitle.textContent = title;
+            toastMessage.textContent = message;
+
+            // Bootstrap 토스트 표시
+            const bsToast = new bootstrap.Toast(toast, {
+                autohide: true,
+                delay: 5000
+            });
+            bsToast.show();
+        }
+
         // OHLCV 데이터 적재
         function loadOhlcvData() {
             const btn = document.getElementById('btnOhlcv');
+            const originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
 
             fetch('/api/v1/data/init-ohlcv-all', { method: 'POST' })
                 .then(response => response.text())
                 .then(message => {
-                    alert(message);
+                    btn.innerHTML = originalHtml;
+
+                    // 메시지에 따라 제목과 내용 설정
+                    if (message.includes('이미 적재')) {
+                        showToast('데이터 확인', message, true);
+                        btn.disabled = true;
+                    } else {
+                        showToast('적재 완료', 'OHLCV 데이터가 성공적으로 적재되었습니다!', true);
+                    }
+
                     checkDataStatus(); // 상태 다시 확인
                 })
                 .catch(error => {
-                    alert('OHLCV 데이터 적재 실패: ' + error);
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-download"></i> OHLCV 데이터 적재';
+                    btn.innerHTML = originalHtml;
+                    showToast('적재 실패', 'OHLCV 데이터 적재에 실패했습니다. 다시 시도해주세요.', false);
+                    console.error('OHLCV 적재 오류:', error);
                 });
         }
 
         // AI 예측 데이터 적재
         function loadAiData() {
             const btn = document.getElementById('btnAi');
+            const originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
 
             fetch('/api/v1/data/init-ai-predictions-all', { method: 'POST' })
                 .then(response => response.text())
                 .then(message => {
-                    alert(message);
+                    btn.innerHTML = originalHtml;
+
+                    // 메시지에 따라 제목과 내용 설정
+                    if (message.includes('이미 적재')) {
+                        showToast('데이터 확인', message, true);
+                        btn.disabled = true;
+                    } else {
+                        showToast('적재 완료', 'AI 예측 데이터가 성공적으로 적재되었습니다!', true);
+                    }
+
                     checkDataStatus(); // 상태 다시 확인
                 })
                 .catch(error => {
-                    alert('AI 예측 데이터 적재 실패: ' + error);
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-download"></i> AI 예측 데이터 적재';
+                    btn.innerHTML = originalHtml;
+                    showToast('적재 실패', 'AI 예측 데이터 적재에 실패했습니다. 다시 시도해주세요.', false);
+                    console.error('AI 적재 오류:', error);
                 });
         }
 
