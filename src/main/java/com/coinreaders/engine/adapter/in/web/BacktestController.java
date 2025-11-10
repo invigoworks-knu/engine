@@ -6,6 +6,7 @@ import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
+import com.coinreaders.engine.application.backtest.dto.ConfidenceColumn;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,7 @@ public class BacktestController {
      * @param foldNumber Fold 번호 (1~8)
      * @param initialCapital 초기 자본 (기본값: 10000)
      * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.1)
+     * @param confidenceColumn 사용할 컬럼 (CONFIDENCE 또는 PRED_PROBA_UP, 기본값: CONFIDENCE)
      * @param thresholdMode 임계값 모드 (FIXED 또는 QUANTILE, 기본값: FIXED)
      * @param positionSizePercent 포지션 크기 (0~100%), null이면 Kelly Criterion 자동 계산
      * @return Kelly vs Buy & Hold 비교 결과
@@ -36,11 +38,12 @@ public class BacktestController {
         @RequestParam Integer foldNumber,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
         @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "CONFIDENCE") ConfidenceColumn confidenceColumn,
         @RequestParam(required = false, defaultValue = "FIXED") ThresholdMode thresholdMode,
         @RequestParam(required = false) BigDecimal positionSizePercent
     ) {
-        log.info("백테스팅 API 호출: foldNumber={}, initialCapital={}, confidenceThreshold={}, thresholdMode={}, positionSizePercent={}",
-            foldNumber, initialCapital, confidenceThreshold, thresholdMode, positionSizePercent);
+        log.info("백테스팅 API 호출: foldNumber={}, initialCapital={}, confidenceThreshold={}, confidenceColumn={}, thresholdMode={}, positionSizePercent={}",
+            foldNumber, initialCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent);
 
         // 입력 검증
         if (foldNumber < 1 || foldNumber > 8) {
@@ -50,10 +53,11 @@ public class BacktestController {
             return ResponseEntity.badRequest().body("initialCapital must be positive");
         }
 
-        // 임계값 범위 검증 (모드에 따라 다름)
+        // 임계값 범위 검증 (컬럼과 모드에 따라 다름)
+        BigDecimal maxFixed = confidenceColumn == ConfidenceColumn.CONFIDENCE ? new BigDecimal("0.5") : BigDecimal.ONE;
         if (thresholdMode == ThresholdMode.FIXED) {
-            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
-                return ResponseEntity.badRequest().body("FIXED 모드: confidenceThreshold must be between 0 and 0.5");
+            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(maxFixed) > 0) {
+                return ResponseEntity.badRequest().body("FIXED 모드: confidenceThreshold must be between 0 and " + maxFixed);
             }
         } else { // QUANTILE
             if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("100")) > 0) {
@@ -65,7 +69,7 @@ public class BacktestController {
             return ResponseEntity.badRequest().body("positionSizePercent must be between 0 and 100");
         }
 
-        BacktestRequest request = new BacktestRequest(foldNumber, initialCapital, confidenceThreshold, thresholdMode, positionSizePercent);
+        BacktestRequest request = new BacktestRequest(foldNumber, initialCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent);
         BacktestResponse response = backtestService.runBacktest(request);
 
         return ResponseEntity.ok(response);
@@ -91,6 +95,7 @@ public class BacktestController {
      * @param endFold 종료 Fold (기본값: 7)
      * @param initialCapital 초기 자본 (기본값: 10000)
      * @param confidenceThreshold 신뢰도 임계값 (기본값: 0.1)
+     * @param confidenceColumn 사용할 컬럼 (CONFIDENCE 또는 PRED_PROBA_UP, 기본값: CONFIDENCE)
      * @param thresholdMode 임계값 모드 (FIXED 또는 QUANTILE, 기본값: FIXED)
      * @param positionSizePercent 포지션 크기 (0~100%), null이면 Kelly Criterion 자동 계산
      * @return Fold별 결과 및 전체 요약
@@ -101,11 +106,12 @@ public class BacktestController {
         @RequestParam(required = false, defaultValue = "7") Integer endFold,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
         @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "CONFIDENCE") ConfidenceColumn confidenceColumn,
         @RequestParam(required = false, defaultValue = "FIXED") ThresholdMode thresholdMode,
         @RequestParam(required = false) BigDecimal positionSizePercent
     ) {
-        log.info("연속 백테스팅 API 호출: Fold {} ~ {}, initialCapital={}, confidenceThreshold={}, thresholdMode={}, positionSizePercent={}",
-            startFold, endFold, initialCapital, confidenceThreshold, thresholdMode, positionSizePercent);
+        log.info("연속 백테스팅 API 호출: Fold {} ~ {}, initialCapital={}, confidenceThreshold={}, confidenceColumn={}, thresholdMode={}, positionSizePercent={}",
+            startFold, endFold, initialCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent);
 
         // 입력 검증
         if (startFold < 1 || startFold > 8 || endFold < 1 || endFold > 8) {
@@ -118,10 +124,11 @@ public class BacktestController {
             return ResponseEntity.badRequest().body("initialCapital must be positive");
         }
 
-        // 임계값 범위 검증 (모드에 따라 다름)
+        // 임계값 범위 검증 (컬럼과 모드에 따라 다름)
+        BigDecimal maxFixed = confidenceColumn == ConfidenceColumn.CONFIDENCE ? new BigDecimal("0.5") : BigDecimal.ONE;
         if (thresholdMode == ThresholdMode.FIXED) {
-            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
-                return ResponseEntity.badRequest().body("FIXED 모드: confidenceThreshold must be between 0 and 0.5");
+            if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(maxFixed) > 0) {
+                return ResponseEntity.badRequest().body("FIXED 모드: confidenceThreshold must be between 0 and " + maxFixed);
             }
         } else { // QUANTILE
             if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("100")) > 0) {
@@ -134,7 +141,7 @@ public class BacktestController {
         }
 
         SequentialBacktestResponse response = backtestService.runSequentialBacktest(
-            startFold, endFold, initialCapital, confidenceThreshold, thresholdMode, positionSizePercent
+            startFold, endFold, initialCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent
         );
 
         return ResponseEntity.ok(response);

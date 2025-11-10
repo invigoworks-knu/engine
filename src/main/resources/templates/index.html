@@ -141,21 +141,32 @@
                                     </div>
                                 </div>
                                 <div class="mb-3">
+                                    <label class="form-label"><i class="fas fa-database"></i> 필터 컬럼 선택</label>
+                                    <div class="btn-group w-100" role="group">
+                                        <input type="radio" class="btn-check" name="confidenceColumn" id="colConfidence1" value="CONFIDENCE" checked autocomplete="off" onchange="updateColumnInput('single')">
+                                        <label class="btn btn-outline-success" for="colConfidence1">confidence (확신도)</label>
+
+                                        <input type="radio" class="btn-check" name="confidenceColumn" id="colPredProba1" value="PRED_PROBA_UP" autocomplete="off" onchange="updateColumnInput('single')">
+                                        <label class="btn btn-outline-success" for="colPredProba1">pred_proba_up (상승 확률)</label>
+                                    </div>
+                                    <small class="text-muted" id="colDesc1">confidence: 모델 확신도 (0~0.5)</small>
+                                </div>
+                                <div class="mb-3">
                                     <label class="form-label"><i class="fas fa-filter"></i> 신뢰도 필터 모드</label>
                                     <div class="btn-group w-100" role="group">
                                         <input type="radio" class="btn-check" name="thresholdMode" id="fixed1" value="FIXED" checked autocomplete="off" onchange="updateThresholdInput('single')">
                                         <label class="btn btn-outline-primary" for="fixed1">고정값 모드</label>
 
                                         <input type="radio" class="btn-check" name="thresholdMode" id="quantile1" value="QUANTILE" autocomplete="off" onchange="updateThresholdInput('single')">
-                                        <label class="btn btn-outline-primary" for="quantile1">백분위수 모드 (파이썬 방식)</label>
+                                        <label class="btn btn-outline-primary" for="quantile1">백분위수 모드</label>
                                     </div>
-                                    <small class="text-muted" id="modeDesc1">고정값: confidence >= 입력값으로 필터링</small>
+                                    <small class="text-muted" id="modeDesc1">고정값: 선택한 컬럼 >= 입력값으로 필터링</small>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label"><i class="fas fa-percent"></i> <span id="thresholdLabel1">신뢰도 임계값</span></label>
+                                        <label class="form-label"><i class="fas fa-percent"></i> <span id="thresholdLabel1">임계값</span></label>
                                         <input type="number" class="form-control" id="confidenceInput1" name="confidenceThreshold" value="0.1" step="0.01" min="0" max="0.5" required>
-                                        <small class="text-muted" id="thresholdHelp1">모델 확신도 (0~0.5, 높을수록 확신)</small>
+                                        <small class="text-muted" id="thresholdHelp1">confidence >= 0.1</small>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label"><i class="fas fa-sliders-h"></i> 포지션 크기 (%)</label>
@@ -191,15 +202,26 @@
                                     </div>
                                 </div>
                                 <div class="mb-3">
+                                    <label class="form-label"><i class="fas fa-database"></i> 필터 컬럼 선택</label>
+                                    <div class="btn-group w-100" role="group">
+                                        <input type="radio" class="btn-check" name="confidenceColumn" id="colConfidence2" value="CONFIDENCE" checked autocomplete="off" onchange="updateColumnInput('sequential')">
+                                        <label class="btn btn-outline-success" for="colConfidence2">confidence (확신도)</label>
+
+                                        <input type="radio" class="btn-check" name="confidenceColumn" id="colPredProba2" value="PRED_PROBA_UP" autocomplete="off" onchange="updateColumnInput('sequential')">
+                                        <label class="btn btn-outline-success" for="colPredProba2">pred_proba_up (상승 확률)</label>
+                                    </div>
+                                    <small class="text-muted" id="colDesc2">confidence: 모델 확신도 (0~0.5)</small>
+                                </div>
+                                <div class="mb-3">
                                     <label class="form-label"><i class="fas fa-filter"></i> 신뢰도 필터 모드</label>
                                     <div class="btn-group w-100" role="group">
                                         <input type="radio" class="btn-check" name="thresholdMode" id="fixed2" value="FIXED" checked autocomplete="off" onchange="updateThresholdInput('sequential')">
                                         <label class="btn btn-outline-primary" for="fixed2">고정값 모드</label>
 
                                         <input type="radio" class="btn-check" name="thresholdMode" id="quantile2" value="QUANTILE" autocomplete="off" onchange="updateThresholdInput('sequential')">
-                                        <label class="btn btn-outline-primary" for="quantile2">백분위수 모드 (파이썬 방식)</label>
+                                        <label class="btn btn-outline-primary" for="quantile2">백분위수 모드</label>
                                     </div>
-                                    <small class="text-muted" id="modeDesc2">고정값: confidence >= 입력값으로 필터링</small>
+                                    <small class="text-muted" id="modeDesc2">고정값: 선택한 컬럼 >= 입력값으로 필터링</small>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-4 mb-3">
@@ -207,9 +229,9 @@
                                         <input type="number" class="form-control" name="initialCapital" value="10000" step="1000" min="1000" required>
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <label class="form-label"><i class="fas fa-percent"></i> <span id="thresholdLabel2">신뢰도 임계값</span></label>
+                                        <label class="form-label"><i class="fas fa-percent"></i> <span id="thresholdLabel2">임계값</span></label>
                                         <input type="number" class="form-control" id="confidenceInput2" name="confidenceThreshold" value="0.1" step="0.01" min="0" max="0.5" required>
-                                        <small class="text-muted" id="thresholdHelp2">모델 확신도 (0~0.5)</small>
+                                        <small class="text-muted" id="thresholdHelp2">confidence >= 0.1</small>
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label"><i class="fas fa-sliders-h"></i> 포지션 크기 (%)</label>
@@ -231,6 +253,54 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function updateColumnInput(formType) {
+            const suffix = formType === 'single' ? '1' : '2';
+            const confidenceRadio = document.getElementById('colConfidence' + suffix);
+            const predProbaRadio = document.getElementById('colPredProba' + suffix);
+            const input = document.getElementById('confidenceInput' + suffix);
+            const colDesc = document.getElementById('colDesc' + suffix);
+            const modeDesc = document.getElementById('modeDesc' + suffix);
+            const help = document.getElementById('thresholdHelp' + suffix);
+
+            // Get current threshold mode
+            const fixedRadio = document.getElementById('fixed' + suffix);
+            const isFixedMode = fixedRadio.checked;
+
+            if (confidenceRadio.checked) {
+                // CONFIDENCE 컬럼 선택
+                colDesc.textContent = 'confidence: 모델 확신도 (0~0.5)';
+
+                if (isFixedMode) {
+                    // FIXED 모드 - confidence
+                    input.value = '0.1';
+                    input.step = '0.01';
+                    input.min = '0';
+                    input.max = '0.5';
+                    help.textContent = 'confidence >= 0.1';
+                    modeDesc.textContent = '고정값: 선택한 컬럼 >= 입력값으로 필터링';
+                } else {
+                    // QUANTILE 모드는 값 유지
+                    modeDesc.textContent = '백분위수: 전체 confidence 분포에서 상위 N% 데이터만 필터링';
+                }
+            } else {
+                // PRED_PROBA_UP 컬럼 선택
+                colDesc.textContent = 'pred_proba_up: 상승 확률 (0~1)';
+
+                if (isFixedMode) {
+                    // FIXED 모드 - pred_proba_up
+                    input.value = '0.5';
+                    input.step = '0.01';
+                    input.min = '0';
+                    input.max = '1';
+                    help.textContent = 'pred_proba_up >= 0.5';
+                    modeDesc.textContent = '고정값: 선택한 컬럼 >= 입력값으로 필터링';
+                } else {
+                    // QUANTILE 모드는 값 유지
+                    modeDesc.textContent = '백분위수: 전체 pred_proba_up 분포에서 상위 N% 데이터만 필터링';
+                }
+            }
+        }
+
         function updateThresholdInput(formType) {
             const suffix = formType === 'single' ? '1' : '2';
             const fixedRadio = document.getElementById('fixed' + suffix);
@@ -240,6 +310,11 @@
             const help = document.getElementById('thresholdHelp' + suffix);
             const modeDesc = document.getElementById('modeDesc' + suffix);
 
+            // Get current column selection
+            const confidenceRadio = document.getElementById('colConfidence' + suffix);
+            const isConfidenceColumn = confidenceRadio.checked;
+            const columnName = isConfidenceColumn ? 'confidence' : 'pred_proba_up';
+
             if (quantileRadio.checked) {
                 // QUANTILE 모드
                 label.textContent = '백분위수 (%)';
@@ -248,16 +323,28 @@
                 input.min = '0';
                 input.max = '100';
                 help.textContent = '상위 몇 %의 데이터만 거래 (예: 50 = 상위 50%, 25 = 상위 75%)';
-                modeDesc.textContent = '백분위수: 전체 confidence 분포에서 상위 N% 데이터만 필터링 (파이썬 quantile 방식)';
+                modeDesc.textContent = '백분위수: 전체 ' + columnName + ' 분포에서 상위 N% 데이터만 필터링';
             } else {
                 // FIXED 모드
-                label.textContent = '신뢰도 임계값';
-                input.value = '0.1';
-                input.step = '0.01';
-                input.min = '0';
-                input.max = '0.5';
-                help.textContent = '모델 확신도 (0~0.5, 높을수록 확신)';
-                modeDesc.textContent = '고정값: confidence >= 입력값으로 필터링';
+                label.textContent = '임계값';
+
+                if (isConfidenceColumn) {
+                    // confidence: 0~0.5
+                    input.value = '0.1';
+                    input.step = '0.01';
+                    input.min = '0';
+                    input.max = '0.5';
+                    help.textContent = 'confidence >= 0.1';
+                } else {
+                    // pred_proba_up: 0~1
+                    input.value = '0.5';
+                    input.step = '0.01';
+                    input.min = '0';
+                    input.max = '1';
+                    help.textContent = 'pred_proba_up >= 0.5';
+                }
+
+                modeDesc.textContent = '고정값: 선택한 컬럼 >= 입력값으로 필터링';
             }
         }
     </script>

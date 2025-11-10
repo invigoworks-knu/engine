@@ -6,6 +6,7 @@ import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
+import com.coinreaders.engine.application.backtest.dto.ConfidenceColumn;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -39,6 +40,7 @@ public class WebViewController {
         @RequestParam Integer foldNumber,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
         @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "CONFIDENCE") ConfidenceColumn confidenceColumn,
         @RequestParam(required = false, defaultValue = "FIXED") ThresholdMode thresholdMode,
         @RequestParam(required = false) BigDecimal positionSizePercent,
         Model model
@@ -54,10 +56,11 @@ public class WebViewController {
                 return "error";
             }
 
-            // 임계값 범위 검증 (모드에 따라 다름)
+            // 임계값 범위 검증 (컬럼과 모드에 따라 다름)
+            BigDecimal maxFixed = confidenceColumn == ConfidenceColumn.CONFIDENCE ? new BigDecimal("0.5") : BigDecimal.ONE;
             if (thresholdMode == ThresholdMode.FIXED) {
-                if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
-                    model.addAttribute("error", "FIXED 모드: 신뢰도 임계값은 0과 0.5 사이여야 합니다");
+                if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(maxFixed) > 0) {
+                    model.addAttribute("error", "FIXED 모드: 임계값은 0과 " + maxFixed + " 사이여야 합니다");
                     return "error";
                 }
             } else { // QUANTILE
@@ -72,13 +75,14 @@ public class WebViewController {
                 return "error";
             }
 
-            BacktestRequest request = new BacktestRequest(foldNumber, initialCapital, confidenceThreshold, thresholdMode, positionSizePercent);
+            BacktestRequest request = new BacktestRequest(foldNumber, initialCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent);
             BacktestResponse response = backtestService.runBacktest(request);
 
             model.addAttribute("result", response);
             model.addAttribute("foldNumber", foldNumber);
             model.addAttribute("initialCapital", initialCapital);
             model.addAttribute("confidenceThreshold", confidenceThreshold);
+            model.addAttribute("confidenceColumn", confidenceColumn);
             model.addAttribute("thresholdMode", thresholdMode);
             model.addAttribute("positionSizePercent", positionSizePercent);
 
@@ -99,6 +103,7 @@ public class WebViewController {
         @RequestParam(required = false, defaultValue = "7") Integer endFold,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
         @RequestParam(required = false, defaultValue = "0.1") BigDecimal confidenceThreshold,
+        @RequestParam(required = false, defaultValue = "CONFIDENCE") ConfidenceColumn confidenceColumn,
         @RequestParam(required = false, defaultValue = "FIXED") ThresholdMode thresholdMode,
         @RequestParam(required = false) BigDecimal positionSizePercent,
         Model model
@@ -118,10 +123,11 @@ public class WebViewController {
                 return "error";
             }
 
-            // 임계값 범위 검증 (모드에 따라 다름)
+            // 임계값 범위 검증 (컬럼과 모드에 따라 다름)
+            BigDecimal maxFixed = confidenceColumn == ConfidenceColumn.CONFIDENCE ? new BigDecimal("0.5") : BigDecimal.ONE;
             if (thresholdMode == ThresholdMode.FIXED) {
-                if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(new BigDecimal("0.5")) > 0) {
-                    model.addAttribute("error", "FIXED 모드: 신뢰도 임계값은 0과 0.5 사이여야 합니다");
+                if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(maxFixed) > 0) {
+                    model.addAttribute("error", "FIXED 모드: 임계값은 0과 " + maxFixed + " 사이여야 합니다");
                     return "error";
                 }
             } else { // QUANTILE
@@ -137,7 +143,7 @@ public class WebViewController {
             }
 
             SequentialBacktestResponse response = backtestService.runSequentialBacktest(
-                startFold, endFold, initialCapital, confidenceThreshold, thresholdMode, positionSizePercent
+                startFold, endFold, initialCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent
             );
 
             model.addAttribute("result", response);
@@ -145,6 +151,7 @@ public class WebViewController {
             model.addAttribute("endFold", endFold);
             model.addAttribute("initialCapital", initialCapital);
             model.addAttribute("confidenceThreshold", confidenceThreshold);
+            model.addAttribute("confidenceColumn", confidenceColumn);
             model.addAttribute("thresholdMode", thresholdMode);
             model.addAttribute("positionSizePercent", positionSizePercent);
 
