@@ -202,14 +202,17 @@
 
                     <!-- 사용 가이드 -->
                     <div class="guide-section">
-                        <h6><i class="fas fa-book"></i> 사용 가이드</h6>
+                        <h6><i class="fas fa-book"></i> 사용 가이드 (초보자용)</h6>
                         <ul>
-                            <li><strong>데이터 초기화:</strong> 최초 1회만 실행하면 됩니다. 데이터가 이미 적재되어 있으면 버튼을 눌러도 중복 적재되지 않습니다.</li>
-                            <li><strong>Fold 선택:</strong> Fold 1-7은 Training Set, Fold 8은 Test Set입니다. 먼저 Training Set으로 전략을 검증하세요.</li>
-                            <li><strong>필터 컬럼:</strong> confidence는 모델 확신도(0~0.5), pred_proba_up은 상승 확률(0~1)입니다.</li>
-                            <li><strong>필터 모드:</strong> 고정값은 절대값 기준, 백분위수는 데이터 분포의 상위 N%를 선택합니다.</li>
-                            <li><strong>포지션 크기:</strong> 비워두면 Kelly Criterion이 자동 계산됩니다. 리스크를 줄이려면 고정 비율(예: 50%)을 입력하세요.</li>
+                            <li><strong>❶ 데이터 준비:</strong> 위의 두 버튼을 눌러 과거 거래 데이터를 먼저 불러오세요. (최초 1회만 하면 됩니다)</li>
+                            <li><strong>❷ 테스트 기간 선택:</strong> 어떤 시기의 시장 상황을 시뮬레이션할지 선택하세요. (각 입력창의 <i class="fas fa-question-circle" style="color: #667eea;"></i> 아이콘에 마우스를 올리면 자세한 설명이 나옵니다)</li>
+                            <li><strong>❸ 투자 금액 입력:</strong> 얼마로 시작할지 입력하세요. 실제 돈이 아닌 가상의 금액입니다.</li>
+                            <li><strong>❹ AI 예측 신뢰 기준 설정:</strong> AI가 얼마나 확신할 때 투자할지 정하세요. 기준이 높으면 거래가 적어지고, 낮으면 거래가 많아집니다.</li>
+                            <li><strong>❺ 실행:</strong> 백테스팅 실행 버튼을 누르면 과거 데이터로 전략을 시뮬레이션한 결과를 볼 수 있습니다.</li>
                         </ul>
+                        <p class="mb-0 mt-2 text-muted small">
+                            <i class="fas fa-info-circle"></i> 백테스팅이란? 과거 데이터로 투자 전략을 미리 테스트해보는 것입니다. 실제 돈을 쓰지 않고 "만약 이렇게 투자했다면 얼마를 벌거나 잃었을까?"를 확인할 수 있습니다.
+                        </p>
                     </div>
 
                     <!-- Fold 정보 카드 -->
@@ -246,51 +249,75 @@
                             <form action="/backtest" method="get">
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label"><i class="fas fa-folder"></i> Fold 번호</label>
+                                        <label class="form-label">
+                                            <i class="fas fa-folder"></i> 테스트 기간 선택
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="과거 어느 시기를 시뮬레이션할지 선택하세요. Fold 1-7은 연습용 데이터, Fold 8은 최종 테스트용 데이터입니다. Bull(상승장), Bear(하락장), Sideways(횡보장) 등 다양한 시장 상황을 테스트할 수 있습니다."></i>
+                                        </label>
                                         <select class="form-select" name="foldNumber" required>
-                                            <option value="">Fold 선택...</option>
+                                            <option value="">기간 선택...</option>
                                             <option th:each="fold : ${folds}" th:value="${fold.foldNumber}"
                                                     th:text="${'Fold ' + fold.foldNumber + ' (' + fold.regime + ')'}">
                                             </option>
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label"><i class="fas fa-dollar-sign"></i> 초기 자본</label>
+                                        <label class="form-label">
+                                            <i class="fas fa-dollar-sign"></i> 초기 자본 (원)
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="시뮬레이션을 시작할 가상의 투자 금액입니다. 예를 들어 10,000원으로 시작하면 과거 데이터에서 이 금액이 어떻게 변했을지 확인할 수 있습니다."></i>
+                                        </label>
                                         <input type="number" class="form-control" name="initialCapital" value="10000" step="1000" min="1000" required>
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label"><i class="fas fa-database"></i> 필터 컬럼 선택</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-database"></i> AI 예측 기준 선택
+                                        <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                           title="confidence: AI가 예측에 얼마나 확신하는지 (0~0.5, 높을수록 확신) | pred_proba_up: AI가 계산한 상승 확률 (0~1, 높을수록 상승 예상). 초보자는 confidence 추천!"></i>
+                                    </label>
                                     <div class="btn-group w-100" role="group">
                                         <input type="radio" class="btn-check" name="confidenceColumn" id="colConfidence1" value="CONFIDENCE" checked autocomplete="off" onchange="updateColumnInput('single')">
-                                        <label class="btn btn-outline-success" for="colConfidence1">confidence (확신도)</label>
+                                        <label class="btn btn-outline-success" for="colConfidence1">확신도 (추천)</label>
 
                                         <input type="radio" class="btn-check" name="confidenceColumn" id="colPredProba1" value="PRED_PROBA_UP" autocomplete="off" onchange="updateColumnInput('single')">
-                                        <label class="btn btn-outline-success" for="colPredProba1">pred_proba_up (상승 확률)</label>
+                                        <label class="btn btn-outline-success" for="colPredProba1">상승 확률</label>
                                     </div>
-                                    <small class="text-muted" id="colDesc1">confidence: 모델 확신도 (0~0.5)</small>
+                                    <small class="text-muted" id="colDesc1">AI의 확신도 기준으로 투자 시점을 판단합니다</small>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label"><i class="fas fa-filter"></i> 신뢰도 필터 모드</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-filter"></i> 투자 기준 설정 방법
+                                        <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                           title="고정값: '0.1 이상일 때 투자'처럼 절대적 기준 사용 | 백분위수: '상위 50%일 때 투자'처럼 상대적 기준 사용. 초보자는 고정값이 더 직관적입니다."></i>
+                                    </label>
                                     <div class="btn-group w-100" role="group">
                                         <input type="radio" class="btn-check" name="thresholdMode" id="fixed1" value="FIXED" checked autocomplete="off" onchange="updateThresholdInput('single')">
-                                        <label class="btn btn-outline-primary" for="fixed1">고정값 모드</label>
+                                        <label class="btn btn-outline-primary" for="fixed1">고정값 (추천)</label>
 
                                         <input type="radio" class="btn-check" name="thresholdMode" id="quantile1" value="QUANTILE" autocomplete="off" onchange="updateThresholdInput('single')">
-                                        <label class="btn btn-outline-primary" for="quantile1">백분위수 모드</label>
+                                        <label class="btn btn-outline-primary" for="quantile1">백분위수</label>
                                     </div>
-                                    <small class="text-muted" id="modeDesc1">고정값: 선택한 컬럼 >= 입력값으로 필터링</small>
+                                    <small class="text-muted" id="modeDesc1">선택한 기준 이상일 때만 투자합니다</small>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label"><i class="fas fa-percent"></i> <span id="thresholdLabel1">임계값</span></label>
+                                        <label class="form-label">
+                                            <i class="fas fa-percent"></i> <span id="thresholdLabel1">투자 기준값</span>
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="AI가 이 값 이상으로 확신할 때만 투자합니다. 값이 높으면 거래가 적어지지만 신중하고, 낮으면 거래가 많아집니다. (예: 0.1 = AI 확신도가 0.1 이상일 때만 투자)"></i>
+                                        </label>
                                         <input type="number" class="form-control" id="confidenceInput1" name="confidenceThreshold" value="0.1" step="0.01" min="0" max="0.5" required>
-                                        <small class="text-muted" id="thresholdHelp1">confidence >= 0.1</small>
+                                        <small class="text-muted" id="thresholdHelp1">이 값 이상일 때 투자</small>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label"><i class="fas fa-sliders-h"></i> 포지션 크기 (%)</label>
-                                        <input type="number" class="form-control" name="positionSizePercent" placeholder="비워두면 Kelly 자동 계산" step="5" min="0" max="100">
-                                        <small class="text-muted">비워두면 Kelly Criterion 사용</small>
+                                        <label class="form-label">
+                                            <i class="fas fa-sliders-h"></i> 투자 비율 (%)
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="한 번에 전체 자본의 몇 %를 투자할지 정합니다. 비워두면 켈리 공식으로 자동 계산됩니다. (예: 50 입력 = 자본의 50%만 투자, 위험을 줄이고 싶다면 30~50% 추천)"></i>
+                                        </label>
+                                        <input type="number" class="form-control" name="positionSizePercent" placeholder="비워두면 자동 계산" step="5" min="0" max="100">
+                                        <small class="text-muted">비워두면 최적 비율 자동 계산</small>
                                     </div>
                                 </div>
                                 <div class="text-center mt-4">
@@ -304,16 +331,27 @@
                         <!-- 연속 백테스팅 -->
                         <div class="tab-pane fade" id="sequential" role="tabpanel">
                             <form action="/backtest-sequential" method="get">
+                                <div class="alert alert-info" role="alert">
+                                    <i class="fas fa-info-circle"></i> <strong>연속 백테스팅</strong>이란? 여러 기간을 연속으로 테스트하는 것입니다. 첫 번째 기간이 끝난 후 남은 금액으로 다음 기간을 시작합니다. 장기 투자 전략의 안정성을 확인할 때 유용합니다.
+                                </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label"><i class="fas fa-play"></i> 시작 Fold</label>
+                                        <label class="form-label">
+                                            <i class="fas fa-play"></i> 시작 기간
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="어느 시기부터 시뮬레이션을 시작할지 선택하세요. 보통 Fold 1부터 시작합니다."></i>
+                                        </label>
                                         <select class="form-select" name="startFold" required>
                                             <option value="1" selected>Fold 1</option>
                                             <option th:each="i : ${#numbers.sequence(2, 8)}" th:value="${i}" th:text="${'Fold ' + i}"></option>
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label"><i class="fas fa-stop"></i> 종료 Fold</label>
+                                        <label class="form-label">
+                                            <i class="fas fa-stop"></i> 종료 기간
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="어느 시기까지 시뮬레이션할지 선택하세요. Fold 1-7까지 하면 장기 전략을 확인할 수 있습니다."></i>
+                                        </label>
                                         <select class="form-select" name="endFold" required>
                                             <option th:each="i : ${#numbers.sequence(1, 7)}" th:value="${i}" th:text="${'Fold ' + i}" th:selected="${i == 7}"></option>
                                             <option value="8">Fold 8 (테스트)</option>
@@ -321,40 +359,60 @@
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label"><i class="fas fa-database"></i> 필터 컬럼 선택</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-database"></i> AI 예측 기준 선택
+                                        <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                           title="confidence: AI가 예측에 얼마나 확신하는지 (0~0.5, 높을수록 확신) | pred_proba_up: AI가 계산한 상승 확률 (0~1, 높을수록 상승 예상). 초보자는 confidence 추천!"></i>
+                                    </label>
                                     <div class="btn-group w-100" role="group">
                                         <input type="radio" class="btn-check" name="confidenceColumn" id="colConfidence2" value="CONFIDENCE" checked autocomplete="off" onchange="updateColumnInput('sequential')">
-                                        <label class="btn btn-outline-success" for="colConfidence2">confidence (확신도)</label>
+                                        <label class="btn btn-outline-success" for="colConfidence2">확신도 (추천)</label>
 
                                         <input type="radio" class="btn-check" name="confidenceColumn" id="colPredProba2" value="PRED_PROBA_UP" autocomplete="off" onchange="updateColumnInput('sequential')">
-                                        <label class="btn btn-outline-success" for="colPredProba2">pred_proba_up (상승 확률)</label>
+                                        <label class="btn btn-outline-success" for="colPredProba2">상승 확률</label>
                                     </div>
-                                    <small class="text-muted" id="colDesc2">confidence: 모델 확신도 (0~0.5)</small>
+                                    <small class="text-muted" id="colDesc2">AI의 확신도 기준으로 투자 시점을 판단합니다</small>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label"><i class="fas fa-filter"></i> 신뢰도 필터 모드</label>
+                                    <label class="form-label">
+                                        <i class="fas fa-filter"></i> 투자 기준 설정 방법
+                                        <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                           title="고정값: '0.1 이상일 때 투자'처럼 절대적 기준 사용 | 백분위수: '상위 50%일 때 투자'처럼 상대적 기준 사용. 초보자는 고정값이 더 직관적입니다."></i>
+                                    </label>
                                     <div class="btn-group w-100" role="group">
                                         <input type="radio" class="btn-check" name="thresholdMode" id="fixed2" value="FIXED" checked autocomplete="off" onchange="updateThresholdInput('sequential')">
-                                        <label class="btn btn-outline-primary" for="fixed2">고정값 모드</label>
+                                        <label class="btn btn-outline-primary" for="fixed2">고정값 (추천)</label>
 
                                         <input type="radio" class="btn-check" name="thresholdMode" id="quantile2" value="QUANTILE" autocomplete="off" onchange="updateThresholdInput('sequential')">
-                                        <label class="btn btn-outline-primary" for="quantile2">백분위수 모드</label>
+                                        <label class="btn btn-outline-primary" for="quantile2">백분위수</label>
                                     </div>
-                                    <small class="text-muted" id="modeDesc2">고정값: 선택한 컬럼 >= 입력값으로 필터링</small>
+                                    <small class="text-muted" id="modeDesc2">선택한 기준 이상일 때만 투자합니다</small>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-4 mb-3">
-                                        <label class="form-label"><i class="fas fa-dollar-sign"></i> 초기 자본</label>
+                                        <label class="form-label">
+                                            <i class="fas fa-dollar-sign"></i> 초기 자본 (원)
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="시뮬레이션을 시작할 가상의 투자 금액입니다."></i>
+                                        </label>
                                         <input type="number" class="form-control" name="initialCapital" value="10000" step="1000" min="1000" required>
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <label class="form-label"><i class="fas fa-percent"></i> <span id="thresholdLabel2">임계값</span></label>
+                                        <label class="form-label">
+                                            <i class="fas fa-percent"></i> <span id="thresholdLabel2">투자 기준값</span>
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="AI가 이 값 이상으로 확신할 때만 투자합니다."></i>
+                                        </label>
                                         <input type="number" class="form-control" id="confidenceInput2" name="confidenceThreshold" value="0.1" step="0.01" min="0" max="0.5" required>
-                                        <small class="text-muted" id="thresholdHelp2">confidence >= 0.1</small>
+                                        <small class="text-muted" id="thresholdHelp2">이 값 이상일 때 투자</small>
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <label class="form-label"><i class="fas fa-sliders-h"></i> 포지션 크기 (%)</label>
-                                        <input type="number" class="form-control" name="positionSizePercent" placeholder="Kelly 자동" step="5" min="0" max="100">
+                                        <label class="form-label">
+                                            <i class="fas fa-sliders-h"></i> 투자 비율 (%)
+                                            <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
+                                               title="한 번에 전체 자본의 몇 %를 투자할지 정합니다. 비워두면 자동 계산됩니다."></i>
+                                        </label>
+                                        <input type="number" class="form-control" name="positionSizePercent" placeholder="자동 계산" step="5" min="0" max="100">
                                     </div>
                                 </div>
                                 <div class="text-center mt-4">
@@ -527,7 +585,7 @@
 
             if (confidenceRadio.checked) {
                 // CONFIDENCE 컬럼 선택
-                colDesc.textContent = 'confidence: 모델 확신도 (0~0.5)';
+                colDesc.textContent = 'AI의 확신도 기준으로 투자 시점을 판단합니다';
 
                 if (isFixedMode) {
                     // FIXED 모드 - confidence
@@ -535,15 +593,15 @@
                     input.step = '0.01';
                     input.min = '0';
                     input.max = '0.5';
-                    help.textContent = 'confidence >= 0.1';
-                    modeDesc.textContent = '고정값: 선택한 컬럼 >= 입력값으로 필터링';
+                    help.textContent = '이 값 이상일 때 투자';
+                    modeDesc.textContent = '선택한 기준 이상일 때만 투자합니다';
                 } else {
                     // QUANTILE 모드는 값 유지
-                    modeDesc.textContent = '백분위수: 전체 confidence 분포에서 상위 N% 데이터만 필터링';
+                    modeDesc.textContent = '상위 몇 %의 확신도를 가진 예측에만 투자합니다';
                 }
             } else {
                 // PRED_PROBA_UP 컬럼 선택
-                colDesc.textContent = 'pred_proba_up: 상승 확률 (0~1)';
+                colDesc.textContent = 'AI가 예측한 상승 확률 기준으로 투자 시점을 판단합니다';
 
                 if (isFixedMode) {
                     // FIXED 모드 - pred_proba_up
@@ -551,11 +609,11 @@
                     input.step = '0.01';
                     input.min = '0';
                     input.max = '1';
-                    help.textContent = 'pred_proba_up >= 0.5';
-                    modeDesc.textContent = '고정값: 선택한 컬럼 >= 입력값으로 필터링';
+                    help.textContent = '이 값 이상일 때 투자';
+                    modeDesc.textContent = '선택한 기준 이상일 때만 투자합니다';
                 } else {
                     // QUANTILE 모드는 값 유지
-                    modeDesc.textContent = '백분위수: 전체 pred_proba_up 분포에서 상위 N% 데이터만 필터링';
+                    modeDesc.textContent = '상위 몇 %의 상승 확률을 가진 예측에만 투자합니다';
                 }
             }
         }
@@ -576,16 +634,16 @@
 
             if (quantileRadio.checked) {
                 // QUANTILE 모드
-                label.textContent = '백분위수 (%)';
+                label.textContent = '상위 몇 % 투자 (백분위수)';
                 input.value = '50';
                 input.step = '1';
                 input.min = '0';
                 input.max = '100';
-                help.textContent = '상위 몇 %의 데이터만 거래 (예: 50 = 상위 50%, 25 = 상위 75%)';
-                modeDesc.textContent = '백분위수: 전체 ' + columnName + ' 분포에서 상위 N% 데이터만 필터링';
+                help.textContent = '상위 몇 %의 예측에만 투자 (예: 50 = 상위 50%에만 투자)';
+                modeDesc.textContent = isConfidenceColumn ? '상위 몇 %의 확신도를 가진 예측에만 투자합니다' : '상위 몇 %의 상승 확률을 가진 예측에만 투자합니다';
             } else {
                 // FIXED 모드
-                label.textContent = '임계값';
+                label.textContent = '투자 기준값';
 
                 if (isConfidenceColumn) {
                     // confidence: 0~0.5
@@ -593,17 +651,17 @@
                     input.step = '0.01';
                     input.min = '0';
                     input.max = '0.5';
-                    help.textContent = 'confidence >= 0.1';
+                    help.textContent = '이 값 이상일 때 투자';
                 } else {
                     // pred_proba_up: 0~1
                     input.value = '0.5';
                     input.step = '0.01';
                     input.min = '0';
                     input.max = '1';
-                    help.textContent = 'pred_proba_up >= 0.5';
+                    help.textContent = '이 값 이상일 때 투자';
                 }
 
-                modeDesc.textContent = '고정값: 선택한 컬럼 >= 입력값으로 필터링';
+                modeDesc.textContent = '선택한 기준 이상일 때만 투자합니다';
             }
         }
     </script>
