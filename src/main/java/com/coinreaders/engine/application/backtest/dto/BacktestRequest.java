@@ -13,7 +13,21 @@ public class BacktestRequest {
 
     private Integer foldNumber; // 1~8
     private BigDecimal initialCapital = new BigDecimal("10000"); // 기본값 10,000
-    private BigDecimal confidenceThreshold = new BigDecimal("0.5"); // 기본값 50%
+    private BigDecimal confidenceThreshold = new BigDecimal("0.1"); // 기본값 0.1 (FIXED) 또는 10 (QUANTILE = 상위 90%)
+
+    /**
+     * 필터링에 사용할 컬럼
+     * CONFIDENCE: confidence 컬럼 사용 (파이썬 방식, 0~0.5)
+     * PRED_PROBA_UP: pred_proba_up 컬럼 사용 (초기 방식, 0~1)
+     */
+    private ConfidenceColumn confidenceColumn = ConfidenceColumn.CONFIDENCE; // 기본값: confidence 컬럼
+
+    /**
+     * 신뢰도 임계값 모드
+     * FIXED: confidenceThreshold를 고정값으로 사용
+     * QUANTILE: confidenceThreshold를 백분위수로 사용 (0~100, 예: 50 = 상위 50%)
+     */
+    private ThresholdMode thresholdMode = ThresholdMode.FIXED; // 기본값: 고정값 모드
 
     /**
      * 포지션 크기 비율 (0~100%)
@@ -36,6 +50,27 @@ public class BacktestRequest {
         this.foldNumber = foldNumber;
         this.initialCapital = initialCapital;
         this.confidenceThreshold = confidenceThreshold;
+        this.positionSizePercent = positionSizePercent;
+        this.thresholdMode = ThresholdMode.FIXED; // 기본값
+    }
+
+    public BacktestRequest(Integer foldNumber, BigDecimal initialCapital, BigDecimal confidenceThreshold,
+                           ThresholdMode thresholdMode, BigDecimal positionSizePercent) {
+        this.foldNumber = foldNumber;
+        this.initialCapital = initialCapital;
+        this.confidenceThreshold = confidenceThreshold;
+        this.thresholdMode = thresholdMode;
+        this.positionSizePercent = positionSizePercent;
+        this.confidenceColumn = ConfidenceColumn.CONFIDENCE; // 기본값
+    }
+
+    public BacktestRequest(Integer foldNumber, BigDecimal initialCapital, BigDecimal confidenceThreshold,
+                           ConfidenceColumn confidenceColumn, ThresholdMode thresholdMode, BigDecimal positionSizePercent) {
+        this.foldNumber = foldNumber;
+        this.initialCapital = initialCapital;
+        this.confidenceThreshold = confidenceThreshold;
+        this.confidenceColumn = confidenceColumn;
+        this.thresholdMode = thresholdMode;
         this.positionSizePercent = positionSizePercent;
     }
 }

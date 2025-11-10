@@ -4,6 +4,8 @@ import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.CsvPredictionData;
 import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
+import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
+import com.coinreaders.engine.application.backtest.dto.ConfidenceColumn;
 import com.coinreaders.engine.domain.entity.BacktestResult;
 import com.coinreaders.engine.domain.entity.BacktestTrade;
 import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
@@ -55,14 +57,39 @@ public class BacktestService {
         // 2. AI 예측 데이터 로드 (CSV에서 직접 로드)
         List<CsvPredictionData> allPredictions = csvLoader.loadGruPredictions(request.getFoldNumber());
 
-        // 3. 상승 예측 & 상승 확률 >= threshold 필터링
-        List<CsvPredictionData> filteredPredictions = allPredictions.stream()
-            .filter(p -> p.getPredDirection() == 1) // 상승 예측만
-            .filter(p -> p.getPredProbaUp().compareTo(request.getConfidenceThreshold()) >= 0) // 상승 확률 >= 0.5
+        // 3. 상승 예측만 먼저 필터링
+        List<CsvPredictionData> longOnlyPredictions = allPredictions.stream()
+            .filter(p -> p.getPredDirection() == 1)  // 상승 예측만
             .collect(Collectors.toList());
 
-        log.info("전체 예측: {}건, 필터링 후 (상승 예측 & 상승확률>={}): {}건",
-            allPredictions.size(), request.getConfidenceThreshold(), filteredPredictions.size());
+        // 4. 임계값 계산 (컬럼과 모드에 따라 다르게 처리)
+        String columnName = request.getConfidenceColumn() == ConfidenceColumn.CONFIDENCE ? "confidence" : "pred_proba_up";
+        BigDecimal actualThreshold;
+
+        if (request.getThresholdMode() == ThresholdMode.QUANTILE) {
+            // QUANTILE 모드: 백분위수 계산
+            actualThreshold = calculateQuantile(longOnlyPredictions, request.getConfidenceThreshold(), request.getConfidenceColumn());
+            log.info("QUANTILE 모드 [{}]: {}% 백분위수 = {}", columnName, request.getConfidenceThreshold(), actualThreshold);
+        } else {
+            // FIXED 모드: 입력값 그대로 사용
+            actualThreshold = request.getConfidenceThreshold();
+            log.info("FIXED 모드 [{}]: 고정 임계값 = {}", columnName, actualThreshold);
+        }
+
+        // 5. 선택한 컬럼으로 필터링
+        List<CsvPredictionData> filteredPredictions;
+        if (request.getConfidenceColumn() == ConfidenceColumn.CONFIDENCE) {
+            filteredPredictions = longOnlyPredictions.stream()
+                .filter(p -> p.getConfidence().compareTo(actualThreshold) >= 0)
+                .collect(Collectors.toList());
+        } else { // PRED_PROBA_UP
+            filteredPredictions = longOnlyPredictions.stream()
+                .filter(p -> p.getPredProbaUp().compareTo(actualThreshold) >= 0)
+                .collect(Collectors.toList());
+        }
+
+        log.info("전체 예측: {}건, 상승예측: {}건, 필터링 후 [{}>={}]: {}건",
+            allPredictions.size(), longOnlyPredictions.size(), columnName, actualThreshold, filteredPredictions.size());
 
         if (filteredPredictions.isEmpty()) {
             throw new IllegalStateException("필터링된 예측 데이터가 없습니다. Confidence 기준을 낮춰주세요.");
@@ -118,10 +145,12 @@ public class BacktestService {
         Integer endFold,
         BigDecimal initialCapital,
         BigDecimal confidenceThreshold,
+        ConfidenceColumn confidenceColumn,
+        ThresholdMode thresholdMode,
         BigDecimal positionSizePercent
     ) {
-        log.info("연속 백테스팅 시작: Fold {} ~ {}, InitialCapital={}, ConfidenceThreshold={}, PositionSizePercent={}",
-            startFold, endFold, initialCapital, confidenceThreshold, positionSizePercent);
+        log.info("연속 백테스팅 시작: Fold {} ~ {}, InitialCapital={}, ConfidenceThreshold={}, Column={}, Mode={}, PositionSizePercent={}",
+            startFold, endFold, initialCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent);
 
         BigDecimal kellyCapital = initialCapital;
         BigDecimal buyHoldCapital = initialCapital;
@@ -132,7 +161,7 @@ public class BacktestService {
             log.info("연속 백테스팅 - Fold {} 실행 중...", foldNumber);
 
             // 각 fold 백테스팅 실행
-            BacktestRequest request = new BacktestRequest(foldNumber, kellyCapital, confidenceThreshold, positionSizePercent);
+            BacktestRequest request = new BacktestRequest(foldNumber, kellyCapital, confidenceThreshold, confidenceColumn, thresholdMode, positionSizePercent);
             BacktestResponse response = runBacktest(request);
 
             // Kelly 전략 결과
@@ -155,6 +184,7 @@ public class BacktestService {
                 .kellyInitialCapital(kellyCapital)
                 .kellyFinalCapital(kellyFinalCapital)
                 .kellyReturnPct(kellyReturnPct)
+                .kellyTrades(response.getKellyStrategy().getTotalTrades())
                 .buyHoldInitialCapital(buyHoldCapital)
                 .buyHoldFinalCapital(buyHoldFinalCapital)
                 .buyHoldReturnPct(buyHoldReturnPct)
@@ -556,5 +586,48 @@ public class BacktestService {
             this.confidence = confidence;
             this.positionSize = positionSize;
         }
+    }
+
+    /**
+     * 백분위수 계산 (파이썬 quantile 함수와 동일한 로직)
+     *
+     * @param predictions 예측 데이터 리스트
+     * @param percentile 백분위수 (0~100, 예: 50 = 50번째 백분위, 75 = 75번째 백분위)
+     * @param column 사용할 컬럼 (CONFIDENCE 또는 PRED_PROBA_UP)
+     * @return 계산된 임계값
+     */
+    private BigDecimal calculateQuantile(List<CsvPredictionData> predictions, BigDecimal percentile, ConfidenceColumn column) {
+        if (predictions.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        // 1. 선택한 컬럼의 값들만 추출하여 정렬
+        List<BigDecimal> values = predictions.stream()
+            .map(p -> column == ConfidenceColumn.CONFIDENCE ? p.getConfidence() : p.getPredProbaUp())
+            .sorted()
+            .collect(Collectors.toList());
+
+        // 2. 백분위수를 0~1 범위로 변환 (50 → 0.50)
+        BigDecimal percentileDecimal = percentile.divide(new BigDecimal("100"), 4, ROUNDING);
+
+        // 3. 인덱스 계산 (파이썬 numpy.quantile과 동일한 방식: linear interpolation)
+        int n = values.size();
+        BigDecimal position = percentileDecimal.multiply(new BigDecimal(n - 1));
+        int lowerIndex = position.intValue();
+        int upperIndex = Math.min(lowerIndex + 1, n - 1);
+
+        // 4. 선형 보간 (linear interpolation)
+        BigDecimal lowerValue = values.get(lowerIndex);
+        BigDecimal upperValue = values.get(upperIndex);
+        BigDecimal fraction = position.subtract(new BigDecimal(lowerIndex));
+
+        BigDecimal result = lowerValue.add(
+            upperValue.subtract(lowerValue).multiply(fraction)
+        ).setScale(4, ROUNDING);
+
+        log.debug("Quantile 계산 [{}]: {}% → 인덱스 {}/{} → 값 {}",
+            column, percentile, lowerIndex, upperIndex, result);
+
+        return result;
     }
 }

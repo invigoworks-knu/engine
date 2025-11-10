@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequential Backtest Result - Fold [[${startFold}]]-[[${endFold}]]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f5f7fa;
+            padding: 2rem 0;
+        }
+        .result-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+            height: 100%;
+        }
+        .stat-card.kelly-card {
+            border-top: 4px solid #667eea;
+        }
+        .stat-card.buyhold-card {
+            border-top: 4px solid #ffc107;
+        }
+        .stat-value-large {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0.5rem 0;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .positive {
+            color: #28a745;
+        }
+        .negative {
+            color: #dc3545;
+        }
+        .chart-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .fold-table {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .table-winner-row {
+            background-color: #d4edda;
+            font-weight: bold;
+        }
+        .back-button {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+            padding: 0.75rem 2rem;
+            font-weight: bold;
+        }
+        .back-button:hover {
+            background: #667eea;
+            color: white;
+        }
+        .badge-regime {
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="result-header">
+            <h1><i class="fas fa-stream"></i> Sequential Backtest Result</h1>
+            <p class="mb-0">Fold [[${startFold}]] - [[${endFold}]] | Continuous Trading Strategy</p>
+            <small class="mt-2 d-block">Each fold's final capital becomes the next fold's initial capital</small>
+        </div>
+
+        <!-- Overall Summary -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="stat-card kelly-card">
+                    <h5><i class="fas fa-brain"></i> Kelly Strategy
+                        <span th:if="${positionSizePercent != null}" class="badge bg-info">[[${positionSizePercent}]]%</span>
+                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">Auto</span>
+                    </h5>
+                    <div class="stat-label">Total Return</div>
+                    <div th:class="${result.kellyComparison.totalReturnPct >= 0 ? 'stat-value-large positive' : 'stat-value-large negative'}">
+                        [[${#numbers.formatDecimal(result.kellyComparison.totalReturnPct, 1, 2)}]]%
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="stat-label">Initial</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;">
+                                ₩[[${#numbers.formatDecimal(result.kellyComparison.initialCapital, 1, 0)}]]
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Final</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;" class="positive">
+                                ₩[[${#numbers.formatDecimal(result.kellyComparison.finalCapital, 1, 0)}]]
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="stat-label">Total Trades</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;">
+                                [[${result.kellyComparison.totalTrades}]]
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Alpha vs B&H</div>
+                            <div th:class="${result.kellyComparison.totalAlpha >= 0 ? 'positive' : 'negative'}"
+                                 style="font-size: 1.2rem; font-weight: bold;">
+                                [[${#numbers.formatDecimal(result.kellyComparison.totalAlpha, 1, 2)}]]%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stat-card buyhold-card">
+                    <h5><i class="fas fa-hand-holding-usd"></i> Buy & Hold Strategy</h5>
+                    <div class="stat-label">Total Return</div>
+                    <div th:class="${result.buyHoldComparison.totalReturnPct >= 0 ? 'stat-value-large positive' : 'stat-value-large negative'}">
+                        [[${#numbers.formatDecimal(result.buyHoldComparison.totalReturnPct, 1, 2)}]]%
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="stat-label">Initial</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;">
+                                ₩[[${#numbers.formatDecimal(result.buyHoldComparison.initialCapital, 1, 0)}]]
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-label">Final</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;"
+                                 th:class="${result.buyHoldComparison.totalReturnPct >= 0 ? 'positive' : 'negative'}">
+                                ₩[[${#numbers.formatDecimal(result.buyHoldComparison.finalCapital, 1, 0)}]]
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="stat-label">Strategy</div>
+                            <div style="font-size: 1rem;">
+                                Hold entire period with fold-based rebalancing
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fold-by-Fold Return Chart -->
+        <div class="chart-container">
+            <h5><i class="fas fa-chart-bar"></i> Fold-by-Fold Return Comparison</h5>
+            <canvas id="foldReturnChart"></canvas>
+        </div>
+
+        <!-- Capital Growth Chart -->
+        <div class="chart-container">
+            <h5><i class="fas fa-chart-line"></i> Capital Growth Over Time</h5>
+            <canvas id="capitalGrowthChart"></canvas>
+        </div>
+
+        <!-- Detailed Fold Results Table -->
+        <div class="fold-table">
+            <h5><i class="fas fa-table"></i> Detailed Fold Results</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Fold</th>
+                            <th>레짐</th>
+                            <th>기간</th>
+                            <th>Kelly 수익률</th>
+                            <th>Kelly 거래</th>
+                            <th>B&H 수익률</th>
+                            <th>Alpha</th>
+                            <th>Winner</th>
+                            <th>Kelly 최종</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="fold : ${result.foldResults}"
+                            th:class="${fold.winner == 'KELLY' ? 'table-winner-row' : ''}">
+                            <td><strong>[[${fold.foldNumber}]]</strong></td>
+                            <td>
+                                <span th:class="${'badge ' + (fold.regime == 'BULL' ? 'bg-success' : (fold.regime == 'BEAR' ? 'bg-danger' : 'bg-info'))} + ' badge-regime'">
+                                    [[${fold.regime}]]
+                                </span>
+                            </td>
+                            <td><small>[[${fold.dateRange}]]</small></td>
+                            <td th:class="${fold.kellyReturnPct >= 0 ? 'positive' : 'negative'}">
+                                <strong>[[${#numbers.formatDecimal(fold.kellyReturnPct, 1, 2)}]]%</strong>
+                            </td>
+                            <td>
+                                <strong>[[${fold.kellyTrades}]]건</strong>
+                            </td>
+                            <td th:class="${fold.buyHoldReturnPct >= 0 ? 'positive' : 'negative'}">
+                                [[${#numbers.formatDecimal(fold.buyHoldReturnPct, 1, 2)}]]%
+                            </td>
+                            <td th:class="${fold.alpha >= 0 ? 'positive' : 'negative'}">
+                                [[${#numbers.formatDecimal(fold.alpha, 1, 2)}]]%
+                            </td>
+                            <td>
+                                <span th:if="${fold.winner == 'KELLY'}" class="badge bg-success">
+                                    <i class="fas fa-trophy"></i> Kelly
+                                </span>
+                                <span th:if="${fold.winner != 'KELLY'}" class="badge bg-warning text-dark">
+                                    B&H
+                                </span>
+                            </td>
+                            <td>₩[[${#numbers.formatDecimal(fold.kellyFinalCapital, 1, 0)}]]</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <td colspan="3"><strong>TOTAL</strong></td>
+                            <td class="positive"><strong>[[${#numbers.formatDecimal(result.kellyComparison.totalReturnPct, 1, 2)}]]%</strong></td>
+                            <td>[[${#numbers.formatDecimal(result.buyHoldComparison.totalReturnPct, 1, 2)}]]%</td>
+                            <td th:class="${result.kellyComparison.totalAlpha >= 0 ? 'positive' : 'negative'}">
+                                <strong>[[${#numbers.formatDecimal(result.kellyComparison.totalAlpha, 1, 2)}]]%</strong>
+                            </td>
+                            <td>
+                                <span th:if="${result.kellyComparison.totalAlpha >= 0}" class="badge bg-success">
+                                    <i class="fas fa-trophy"></i> Kelly
+                                </span>
+                                <span th:if="${result.kellyComparison.totalAlpha < 0}" class="badge bg-warning text-dark">
+                                    B&H
+                                </span>
+                            </td>
+                            <td>₩[[${#numbers.formatDecimal(result.kellyComparison.finalCapital, 1, 0)}]]</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Back Button -->
+        <div class="text-center mt-4 mb-4">
+            <a href="/" class="btn back-button">
+                <i class="fas fa-arrow-left"></i> Back to Home
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.js"></script>
+    <script th:inline="javascript">
+        // Fold-by-Fold Return Chart
+        const foldLabels = /*[[${result.foldResults.![foldNumber]}]]*/ [];
+        const kellyReturns = /*[[${result.foldResults.![kellyReturnPct]}]]*/ [];
+        const buyHoldReturns = /*[[${result.foldResults.![buyHoldReturnPct]}]]*/ [];
+
+        const ctx1 = document.getElementById('foldReturnChart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: foldLabels.map(f => 'Fold ' + f),
+                datasets: [
+                    {
+                        label: 'Kelly Strategy',
+                        data: kellyReturns,
+                        backgroundColor: 'rgba(102, 126, 234, 0.7)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Buy & Hold',
+                        data: buyHoldReturns,
+                        backgroundColor: 'rgba(255, 193, 7, 0.7)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    title: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Return (%)'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Capital Growth Chart
+        const kellyCapitals = /*[[${result.foldResults.![kellyFinalCapital]}]]*/ [];
+        const buyHoldCapitals = /*[[${result.foldResults.![buyHoldFinalCapital]}]]*/ [];
+        const initialCapital = /*[[${result.initialCapital}]]*/ 10000;
+
+        // Add initial capital at the beginning
+        kellyCapitals.unshift(initialCapital);
+        buyHoldCapitals.unshift(initialCapital);
+
+        const growthLabels = ['Start'].concat(foldLabels.map(f => 'Fold ' + f));
+
+        const ctx2 = document.getElementById('capitalGrowthChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: growthLabels,
+                datasets: [
+                    {
+                        label: 'Kelly Strategy',
+                        data: kellyCapitals,
+                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    },
+                    {
+                        label: 'Buy & Hold',
+                        data: buyHoldCapitals,
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ₩' + context.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'Capital (₩)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '₩' + value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

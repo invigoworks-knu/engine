@@ -3,8 +3,7 @@ package com.coinreaders.engine.application.backtest;
 import lombok.Getter;
 
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 백테스팅을 위한 Fold 정의
@@ -87,5 +86,9 @@ public class FoldConfig {
 
     public static boolean isValidFold(int foldNumber) {
         return FOLD_MAP.containsKey(foldNumber);
+    }
+
+    public static List<FoldConfig> getAllFolds() {
+        return new ArrayList<>(FOLD_MAP.values());
     }
 }
