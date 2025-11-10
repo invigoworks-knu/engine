@@ -1,8 +1,10 @@
 package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.backtest.BacktestService;
+import com.coinreaders.engine.application.backtest.FoldConfig;
 import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
+import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +30,7 @@ public class BacktestController {
      * @return Kelly vs Buy & Hold 비교 결과
      */
     @GetMapping("/run")
-    public ResponseEntity<BacktestResponse> runBacktest(
+    public ResponseEntity<?> runBacktest(
         @RequestParam Integer foldNumber,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
         @RequestParam(required = false, defaultValue = "0.5") BigDecimal confidenceThreshold,
@@ -36,6 +38,20 @@ public class BacktestController {
     ) {
         log.info("백테스팅 API 호출: foldNumber={}, initialCapital={}, confidenceThreshold={}, positionSizePercent={}",
             foldNumber, initialCapital, confidenceThreshold, positionSizePercent);
+
+        // 입력 검증
+        if (foldNumber < 1 || foldNumber > 8) {
+            return ResponseEntity.badRequest().body("foldNumber must be between 1 and 8");
+        }
+        if (initialCapital.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest().body("initialCapital must be positive");
+        }
+        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
+            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 1");
+        }
+        if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
+            return ResponseEntity.badRequest().body("positionSizePercent must be between 0 and 100");
+        }
 
         BacktestRequest request = new BacktestRequest(foldNumber, initialCapital, confidenceThreshold, positionSizePercent);
         BacktestResponse response = backtestService.runBacktest(request);
@@ -67,7 +83,7 @@ public class BacktestController {
      * @return Fold별 결과 및 전체 요약
      */
     @GetMapping("/run-sequential")
-    public ResponseEntity<com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse> runSequentialBacktest(
+    public ResponseEntity<?> runSequentialBacktest(
         @RequestParam(required = false, defaultValue = "1") Integer startFold,
         @RequestParam(required = false, defaultValue = "7") Integer endFold,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
@@ -77,7 +93,24 @@ public class BacktestController {
         log.info("연속 백테스팅 API 호출: Fold {} ~ {}, initialCapital={}, confidenceThreshold={}, positionSizePercent={}",
             startFold, endFold, initialCapital, confidenceThreshold, positionSizePercent);
 
-        var response = backtestService.runSequentialBacktest(
+        // 입력 검증
+        if (startFold < 1 || startFold > 8 || endFold < 1 || endFold > 8) {
+            return ResponseEntity.badRequest().body("Fold numbers must be between 1 and 8");
+        }
+        if (startFold > endFold) {
+            return ResponseEntity.badRequest().body("startFold must be less than or equal to endFold");
+        }
+        if (initialCapital.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest().body("initialCapital must be positive");
+        }
+        if (confidenceThreshold.compareTo(BigDecimal.ZERO) < 0 || confidenceThreshold.compareTo(BigDecimal.ONE) > 0) {
+            return ResponseEntity.badRequest().body("confidenceThreshold must be between 0 and 1");
+        }
+        if (positionSizePercent != null && (positionSizePercent.compareTo(BigDecimal.ZERO) < 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0)) {
+            return ResponseEntity.badRequest().body("positionSizePercent must be between 0 and 100");
+        }
+
+        SequentialBacktestResponse response = backtestService.runSequentialBacktest(
             startFold, endFold, initialCapital, confidenceThreshold, positionSizePercent
         );
 
@@ -88,17 +121,21 @@ public class BacktestController {
      * Fold 정보 조회 API
      */
     @GetMapping("/fold/{foldNumber}")
-    public ResponseEntity<FoldInfo> getFoldInfo(@PathVariable Integer foldNumber) {
-        var foldConfig = com.coinreaders.engine.application.backtest.FoldConfig.getFold(foldNumber);
+    public ResponseEntity<?> getFoldInfo(@PathVariable Integer foldNumber) {
+        try {
+            FoldConfig foldConfig = FoldConfig.getFold(foldNumber);
 
-        FoldInfo info = new FoldInfo(
-            foldConfig.getFoldNumber(),
-            foldConfig.getStartDate().toString(),
-            foldConfig.getEndDate().toString(),
-            foldConfig.getRegime()
-        );
+            FoldInfo info = new FoldInfo(
+                foldConfig.getFoldNumber(),
+                foldConfig.getStartDate().toString(),
+                foldConfig.getEndDate().toString(),
+                foldConfig.getRegime()
+            );
 
-        return ResponseEntity.ok(info);
+            return ResponseEntity.ok(info);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Invalid fold number: " + foldNumber);
+        }
     }
 
     // Fold 정보 DTO

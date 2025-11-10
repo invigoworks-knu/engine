@@ -171,14 +171,18 @@ public class BacktestService {
                 foldNumber, kellyFinalCapital, buyHoldFinalCapital);
         }
 
-        // 전체 수익률 계산
-        BigDecimal kellyTotalReturnPct = kellyCapital.divide(initialCapital, SCALE, ROUNDING)
-            .subtract(BigDecimal.ONE)
-            .multiply(new BigDecimal("100"));
+        // 전체 수익률 계산 (0원 초기자본 가드)
+        BigDecimal kellyTotalReturnPct = initialCapital.compareTo(BigDecimal.ZERO) == 0
+            ? BigDecimal.ZERO
+            : kellyCapital.divide(initialCapital, SCALE, ROUNDING)
+                .subtract(BigDecimal.ONE)
+                .multiply(new BigDecimal("100"));
 
-        BigDecimal buyHoldTotalReturnPct = buyHoldCapital.divide(initialCapital, SCALE, ROUNDING)
-            .subtract(BigDecimal.ONE)
-            .multiply(new BigDecimal("100"));
+        BigDecimal buyHoldTotalReturnPct = initialCapital.compareTo(BigDecimal.ZERO) == 0
+            ? BigDecimal.ZERO
+            : buyHoldCapital.divide(initialCapital, SCALE, ROUNDING)
+                .subtract(BigDecimal.ONE)
+                .multiply(new BigDecimal("100"));
 
         BigDecimal totalAlpha = kellyTotalReturnPct.subtract(buyHoldTotalReturnPct);
 
@@ -383,9 +387,12 @@ public class BacktestService {
             BigDecimal.ZERO :
             avgWin.divide(avgLoss, 4, ROUNDING);
 
-        BigDecimal totalReturnPct = capital.divide(initialCapital, SCALE, ROUNDING)
-            .subtract(BigDecimal.ONE)
-            .multiply(new BigDecimal("100"));
+        // 총 수익률 계산 (0원 초기자본 가드)
+        BigDecimal totalReturnPct = initialCapital.compareTo(BigDecimal.ZERO) == 0
+            ? BigDecimal.ZERO
+            : capital.divide(initialCapital, SCALE, ROUNDING)
+                .subtract(BigDecimal.ONE)
+                .multiply(new BigDecimal("100"));
 
         BigDecimal maxDrawdown = calculateMaxDrawdown(capitalHistory);
 
