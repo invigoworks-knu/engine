@@ -50,9 +50,46 @@ public class AiPredictionDataService {
             int count = 0;
             // 5. 데이터 행 반복 처리
             while ((nextLine = reader.readNext()) != null) {
+                // CSV 컬럼 개수 검증
+                if (nextLine.length < 6) {
+                    log.warn("잘못된 CSV 행 형식 (컬럼 수 부족): {}", String.join(",", nextLine));
+                    continue;
+                }
+
                 String dateStr = nextLine[0];
-                String predDirection = Integer.parseInt(nextLine[1]) == 1 ? "UP" : "DOWN";
-                BigDecimal probability = new BigDecimal(nextLine[3]);
+
+                // pred_direction 파싱 및 검증
+                int predDirectionValue;
+                try {
+                    predDirectionValue = Integer.parseInt(nextLine[3].trim());
+                } catch (NumberFormatException e) {
+                    log.warn("잘못된 pred_direction 값: {}", nextLine[3]);
+                    continue;
+                }
+
+                // 예상 범위 검증 (0 또는 1)
+                if (predDirectionValue != 0 && predDirectionValue != 1) {
+                    log.warn("예상치 못한 pred_direction 값: {}. 0 또는 1이어야 합니다.", predDirectionValue);
+                    continue;
+                }
+
+                String predDirection = predDirectionValue == 1 ? "UP" : "DOWN";
+
+                // pred_direction에 따라 해당하는 확률값 사용
+                BigDecimal probability;
+                try {
+                    String probStr = predDirectionValue == 1 ? nextLine[4].trim() : nextLine[5].trim();
+                    probability = new BigDecimal(probStr);
+                } catch (NumberFormatException e) {
+                    log.warn("잘못된 확률값: {}", predDirectionValue == 1 ? nextLine[4] : nextLine[5]);
+                    continue;
+                }
+
+                // 확률값 범위 검증 [0, 1]
+                if (probability.compareTo(BigDecimal.ZERO) < 0 || probability.compareTo(BigDecimal.ONE) > 0) {
+                    log.warn("확률값이 유효 범위를 벗어남: {}. [0, 1] 범위여야 합니다.", probability);
+                    continue;
+                }
 
                 LocalDateTime candleDateTimeKst = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
                     .atTime(9, 0, 0);
