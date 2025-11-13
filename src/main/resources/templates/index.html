@@ -340,29 +340,29 @@
                         <div class="tab-pane fade" id="sequential" role="tabpanel">
                             <form action="/backtest-sequential" method="get">
                                 <div class="alert alert-info" role="alert">
-                                    <i class="fas fa-info-circle"></i> <strong>연속 백테스팅</strong>이란? 여러 기간을 연속으로 테스트하는 것입니다. 첫 번째 기간이 끝난 후 남은 금액으로 다음 기간을 시작합니다. 장기 투자 전략의 안정성을 확인할 때 유용합니다.
+                                    <i class="fas fa-info-circle"></i> <strong>연속 백테스팅</strong>이란? 여러 기간을 연속으로 테스트하는 것입니다. 첫 번째 기간이 끝난 후 남은 금액으로 다음 기간을 시작합니다. 장기 투자 전략의 안정성을 확인할 때 유용합니다.<br/>
+                                    <small class="text-muted"><i class="fas fa-exclamation-triangle"></i> Fold 1-7은 연속된 시계열 데이터입니다. Fold 8은 기간이 겹쳐 연속 백테스팅에서 제외됩니다.</small>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">
                                             <i class="fas fa-play"></i> 시작 기간
                                             <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
-                                               title="어느 시기부터 시뮬레이션을 시작할지 선택합니다. 보통 Fold 1부터 시작하여 여러 기간을 연속으로 테스트합니다."></i>
+                                               title="어느 시기부터 시뮬레이션을 시작할지 선택합니다. Fold 1-7은 시간 순서대로 연속된 데이터입니다."></i>
                                         </label>
                                         <select class="form-select" name="startFold" required>
                                             <option value="1" selected>Fold 1</option>
-                                            <option th:each="i : ${#numbers.sequence(2, 8)}" th:value="${i}" th:text="${'Fold ' + i}"></option>
+                                            <option th:each="i : ${#numbers.sequence(2, 7)}" th:value="${i}" th:text="${'Fold ' + i}"></option>
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">
                                             <i class="fas fa-stop"></i> 종료 기간
                                             <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip"
-                                               title="어느 시기까지 시뮬레이션할지 선택합니다. Fold 1-7까지 연속으로 실행하면 약 2년간의 장기 투자 전략을 확인할 수 있습니다."></i>
+                                               title="어느 시기까지 시뮬레이션할지 선택합니다. Fold 1-7까지 연속으로 실행하면 장기 투자 전략의 안정성을 확인할 수 있습니다."></i>
                                         </label>
                                         <select class="form-select" name="endFold" required>
                                             <option th:each="i : ${#numbers.sequence(1, 7)}" th:value="${i}" th:text="${'Fold ' + i}" th:selected="${i == 7}"></option>
-                                            <option value="8">Fold 8 (테스트)</option>
                                         </select>
                                     </div>
                                 </div>
