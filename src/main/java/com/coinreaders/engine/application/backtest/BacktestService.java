@@ -12,6 +12,8 @@ import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
 import com.coinreaders.engine.domain.repository.BacktestResultRepository;
 import com.coinreaders.engine.domain.repository.BacktestTradeRepository;
 import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
+import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
+import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,10 +31,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class BacktestService {
 
-    private final CsvPredictionLoaderService csvLoader;
     private final HistoricalOhlcvRepository ohlcvRepository;
     private final BacktestResultRepository resultRepository;
     private final BacktestTradeRepository tradeRepository;
+    private final HistoricalAiPredictionRepository aiPredictionRepository;
 
     // 상수 정의 (업비트 기준)
     private static final String MARKET = "KRW-ETH";
@@ -54,8 +56,8 @@ public class BacktestService {
         // 1. Fold 설정 조회
         FoldConfig foldConfig = FoldConfig.getFold(request.getFoldNumber());
 
-        // 2. AI 예측 데이터 로드 (CSV에서 직접 로드)
-        List<CsvPredictionData> allPredictions = csvLoader.loadGruPredictions(request.getFoldNumber());
+        // 2. AI 예측 데이터 로드 (DB에서 로드)
+        List<CsvPredictionData> allPredictions = loadPredictionsFromDb(request.getFoldNumber());
 
         // 3. 상승 예측만 먼저 필터링
         List<CsvPredictionData> longOnlyPredictions = allPredictions.stream()
@@ -586,6 +588,40 @@ public class BacktestService {
             this.confidence = confidence;
             this.positionSize = positionSize;
         }
+    }
+
+    /**
+     * DB에서 AI 예측 데이터를 조회하여 CsvPredictionData로 변환
+     * @param foldNumber 1~8
+     * @return 예측 데이터 리스트
+     */
+    private List<CsvPredictionData> loadPredictionsFromDb(int foldNumber) {
+        log.info("DB에서 AI 예측 데이터 로드 시작: Fold {}", foldNumber);
+
+        List<HistoricalAiPrediction> entities = aiPredictionRepository
+            .findByMarketAndFoldNumberOrderByPredictionDateAsc(MARKET, foldNumber);
+
+        if (entities.isEmpty()) {
+            throw new IllegalStateException(
+                String.format("Fold %d의 AI 예측 데이터가 DB에 없습니다. 먼저 데이터를 적재해주세요.", foldNumber));
+        }
+
+        List<CsvPredictionData> predictions = entities.stream()
+            .map(entity -> CsvPredictionData.builder()
+                .date(entity.getPredictionDate())
+                .actualDirection(entity.getActualDirection())
+                .actualReturn(entity.getActualReturn())
+                .predDirection(entity.getPredDirection())
+                .predProbaUp(entity.getPredProbaUp())
+                .predProbaDown(entity.getPredProbaDown())
+                .maxProba(entity.getMaxProba())
+                .confidence(entity.getConfidence())
+                .correct(entity.getCorrect())
+                .build())
+            .collect(Collectors.toList());
+
+        log.info("DB에서 AI 예측 데이터 로드 완료: Fold {} ({}건)", foldNumber, predictions.size());
+        return predictions;
     }
 
     /**

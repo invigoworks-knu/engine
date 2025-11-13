@@ -18,7 +18,9 @@ import java.util.List;
 
 /**
  * CSV 파일에서 예측 데이터를 로드하는 서비스
+ * @deprecated DB 기반 데이터 로딩으로 대체되었습니다. {@link com.coinreaders.engine.application.AiPredictionDataService} 사용을 권장합니다.
  */
+@Deprecated(since = "2025-01", forRemoval = true)
 @Service
 @Slf4j
 public class CsvPredictionLoaderService {

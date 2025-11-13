@@ -15,7 +15,6 @@ import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Slf4j
@@ -24,19 +23,20 @@ import java.time.format.DateTimeFormatter;
 public class AiPredictionDataService {
 
     private final HistoricalAiPredictionRepository predictionRepository;
+    private static final String MARKET = "KRW-ETH";
 
     /**
-     * 리소스 폴더의 AI 예측 CSV 파일을 DB에 적재합니다.
-     * @param modelVersion "GRU-f8" 등 DB에 저장될 모델명
-     * @param filePath "data/GRU_fold_8_predictions.csv"
+     * Fold별 GRU 예측 CSV 파일을 DB에 적재합니다.
+     * @param foldNumber 1~8
      */
     @Transactional
-    public void loadAiPredictionsFromCsv(String modelVersion, String filePath) {
-        log.info("AI 예측 데이터 적재 시작: {} (File: {})", modelVersion, filePath);
+    public void loadAiPredictionsFromCsv(int foldNumber) {
+        String filePath = String.format("data/fold%d_GRU_predictions.csv", foldNumber);
+        log.info("AI 예측 데이터 적재 시작: Fold {} (File: {})", foldNumber, filePath);
 
-        // 1. 적재 전, 혹시 모를 중복 모델 데이터 삭제
-        predictionRepository.deleteByAiModelVersion(modelVersion);
-        log.info("기존 {} 모델 데이터를 삭제했습니다.", modelVersion);
+        // 1. 적재 전, 해당 fold 데이터 삭제
+        predictionRepository.deleteByMarketAndFoldNumber(MARKET, foldNumber);
+        log.info("기존 Fold {} 데이터를 삭제했습니다.", foldNumber);
 
         // 2. 리소스 경로에서 파일 찾기
         ClassPathResource resource = new ClassPathResource(filePath);
@@ -49,63 +49,48 @@ public class AiPredictionDataService {
 
             int count = 0;
             // 5. 데이터 행 반복 처리
+            // CSV 구조: date, actual_direction, actual_return, pred_direction,
+            //           pred_proba_up, pred_proba_down, max_proba, confidence, correct
             while ((nextLine = reader.readNext()) != null) {
                 // CSV 컬럼 개수 검증
-                if (nextLine.length < 6) {
+                if (nextLine.length < 9) {
                     log.warn("잘못된 CSV 행 형식 (컬럼 수 부족): {}", String.join(",", nextLine));
                     continue;
                 }
 
-                String dateStr = nextLine[0];
-
-                // pred_direction 파싱 및 검증
-                int predDirectionValue;
                 try {
-                    predDirectionValue = Integer.parseInt(nextLine[3].trim());
-                } catch (NumberFormatException e) {
-                    log.warn("잘못된 pred_direction 값: {}", nextLine[3]);
-                    continue;
+                    LocalDate predictionDate = LocalDate.parse(nextLine[0], DateTimeFormatter.ISO_LOCAL_DATE);
+                    Integer actualDirection = Integer.parseInt(nextLine[1].trim());
+                    BigDecimal actualReturn = new BigDecimal(nextLine[2].trim());
+                    Integer predDirection = Integer.parseInt(nextLine[3].trim());
+                    BigDecimal predProbaUp = new BigDecimal(nextLine[4].trim());
+                    BigDecimal predProbaDown = new BigDecimal(nextLine[5].trim());
+                    BigDecimal maxProba = new BigDecimal(nextLine[6].trim());
+                    BigDecimal confidence = new BigDecimal(nextLine[7].trim());
+                    Integer correct = Integer.parseInt(nextLine[8].trim());
+
+                    HistoricalAiPrediction prediction = HistoricalAiPrediction.of(
+                        MARKET,
+                        predictionDate,
+                        foldNumber,
+                        actualDirection,
+                        actualReturn,
+                        predDirection,
+                        predProbaUp,
+                        predProbaDown,
+                        maxProba,
+                        confidence,
+                        correct
+                    );
+
+                    predictionRepository.save(prediction);
+                    count++;
+
+                } catch (Exception e) {
+                    log.warn("CSV 행 파싱 실패 (건너뜀): {}", String.join(",", nextLine), e);
                 }
-
-                // 예상 범위 검증 (0 또는 1)
-                if (predDirectionValue != 0 && predDirectionValue != 1) {
-                    log.warn("예상치 못한 pred_direction 값: {}. 0 또는 1이어야 합니다.", predDirectionValue);
-                    continue;
-                }
-
-                String predDirection = predDirectionValue == 1 ? "UP" : "DOWN";
-
-                // pred_direction에 따라 해당하는 확률값 사용
-                BigDecimal probability;
-                try {
-                    String probStr = predDirectionValue == 1 ? nextLine[4].trim() : nextLine[5].trim();
-                    probability = new BigDecimal(probStr);
-                } catch (NumberFormatException e) {
-                    log.warn("잘못된 확률값: {}", predDirectionValue == 1 ? nextLine[4] : nextLine[5]);
-                    continue;
-                }
-
-                // 확률값 범위 검증 [0, 1]
-                if (probability.compareTo(BigDecimal.ZERO) < 0 || probability.compareTo(BigDecimal.ONE) > 0) {
-                    log.warn("확률값이 유효 범위를 벗어남: {}. [0, 1] 범위여야 합니다.", probability);
-                    continue;
-                }
-
-                LocalDateTime candleDateTimeKst = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
-                    .atTime(9, 0, 0);
-
-                HistoricalAiPrediction prediction = HistoricalAiPrediction.of(
-                    "KRW-ETH",
-                    candleDateTimeKst,
-                    modelVersion,
-                    predDirection,
-                    probability
-                );
-
-                predictionRepository.save(prediction);
-                count++;
             }
-            log.info("AI 예측 데이터 적재 완료: {}. 총 {}건", modelVersion, count);
+            log.info("AI 예측 데이터 적재 완료: Fold {}. 총 {}건", foldNumber, count);
 
         } catch (IOException | CsvValidationException e) {
             log.error("CSV 파일 읽기 실패: {}", filePath, e);
