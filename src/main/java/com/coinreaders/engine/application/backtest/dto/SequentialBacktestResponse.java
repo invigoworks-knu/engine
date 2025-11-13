@@ -64,6 +64,9 @@ public class SequentialBacktestResponse {
         private BigDecimal kellyFinalCapital;
         private BigDecimal kellyReturnPct;
         private Integer kellyTrades; // 거래 횟수
+        private Integer kellyWins; // 승리 횟수
+        private Integer kellyLosses; // 패배 횟수
+        private BigDecimal kellyWinRate; // 승률 (%)
         private BigDecimal kellyMdd; // 최대 낙폭 (%)
 
         // Buy & Hold 전략

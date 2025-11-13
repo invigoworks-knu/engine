@@ -250,6 +250,7 @@
                             <th>기간</th>
                             <th>나의 수익률</th>
                             <th>나의 거래</th>
+                            <th>나의 승률</th>
                             <th>나의 MDD</th>
                             <th>매수보유 수익률</th>
                             <th>매수보유 MDD</th>
@@ -273,6 +274,10 @@
                             </td>
                             <td>
                                 <strong>[[${fold.kellyTrades}]]건</strong>
+                            </td>
+                            <td class="positive">
+                                [[${#numbers.formatDecimal(fold.kellyWinRate, 1, 1)}]]%
+                                <br><small class="text-muted">([[${fold.kellyWins}]]승/[[${fold.kellyLosses}]]패)</small>
                             </td>
                             <td class="negative">
                                 -[[${#numbers.formatDecimal(fold.kellyMdd, 1, 2)}]]%
@@ -302,6 +307,10 @@
                             <td colspan="3"><strong>합계</strong></td>
                             <td class="positive"><strong>[[${#numbers.formatDecimal(result.kellyComparison.totalReturnPct, 1, 2)}]]%</strong></td>
                             <td><strong>[[${result.kellyComparison.totalTrades}]]건</strong></td>
+                            <td class="positive">
+                                <strong>[[${#numbers.formatDecimal(result.kellyComparison.overallWinRate, 1, 1)}]]%</strong>
+                                <br><small class="text-muted">([[${result.kellyComparison.totalWins}]]승/[[${result.kellyComparison.totalLosses}]]패)</small>
+                            </td>
                             <td class="negative">-[[${#numbers.formatDecimal(result.kellyComparison.overallMaxDrawdown, 1, 2)}]]%</td>
                             <td>[[${#numbers.formatDecimal(result.buyHoldComparison.totalReturnPct, 1, 2)}]]%</td>
                             <td>-</td>
