@@ -142,28 +142,48 @@
                     </div>
                     <hr>
                     <div class="row">
-                        <div class="col-4">
-                            <div class="stat-label">승률</div>
-                            <div class="stat-value" style="font-size: 1.3rem;">
-                                [[${#numbers.formatDecimal(result.kellyStrategy.winRate, 1, 1)}]]%
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="stat-label">거래 횟수</div>
-                            <div class="stat-value" style="font-size: 1.3rem;">
-                                [[${result.kellyStrategy.totalTrades}]]
-                            </div>
-                        </div>
-                        <div class="col-4">
+                        <div class="col-3">
                             <div class="stat-label"
                                  data-bs-toggle="tooltip"
                                  data-bs-placement="top"
-                                 title="최대 낙폭(Maximum Drawdown): 투자 기간 중 자산이 최고점에서 최저점까지 떨어진 최대 폭입니다. 손실 위험의 크기를 나타냅니다.">
-                                최대 낙폭 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                                 title="승률: 전체 거래 중 수익을 낸 거래의 비율입니다. 높을수록 안정적인 전략입니다.">
+                                승률 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
                             </div>
-                            <div class="stat-value negative" style="font-size: 1.3rem;">
-                                [[${#numbers.formatDecimal(result.kellyStrategy.maxDrawdown, 1, 2)}]]%
+                            <div class="stat-value positive" style="font-size: 1.2rem;">
+                                [[${#numbers.formatDecimal(result.kellyStrategy.winRate, 1, 1)}]]%
                             </div>
+                            <small class="text-muted">([[${result.kellyStrategy.winTrades}]]승 / [[${result.kellyStrategy.lossTrades}]]패)</small>
+                        </div>
+                        <div class="col-3">
+                            <div class="stat-label">거래 횟수</div>
+                            <div class="stat-value" style="font-size: 1.2rem;">
+                                [[${result.kellyStrategy.totalTrades}]]건
+                            </div>
+                            <small class="text-muted">총 거래</small>
+                        </div>
+                        <div class="col-3">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="최대 낙폭(MDD): 투자 기간 중 자산이 최고점에서 최저점까지 떨어진 최대 폭입니다. 손실 위험의 크기를 나타내며, 낮을수록 좋습니다.">
+                                MDD <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div class="stat-value negative" style="font-size: 1.2rem;">
+                                -[[${#numbers.formatDecimal(result.kellyStrategy.maxDrawdown, 1, 2)}]]%
+                            </div>
+                            <small class="text-muted">최대 손실</small>
+                        </div>
+                        <div class="col-3">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="샤프 비율(Sharpe Ratio): 위험 대비 수익률을 나타냅니다. 1 이상이면 양호, 2 이상이면 우수한 전략입니다.">
+                                샤프 비율 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div th:class="${result.kellyStrategy.sharpeRatio >= 1 ? 'stat-value positive' : 'stat-value'}" style="font-size: 1.2rem;">
+                                [[${#numbers.formatDecimal(result.kellyStrategy.sharpeRatio, 1, 2)}]]
+                            </div>
+                            <small class="text-muted">위험대비수익</small>
                         </div>
                     </div>
                 </div>
@@ -191,26 +211,29 @@
                     <div class="row">
                         <div class="col-4">
                             <div class="stat-label">진입 가격</div>
-                            <div class="stat-value" style="font-size: 1.3rem;">
+                            <div class="stat-value" style="font-size: 1.2rem;">
                                 ₩[[${#numbers.formatDecimal(result.buyHoldStrategy.entryPrice, 1, 0)}]]
                             </div>
+                            <small class="text-muted">시작일 시가</small>
                         </div>
                         <div class="col-4">
                             <div class="stat-label">청산 가격</div>
-                            <div class="stat-value" style="font-size: 1.3rem;">
+                            <div class="stat-value" style="font-size: 1.2rem;">
                                 ₩[[${#numbers.formatDecimal(result.buyHoldStrategy.exitPrice, 1, 0)}]]
                             </div>
+                            <small class="text-muted">종료일 종가</small>
                         </div>
                         <div class="col-4">
                             <div class="stat-label"
                                  data-bs-toggle="tooltip"
                                  data-bs-placement="top"
-                                 title="최대 낙폭(Maximum Drawdown): 투자 기간 중 자산이 최고점에서 최저점까지 떨어진 최대 폭입니다. 손실 위험의 크기를 나타냅니다.">
-                                최대 낙폭 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                                 title="최대 낙폭(MDD): 투자 기간 중 자산이 최고점에서 최저점까지 떨어진 최대 폭입니다. 손실 위험의 크기를 나타내며, 낮을수록 좋습니다.">
+                                MDD <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
                             </div>
-                            <div class="stat-value negative" style="font-size: 1.3rem;">
-                                [[${#numbers.formatDecimal(result.buyHoldStrategy.maxDrawdown, 1, 2)}]]%
+                            <div class="stat-value negative" style="font-size: 1.2rem;">
+                                -[[${#numbers.formatDecimal(result.buyHoldStrategy.maxDrawdown, 1, 2)}]]%
                             </div>
+                            <small class="text-muted">최대 손실</small>
                         </div>
                     </div>
                 </div>

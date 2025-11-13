@@ -40,6 +40,13 @@ public class SequentialBacktestResponse {
         private BigDecimal totalReturnPct;
         private Integer totalTrades;
         private BigDecimal totalAlpha; // vs Buy & Hold
+
+        // 추가 통계
+        private Integer totalWins;
+        private Integer totalLosses;
+        private BigDecimal overallWinRate;
+        private BigDecimal overallMaxDrawdown;
+        private BigDecimal overallSharpeRatio;
     }
 
     @Getter

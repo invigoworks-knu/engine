@@ -127,23 +127,65 @@
                     </div>
                     <hr>
                     <div class="row">
-                        <div class="col-6">
-                            <div class="stat-label">총 거래 횟수</div>
-                            <div style="font-size: 1.2rem; font-weight: bold;">
+                        <div class="col-4">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="승률: 전체 거래 중 수익을 낸 거래의 비율입니다.">
+                                승률 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div style="font-size: 1.1rem; font-weight: bold;" class="positive">
+                                [[${#numbers.formatDecimal(result.kellyComparison.overallWinRate, 1, 1)}]]%
+                            </div>
+                            <small class="text-muted">([[${result.kellyComparison.totalWins}]]승/[[${result.kellyComparison.totalLosses}]]패)</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-label">총 거래</div>
+                            <div style="font-size: 1.1rem; font-weight: bold;">
                                 [[${result.kellyComparison.totalTrades}]]건
                             </div>
+                            <small class="text-muted">전체 기간</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="MDD: 최고점에서 최저점까지의 최대 낙폭입니다.">
+                                MDD <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div style="font-size: 1.1rem; font-weight: bold;" class="negative">
+                                -[[${#numbers.formatDecimal(result.kellyComparison.overallMaxDrawdown, 1, 2)}]]%
+                            </div>
+                            <small class="text-muted">최대 손실</small>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="샤프 비율: 위험 대비 수익률입니다. 1 이상이면 양호, 2 이상이면 우수합니다.">
+                                샤프 비율 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div th:class="${result.kellyComparison.overallSharpeRatio >= 1 ? 'positive' : ''}"
+                                 style="font-size: 1.1rem; font-weight: bold;">
+                                [[${#numbers.formatDecimal(result.kellyComparison.overallSharpeRatio, 1, 2)}]]
+                            </div>
+                            <small class="text-muted">위험대비수익</small>
                         </div>
                         <div class="col-6">
                             <div class="stat-label"
                                  data-bs-toggle="tooltip"
                                  data-bs-placement="top"
-                                 title="매수 후 보유 대비 알파: 켈리 전략의 수익률에서 매수 후 보유 전략의 수익률을 뺀 값입니다. 양수면 켈리 전략이 더 우수하다는 의미입니다.">
-                                매수 후 보유 대비 알파 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                                 title="알파: 매수 후 보유 대비 초과 수익률입니다.">
+                                알파 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
                             </div>
                             <div th:class="${result.kellyComparison.totalAlpha >= 0 ? 'positive' : 'negative'}"
-                                 style="font-size: 1.2rem; font-weight: bold;">
+                                 style="font-size: 1.1rem; font-weight: bold;">
                                 [[${#numbers.formatDecimal(result.kellyComparison.totalAlpha, 1, 2)}]]%
                             </div>
+                            <small class="text-muted">초과수익</small>
                         </div>
                     </div>
                 </div>
