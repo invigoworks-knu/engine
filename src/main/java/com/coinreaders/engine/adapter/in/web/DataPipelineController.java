@@ -99,11 +99,9 @@ public class DataPipelineController {
 
             // Fold 1-7: Walk-forward validation 세트
             for (int fold = 1; fold <= 7; fold++) {
-                String modelVersion = "GRU-f" + fold;
-                String filePath = "data/fold" + fold + "_GRU_predictions.csv";
-                aiPredictionDataService.loadAiPredictionsFromCsv(modelVersion, filePath);
+                aiPredictionDataService.loadAiPredictionsFromCsv(fold);
                 totalRecords += 120;
-                log.info("Loaded {} successfully (120 records)", modelVersion);
+                log.info("Loaded Fold {} successfully (120 records)", fold);
             }
 
             return ResponseEntity.ok(
@@ -125,12 +123,9 @@ public class DataPipelineController {
     @PostMapping("/init-ai-predictions-test")
     public ResponseEntity<String> initializeAiPredictionsTest() {
         try {
-            aiPredictionDataService.loadAiPredictionsFromCsv(
-                "GRU-f8",
-                "data/fold8_GRU_predictions.csv"
-            );
+            aiPredictionDataService.loadAiPredictionsFromCsv(8);
 
-            return ResponseEntity.ok("AI Prediction Test data (GRU-f8) initialization completed successfully. (264 records)");
+            return ResponseEntity.ok("AI Prediction Test data (Fold 8) initialization completed successfully. (264 records)");
         } catch (Exception e) {
             log.error("Failed to load AI prediction test data", e);
             return ResponseEntity.internalServerError().body("Failed to load AI test data: " + e.getMessage());
@@ -160,20 +155,15 @@ public class DataPipelineController {
 
             // Fold 1-7: 각각 120개 데이터
             for (int fold = 1; fold <= 7; fold++) {
-                String modelVersion = "GRU-f" + fold;
-                String filePath = "data/fold" + fold + "_GRU_predictions.csv";
-                aiPredictionDataService.loadAiPredictionsFromCsv(modelVersion, filePath);
+                aiPredictionDataService.loadAiPredictionsFromCsv(fold);
                 totalRecords += 120;
-                log.info("Loaded {} successfully (120 records)", modelVersion);
+                log.info("Loaded Fold {} successfully (120 records)", fold);
             }
 
             // Fold 8: 264개 데이터
-            aiPredictionDataService.loadAiPredictionsFromCsv(
-                "GRU-f8",
-                "data/fold8_GRU_predictions.csv"
-            );
+            aiPredictionDataService.loadAiPredictionsFromCsv(8);
             totalRecords += 264;
-            log.info("Loaded GRU-f8 successfully (264 records)");
+            log.info("Loaded Fold 8 successfully (264 records)");
 
             return ResponseEntity.ok(
                 String.format("All AI Prediction data (GRU-f1~f8) initialization completed. Total %d records loaded.", totalRecords)

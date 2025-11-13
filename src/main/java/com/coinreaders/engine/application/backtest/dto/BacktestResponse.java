@@ -1,9 +1,11 @@
 package com.coinreaders.engine.application.backtest.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
@@ -47,6 +49,10 @@ public class BacktestResponse {
         private BigDecimal kellyFraction; // 켈리 비율 (F)
         private BigDecimal maxDrawdown; // 최대 낙폭 (%)
         private BigDecimal sharpeRatio; // 샤프 비율 (선택)
+
+        // 내부용: 연속 백테스팅 MDD 계산을 위한 자본 이력 (API 응답에는 포함되지 않음)
+        @JsonIgnore
+        private List<BigDecimal> capitalHistory;
     }
 
     @Getter

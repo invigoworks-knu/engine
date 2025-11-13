@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>연속 백테스팅 결과 - Fold [[${startFold}]]-[[${endFold}]]</title>
+    <title>AI 기반 투자 전략 엔진 - 연속 백테스팅 결과 Fold [[${startFold}]]-[[${endFold}]]</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -102,9 +102,9 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="stat-card kelly-card">
-                    <h5><i class="fas fa-brain"></i> 켈리 전략
+                    <h5><i class="fas fa-brain"></i> 나의 전략
                         <span th:if="${positionSizePercent != null}" class="badge bg-info">[[${positionSizePercent}]]% 고정</span>
-                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">자동</span>
+                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">켈리 자동</span>
                     </h5>
                     <div class="stat-label">총 수익률</div>
                     <div th:class="${result.kellyComparison.totalReturnPct >= 0 ? 'stat-value-large positive' : 'stat-value-large negative'}">
@@ -127,23 +127,65 @@
                     </div>
                     <hr>
                     <div class="row">
-                        <div class="col-6">
-                            <div class="stat-label">총 거래 횟수</div>
-                            <div style="font-size: 1.2rem; font-weight: bold;">
+                        <div class="col-4">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="승률: 전체 거래 중 수익을 낸 거래의 비율입니다.">
+                                승률 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div style="font-size: 1.1rem; font-weight: bold;" class="positive">
+                                [[${#numbers.formatDecimal(result.kellyComparison.overallWinRate, 1, 1)}]]%
+                            </div>
+                            <small class="text-muted">([[${result.kellyComparison.totalWins}]]승/[[${result.kellyComparison.totalLosses}]]패)</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-label">총 거래</div>
+                            <div style="font-size: 1.1rem; font-weight: bold;">
                                 [[${result.kellyComparison.totalTrades}]]건
                             </div>
+                            <small class="text-muted">전체 기간</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="MDD: 최고점에서 최저점까지의 최대 낙폭입니다.">
+                                MDD <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div style="font-size: 1.1rem; font-weight: bold;" class="negative">
+                                -[[${#numbers.formatDecimal(result.kellyComparison.overallMaxDrawdown, 1, 2)}]]%
+                            </div>
+                            <small class="text-muted">최대 손실</small>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="stat-label"
+                                 data-bs-toggle="tooltip"
+                                 data-bs-placement="top"
+                                 title="샤프 비율: 위험 대비 수익률입니다. 1 이상이면 양호, 2 이상이면 우수합니다.">
+                                샤프 비율 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                            </div>
+                            <div th:class="${result.kellyComparison.overallSharpeRatio >= 1 ? 'positive' : ''}"
+                                 style="font-size: 1.1rem; font-weight: bold;">
+                                [[${#numbers.formatDecimal(result.kellyComparison.overallSharpeRatio, 1, 2)}]]
+                            </div>
+                            <small class="text-muted">위험대비수익</small>
                         </div>
                         <div class="col-6">
                             <div class="stat-label"
                                  data-bs-toggle="tooltip"
                                  data-bs-placement="top"
-                                 title="매수 후 보유 대비 알파: 켈리 전략의 수익률에서 매수 후 보유 전략의 수익률을 뺀 값입니다. 양수면 켈리 전략이 더 우수하다는 의미입니다.">
-                                매수 후 보유 대비 알파 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
+                                 title="알파: 매수 후 보유 대비 초과 수익률입니다.">
+                                알파 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
                             </div>
                             <div th:class="${result.kellyComparison.totalAlpha >= 0 ? 'positive' : 'negative'}"
-                                 style="font-size: 1.2rem; font-weight: bold;">
+                                 style="font-size: 1.1rem; font-weight: bold;">
                                 [[${#numbers.formatDecimal(result.kellyComparison.totalAlpha, 1, 2)}]]%
                             </div>
+                            <small class="text-muted">초과수익</small>
                         </div>
                     </div>
                 </div>
@@ -206,12 +248,15 @@
                             <th>Fold</th>
                             <th>레짐</th>
                             <th>기간</th>
-                            <th>켈리 수익률</th>
-                            <th>켈리 거래</th>
+                            <th>나의 수익률</th>
+                            <th>나의 거래</th>
+                            <th>나의 승률</th>
+                            <th>나의 MDD</th>
                             <th>매수보유 수익률</th>
+                            <th>매수보유 MDD</th>
                             <th>알파</th>
                             <th>승자</th>
-                            <th>켈리 최종</th>
+                            <th>나의 최종</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -230,15 +275,25 @@
                             <td>
                                 <strong>[[${fold.kellyTrades}]]건</strong>
                             </td>
+                            <td class="positive">
+                                [[${#numbers.formatDecimal(fold.kellyWinRate, 1, 1)}]]%
+                                <br><small class="text-muted">([[${fold.kellyWins}]]승/[[${fold.kellyLosses}]]패)</small>
+                            </td>
+                            <td class="negative">
+                                -[[${#numbers.formatDecimal(fold.kellyMdd, 1, 2)}]]%
+                            </td>
                             <td th:class="${fold.buyHoldReturnPct >= 0 ? 'positive' : 'negative'}">
                                 [[${#numbers.formatDecimal(fold.buyHoldReturnPct, 1, 2)}]]%
+                            </td>
+                            <td class="negative">
+                                -[[${#numbers.formatDecimal(fold.buyHoldMdd, 1, 2)}]]%
                             </td>
                             <td th:class="${fold.alpha >= 0 ? 'positive' : 'negative'}">
                                 [[${#numbers.formatDecimal(fold.alpha, 1, 2)}]]%
                             </td>
                             <td>
                                 <span th:if="${fold.winner == 'KELLY'}" class="badge bg-success">
-                                    <i class="fas fa-trophy"></i> 켈리
+                                    <i class="fas fa-trophy"></i> 나의 전략
                                 </span>
                                 <span th:if="${fold.winner != 'KELLY'}" class="badge bg-warning text-dark">
                                     매수보유
@@ -252,13 +307,19 @@
                             <td colspan="3"><strong>합계</strong></td>
                             <td class="positive"><strong>[[${#numbers.formatDecimal(result.kellyComparison.totalReturnPct, 1, 2)}]]%</strong></td>
                             <td><strong>[[${result.kellyComparison.totalTrades}]]건</strong></td>
+                            <td class="positive">
+                                <strong>[[${#numbers.formatDecimal(result.kellyComparison.overallWinRate, 1, 1)}]]%</strong>
+                                <br><small class="text-muted">([[${result.kellyComparison.totalWins}]]승/[[${result.kellyComparison.totalLosses}]]패)</small>
+                            </td>
+                            <td class="negative">-[[${#numbers.formatDecimal(result.kellyComparison.overallMaxDrawdown, 1, 2)}]]%</td>
                             <td>[[${#numbers.formatDecimal(result.buyHoldComparison.totalReturnPct, 1, 2)}]]%</td>
+                            <td>-</td>
                             <td th:class="${result.kellyComparison.totalAlpha >= 0 ? 'positive' : 'negative'}">
                                 <strong>[[${#numbers.formatDecimal(result.kellyComparison.totalAlpha, 1, 2)}]]%</strong>
                             </td>
                             <td>
                                 <span th:if="${result.kellyComparison.totalAlpha >= 0}" class="badge bg-success">
-                                    <i class="fas fa-trophy"></i> 켈리
+                                    <i class="fas fa-trophy"></i> 나의 전략
                                 </span>
                                 <span th:if="${result.kellyComparison.totalAlpha < 0}" class="badge bg-warning text-dark">
                                     매수보유
@@ -303,7 +364,7 @@
                 labels: foldLabels.map(f => 'Fold ' + f),
                 datasets: [
                     {
-                        label: '켈리 전략',
+                        label: '나의 전략',
                         data: kellyReturns,
                         backgroundColor: 'rgba(102, 126, 234, 0.7)',
                         borderColor: 'rgba(102, 126, 234, 1)',
@@ -368,7 +429,7 @@
                 labels: growthLabels,
                 datasets: [
                     {
-                        label: '켈리 전략',
+                        label: '나의 전략',
                         data: kellyCapitals,
                         backgroundColor: 'rgba(102, 126, 234, 0.2)',
                         borderColor: 'rgba(102, 126, 234, 1)',

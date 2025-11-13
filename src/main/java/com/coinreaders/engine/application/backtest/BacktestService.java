@@ -6,12 +6,10 @@ import com.coinreaders.engine.application.backtest.dto.CsvPredictionData;
 import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
 import com.coinreaders.engine.application.backtest.dto.ConfidenceColumn;
-import com.coinreaders.engine.domain.entity.BacktestResult;
-import com.coinreaders.engine.domain.entity.BacktestTrade;
 import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
-import com.coinreaders.engine.domain.repository.BacktestResultRepository;
-import com.coinreaders.engine.domain.repository.BacktestTradeRepository;
 import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
+import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
+import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,10 +27,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class BacktestService {
 
-    private final CsvPredictionLoaderService csvLoader;
     private final HistoricalOhlcvRepository ohlcvRepository;
-    private final BacktestResultRepository resultRepository;
-    private final BacktestTradeRepository tradeRepository;
+    private final HistoricalAiPredictionRepository aiPredictionRepository;
 
     // 상수 정의 (업비트 기준)
     private static final String MARKET = "KRW-ETH";
@@ -54,8 +50,8 @@ public class BacktestService {
         // 1. Fold 설정 조회
         FoldConfig foldConfig = FoldConfig.getFold(request.getFoldNumber());
 
-        // 2. AI 예측 데이터 로드 (CSV에서 직접 로드)
-        List<CsvPredictionData> allPredictions = csvLoader.loadGruPredictions(request.getFoldNumber());
+        // 2. AI 예측 데이터 로드 (DB에서 로드)
+        List<CsvPredictionData> allPredictions = loadPredictionsFromDb(request.getFoldNumber());
 
         // 3. 상승 예측만 먼저 필터링
         List<CsvPredictionData> longOnlyPredictions = allPredictions.stream()
@@ -156,6 +152,10 @@ public class BacktestService {
         BigDecimal buyHoldCapital = initialCapital;
         List<SequentialBacktestResponse.FoldResult> foldResults = new ArrayList<>();
         int totalKellyTrades = 0;
+        int totalWins = 0;
+        int totalLosses = 0;
+        List<BigDecimal> allCapitalHistory = new ArrayList<>();
+        List<BigDecimal> allReturns = new ArrayList<>(); // 전체 거래 수익률 (Sharpe 계산용)
 
         for (int foldNumber = startFold; foldNumber <= endFold; foldNumber++) {
             log.info("연속 백테스팅 - Fold {} 실행 중...", foldNumber);
@@ -185,9 +185,14 @@ public class BacktestService {
                 .kellyFinalCapital(kellyFinalCapital)
                 .kellyReturnPct(kellyReturnPct)
                 .kellyTrades(response.getKellyStrategy().getTotalTrades())
+                .kellyWins(response.getKellyStrategy().getWinTrades())
+                .kellyLosses(response.getKellyStrategy().getLossTrades())
+                .kellyWinRate(response.getKellyStrategy().getWinRate())
+                .kellyMdd(response.getKellyStrategy().getMaxDrawdown())
                 .buyHoldInitialCapital(buyHoldCapital)
                 .buyHoldFinalCapital(buyHoldFinalCapital)
                 .buyHoldReturnPct(buyHoldReturnPct)
+                .buyHoldMdd(response.getBuyHoldStrategy().getMaxDrawdown())
                 .alpha(response.getAlpha())
                 .winner(response.getWinner())
                 .build());
@@ -196,6 +201,22 @@ public class BacktestService {
             kellyCapital = kellyFinalCapital;
             buyHoldCapital = buyHoldFinalCapital;
             totalKellyTrades += response.getKellyStrategy().getTotalTrades();
+
+            // 통계 집계
+            totalWins += response.getKellyStrategy().getWinTrades();
+            totalLosses += response.getKellyStrategy().getLossTrades();
+
+            // 자본 이력 수집 (첫 fold는 전체, 이후 fold는 첫 값 제외하여 중복 방지)
+            List<BigDecimal> foldCapitalHistory = response.getKellyStrategy().getCapitalHistory();
+            if (foldCapitalHistory != null && !foldCapitalHistory.isEmpty()) {
+                if (allCapitalHistory.isEmpty()) {
+                    // 첫 fold: 전체 이력 추가
+                    allCapitalHistory.addAll(foldCapitalHistory);
+                } else {
+                    // 이후 fold: 첫 값(이전 fold의 마지막 값과 동일)을 제외하고 추가
+                    allCapitalHistory.addAll(foldCapitalHistory.subList(1, foldCapitalHistory.size()));
+                }
+            }
 
             log.info("Fold {} 완료: Kelly={}원, B&H={}원",
                 foldNumber, kellyFinalCapital, buyHoldFinalCapital);
@@ -216,8 +237,22 @@ public class BacktestService {
 
         BigDecimal totalAlpha = kellyTotalReturnPct.subtract(buyHoldTotalReturnPct);
 
-        log.info("연속 백테스팅 완료: Kelly {}% ({}원), B&H {}% ({}원), Alpha {}%",
-            kellyTotalReturnPct, kellyCapital, buyHoldTotalReturnPct, buyHoldCapital, totalAlpha);
+        // 전체 통계 계산
+        BigDecimal overallWinRate = totalKellyTrades == 0 ? BigDecimal.ZERO :
+            new BigDecimal(totalWins).divide(new BigDecimal(totalKellyTrades), 4, ROUNDING)
+                .multiply(new BigDecimal("100"));
+
+        BigDecimal overallMaxDrawdown = calculateMaxDrawdown(allCapitalHistory);
+
+        // Fold별 수익률로 Sharpe Ratio 계산
+        List<BigDecimal> foldReturns = foldResults.stream()
+            .map(SequentialBacktestResponse.FoldResult::getKellyReturnPct)
+            .collect(Collectors.toList());
+        BigDecimal overallSharpeRatio = calculateSharpeRatioFromReturns(foldReturns);
+
+        log.info("연속 백테스팅 완료: Kelly {}% ({}원), B&H {}% ({}원), Alpha {}%, 승률 {}%, MDD {}%, Sharpe {}",
+            kellyTotalReturnPct, kellyCapital, buyHoldTotalReturnPct, buyHoldCapital, totalAlpha,
+            overallWinRate, overallMaxDrawdown, overallSharpeRatio);
 
         return SequentialBacktestResponse.builder()
             .initialCapital(initialCapital)
@@ -231,6 +266,11 @@ public class BacktestService {
                 .totalReturnPct(kellyTotalReturnPct)
                 .totalTrades(totalKellyTrades)
                 .totalAlpha(totalAlpha)
+                .totalWins(totalWins)
+                .totalLosses(totalLosses)
+                .overallWinRate(overallWinRate)
+                .overallMaxDrawdown(overallMaxDrawdown)
+                .overallSharpeRatio(overallSharpeRatio)
                 .build())
             .buyHoldComparison(SequentialBacktestResponse.StrategyComparison.builder()
                 .initialCapital(initialCapital)
@@ -426,6 +466,9 @@ public class BacktestService {
 
         BigDecimal maxDrawdown = calculateMaxDrawdown(capitalHistory);
 
+        // Sharpe Ratio 계산 (거래 수익률 기반)
+        BigDecimal sharpeRatio = calculateSharpeRatio(tradeResults);
+
         return BacktestResponse.KellyStrategyResult.builder()
             .initialCapital(initialCapital)
             .finalCapital(capital)
@@ -439,6 +482,8 @@ public class BacktestService {
             .winLossRatio(winLossRatio)
             .kellyFraction(kellyFraction.multiply(new BigDecimal("100"))) // %로 변환
             .maxDrawdown(maxDrawdown)
+            .sharpeRatio(sharpeRatio)
+            .capitalHistory(capitalHistory) // 연속 백테스팅 MDD 계산을 위해 추가
             .build();
     }
 
@@ -586,6 +631,123 @@ public class BacktestService {
             this.confidence = confidence;
             this.positionSize = positionSize;
         }
+    }
+
+    /**
+     * DB에서 AI 예측 데이터를 조회하여 CsvPredictionData로 변환
+     * @param foldNumber 1~8
+     * @return 예측 데이터 리스트
+     */
+    private List<CsvPredictionData> loadPredictionsFromDb(int foldNumber) {
+        log.info("DB에서 AI 예측 데이터 로드 시작: Fold {}", foldNumber);
+
+        List<HistoricalAiPrediction> entities = aiPredictionRepository
+            .findByMarketAndFoldNumberOrderByPredictionDateAsc(MARKET, foldNumber);
+
+        if (entities.isEmpty()) {
+            throw new IllegalStateException(
+                String.format("Fold %d의 AI 예측 데이터가 DB에 없습니다. 먼저 데이터를 적재해주세요.", foldNumber));
+        }
+
+        List<CsvPredictionData> predictions = entities.stream()
+            .map(entity -> CsvPredictionData.builder()
+                .date(entity.getPredictionDate())
+                .actualDirection(entity.getActualDirection())
+                .actualReturn(entity.getActualReturn())
+                .predDirection(entity.getPredDirection())
+                .predProbaUp(entity.getPredProbaUp())
+                .predProbaDown(entity.getPredProbaDown())
+                .maxProba(entity.getMaxProba())
+                .confidence(entity.getConfidence())
+                .correct(entity.getCorrect())
+                .build())
+            .collect(Collectors.toList());
+
+        log.info("DB에서 AI 예측 데이터 로드 완료: Fold {} ({}건)", foldNumber, predictions.size());
+        return predictions;
+    }
+
+    /**
+     * 수익률 리스트로부터 Sharpe Ratio 계산 (연속 백테스팅용)
+     * @param returns 수익률 리스트 (%)
+     * @return Sharpe Ratio
+     */
+    private BigDecimal calculateSharpeRatioFromReturns(List<BigDecimal> returns) {
+        if (returns.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        // 1. 평균 수익률
+        BigDecimal sumReturns = returns.stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal avgReturn = sumReturns.divide(new BigDecimal(returns.size()), SCALE, ROUNDING);
+
+        // 2. 표준편차
+        BigDecimal sumSquaredDiff = returns.stream()
+            .map(r -> {
+                BigDecimal diff = r.subtract(avgReturn);
+                return diff.multiply(diff);
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal variance = sumSquaredDiff.divide(new BigDecimal(returns.size()), SCALE, ROUNDING);
+        double stdDevDouble = Math.sqrt(variance.doubleValue());
+        BigDecimal stdDev = new BigDecimal(stdDevDouble).setScale(SCALE, ROUNDING);
+
+        // 3. Sharpe Ratio
+        if (stdDev.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        return avgReturn.divide(stdDev, 4, ROUNDING);
+    }
+
+    /**
+     * Sharpe Ratio 계산 (거래별)
+     * Sharpe Ratio = (평균 수익률 - 무위험 수익률) / 수익률의 표준편차
+     * 무위험 수익률은 0으로 가정
+     *
+     * @param tradeResults 거래 결과 리스트
+     * @return Sharpe Ratio
+     */
+    private BigDecimal calculateSharpeRatio(List<TradeResult> tradeResults) {
+        if (tradeResults.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        // 1. 평균 수익률 계산 (%)
+        BigDecimal sumReturns = tradeResults.stream()
+            .map(t -> t.returnPct)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal avgReturn = sumReturns.divide(new BigDecimal(tradeResults.size()), SCALE, ROUNDING);
+
+        // 2. 표준편차 계산
+        // 분산 = Σ(수익률 - 평균)² / N
+        BigDecimal sumSquaredDiff = tradeResults.stream()
+            .map(t -> {
+                BigDecimal diff = t.returnPct.subtract(avgReturn);
+                return diff.multiply(diff);
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal variance = sumSquaredDiff.divide(new BigDecimal(tradeResults.size()), SCALE, ROUNDING);
+
+        // 표준편차 = √분산
+        double stdDevDouble = Math.sqrt(variance.doubleValue());
+        BigDecimal stdDev = new BigDecimal(stdDevDouble).setScale(SCALE, ROUNDING);
+
+        // 3. Sharpe Ratio 계산 (무위험 수익률 = 0 가정)
+        if (stdDev.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal sharpeRatio = avgReturn.divide(stdDev, 4, ROUNDING);
+
+        log.debug("Sharpe Ratio 계산: 평균수익률={}, 표준편차={}, Sharpe={}",
+            avgReturn, stdDev, sharpeRatio);
+
+        return sharpeRatio;
     }
 
     /**
