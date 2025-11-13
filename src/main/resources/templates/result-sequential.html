@@ -102,9 +102,9 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="stat-card kelly-card">
-                    <h5><i class="fas fa-brain"></i> 켈리 전략
+                    <h5><i class="fas fa-brain"></i> AI 전략
                         <span th:if="${positionSizePercent != null}" class="badge bg-info">[[${positionSizePercent}]]% 고정</span>
-                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">자동</span>
+                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">켈리 자동</span>
                     </h5>
                     <div class="stat-label">총 수익률</div>
                     <div th:class="${result.kellyComparison.totalReturnPct >= 0 ? 'stat-value-large positive' : 'stat-value-large negative'}">
@@ -345,7 +345,7 @@
                 labels: foldLabels.map(f => 'Fold ' + f),
                 datasets: [
                     {
-                        label: '켈리 전략',
+                        label: 'AI 전략',
                         data: kellyReturns,
                         backgroundColor: 'rgba(102, 126, 234, 0.7)',
                         borderColor: 'rgba(102, 126, 234, 1)',
@@ -410,7 +410,7 @@
                 labels: growthLabels,
                 datasets: [
                     {
-                        label: '켈리 전략',
+                        label: 'AI 전략',
                         data: kellyCapitals,
                         backgroundColor: 'rgba(102, 126, 234, 0.2)',
                         borderColor: 'rgba(102, 126, 234, 1)',

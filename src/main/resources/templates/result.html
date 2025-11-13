@@ -111,7 +111,7 @@
 
         <!-- Winner Banner -->
         <div th:if="${result.winner == 'KELLY'}" class="alert alert-success text-center mb-4" style="border-radius: 0 0 15px 15px;">
-            <h4><i class="fas fa-trophy"></i> 켈리 전략 승리! (+[[${#numbers.formatDecimal(result.alpha, 1, 2)}]]% 알파)</h4>
+            <h4><i class="fas fa-trophy"></i> AI 전략 승리! (+[[${#numbers.formatDecimal(result.alpha, 1, 2)}]]% 알파)</h4>
         </div>
         <div th:if="${result.winner != 'KELLY'}" class="alert alert-warning text-center mb-4" style="border-radius: 0 0 15px 15px;">
             <h4><i class="fas fa-info-circle"></i> 매수 후 보유 승리! ([[${#numbers.formatDecimal(result.alpha, 1, 2)}]]% 알파)</h4>
@@ -119,12 +119,12 @@
 
         <!-- Summary Cards -->
         <div class="row">
-            <!-- Kelly Strategy -->
+            <!-- AI Strategy -->
             <div class="col-md-6">
                 <div th:class="${result.winner == 'KELLY' ? 'stat-card winner' : 'stat-card'}">
-                    <h5><i class="fas fa-brain"></i> 켈리 전략
+                    <h5><i class="fas fa-brain"></i> AI 전략
                         <span th:if="${positionSizePercent != null}" class="badge bg-info">[[${positionSizePercent}]]% 고정</span>
-                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">자동 켈리</span>
+                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">켈리 자동</span>
                     </h5>
                     <div class="row mt-3">
                         <div class="col-6">
@@ -250,7 +250,7 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="stat-card">
-                    <h5><i class="fas fa-info-circle"></i> 켈리 전략 세부사항</h5>
+                    <h5><i class="fas fa-info-circle"></i> AI 전략 세부사항</h5>
                     <div class="info-row">
                         <span data-bs-toggle="tooltip"
                               data-bs-placement="left"
@@ -316,7 +316,7 @@
                     <div class="info-row">
                         <span data-bs-toggle="tooltip"
                               data-bs-placement="left"
-                              title="알파(초과 수익률): 켈리 전략의 수익률에서 매수 후 보유 전략의 수익률을 뺀 값입니다. 양수면 켈리 전략이 더 우수하다는 의미입니다.">
+                              title="알파(초과 수익률): AI 전략의 수익률에서 매수 후 보유 전략의 수익률을 뺀 값입니다. 양수면 AI 전략이 더 우수하다는 의미입니다.">
                             알파 (초과 수익률) <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
                         </span>
                         <strong th:class="${result.alpha >= 0 ? 'positive' : 'negative'}">
@@ -355,7 +355,7 @@
         new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: ['켈리 전략', '매수 후 보유'],
+                labels: ['AI 전략', '매수 후 보유'],
                 datasets: [{
                     label: '총 수익률 (%)',
                     data: [kellyReturn, buyHoldReturn],
