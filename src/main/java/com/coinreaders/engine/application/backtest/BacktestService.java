@@ -6,11 +6,7 @@ import com.coinreaders.engine.application.backtest.dto.CsvPredictionData;
 import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
 import com.coinreaders.engine.application.backtest.dto.ConfidenceColumn;
-import com.coinreaders.engine.domain.entity.BacktestResult;
-import com.coinreaders.engine.domain.entity.BacktestTrade;
 import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
-import com.coinreaders.engine.domain.repository.BacktestResultRepository;
-import com.coinreaders.engine.domain.repository.BacktestTradeRepository;
 import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
 import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
 import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
@@ -32,8 +28,6 @@ import java.util.stream.Collectors;
 public class BacktestService {
 
     private final HistoricalOhlcvRepository ohlcvRepository;
-    private final BacktestResultRepository resultRepository;
-    private final BacktestTradeRepository tradeRepository;
     private final HistoricalAiPredictionRepository aiPredictionRepository;
 
     // 상수 정의 (업비트 기준)
