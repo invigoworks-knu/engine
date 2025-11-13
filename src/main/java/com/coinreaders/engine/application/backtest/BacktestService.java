@@ -161,7 +161,6 @@ public class BacktestService {
         int totalWins = 0;
         int totalLosses = 0;
         List<BigDecimal> allCapitalHistory = new ArrayList<>();
-        allCapitalHistory.add(initialCapital); // 시작 자본
         List<BigDecimal> allReturns = new ArrayList<>(); // 전체 거래 수익률 (Sharpe 계산용)
 
         for (int foldNumber = startFold; foldNumber <= endFold; foldNumber++) {
@@ -192,9 +191,11 @@ public class BacktestService {
                 .kellyFinalCapital(kellyFinalCapital)
                 .kellyReturnPct(kellyReturnPct)
                 .kellyTrades(response.getKellyStrategy().getTotalTrades())
+                .kellyMdd(response.getKellyStrategy().getMaxDrawdown())
                 .buyHoldInitialCapital(buyHoldCapital)
                 .buyHoldFinalCapital(buyHoldFinalCapital)
                 .buyHoldReturnPct(buyHoldReturnPct)
+                .buyHoldMdd(response.getBuyHoldStrategy().getMaxDrawdown())
                 .alpha(response.getAlpha())
                 .winner(response.getWinner())
                 .build());
@@ -207,7 +208,18 @@ public class BacktestService {
             // 통계 집계
             totalWins += response.getKellyStrategy().getWinTrades();
             totalLosses += response.getKellyStrategy().getLossTrades();
-            allCapitalHistory.add(kellyFinalCapital);
+
+            // 자본 이력 수집 (첫 fold는 전체, 이후 fold는 첫 값 제외하여 중복 방지)
+            List<BigDecimal> foldCapitalHistory = response.getKellyStrategy().getCapitalHistory();
+            if (foldCapitalHistory != null && !foldCapitalHistory.isEmpty()) {
+                if (allCapitalHistory.isEmpty()) {
+                    // 첫 fold: 전체 이력 추가
+                    allCapitalHistory.addAll(foldCapitalHistory);
+                } else {
+                    // 이후 fold: 첫 값(이전 fold의 마지막 값과 동일)을 제외하고 추가
+                    allCapitalHistory.addAll(foldCapitalHistory.subList(1, foldCapitalHistory.size()));
+                }
+            }
 
             log.info("Fold {} 완료: Kelly={}원, B&H={}원",
                 foldNumber, kellyFinalCapital, buyHoldFinalCapital);
@@ -474,6 +486,7 @@ public class BacktestService {
             .kellyFraction(kellyFraction.multiply(new BigDecimal("100"))) // %로 변환
             .maxDrawdown(maxDrawdown)
             .sharpeRatio(sharpeRatio)
+            .capitalHistory(capitalHistory) // 연속 백테스팅 MDD 계산을 위해 추가
             .build();
     }
 

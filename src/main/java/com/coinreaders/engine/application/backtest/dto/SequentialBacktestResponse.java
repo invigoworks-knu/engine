@@ -64,11 +64,13 @@ public class SequentialBacktestResponse {
         private BigDecimal kellyFinalCapital;
         private BigDecimal kellyReturnPct;
         private Integer kellyTrades; // 거래 횟수
+        private BigDecimal kellyMdd; // 최대 낙폭 (%)
 
         // Buy & Hold 전략
         private BigDecimal buyHoldInitialCapital;
         private BigDecimal buyHoldFinalCapital;
         private BigDecimal buyHoldReturnPct;
+        private BigDecimal buyHoldMdd; // 최대 낙폭 (%)
 
         // 비교
         private BigDecimal alpha;

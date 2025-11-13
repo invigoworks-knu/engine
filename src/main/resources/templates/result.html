@@ -111,7 +111,7 @@
 
         <!-- Winner Banner -->
         <div th:if="${result.winner == 'KELLY'}" class="alert alert-success text-center mb-4" style="border-radius: 0 0 15px 15px;">
-            <h4><i class="fas fa-trophy"></i> AI 전략 승리! (+[[${#numbers.formatDecimal(result.alpha, 1, 2)}]]% 알파)</h4>
+            <h4><i class="fas fa-trophy"></i> 나의 전략 승리! (+[[${#numbers.formatDecimal(result.alpha, 1, 2)}]]% 알파)</h4>
         </div>
         <div th:if="${result.winner != 'KELLY'}" class="alert alert-warning text-center mb-4" style="border-radius: 0 0 15px 15px;">
             <h4><i class="fas fa-info-circle"></i> 매수 후 보유 승리! ([[${#numbers.formatDecimal(result.alpha, 1, 2)}]]% 알파)</h4>
@@ -122,7 +122,7 @@
             <!-- AI Strategy -->
             <div class="col-md-6">
                 <div th:class="${result.winner == 'KELLY' ? 'stat-card winner' : 'stat-card'}">
-                    <h5><i class="fas fa-brain"></i> AI 전략
+                    <h5><i class="fas fa-brain"></i> 나의 전략
                         <span th:if="${positionSizePercent != null}" class="badge bg-info">[[${positionSizePercent}]]% 고정</span>
                         <span th:if="${positionSizePercent == null}" class="badge bg-primary">켈리 자동</span>
                     </h5>
@@ -250,7 +250,7 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="stat-card">
-                    <h5><i class="fas fa-info-circle"></i> AI 전략 세부사항</h5>
+                    <h5><i class="fas fa-info-circle"></i> 나의 전략 세부사항</h5>
                     <div class="info-row">
                         <span data-bs-toggle="tooltip"
                               data-bs-placement="left"
@@ -355,7 +355,7 @@
         new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: ['AI 전략', '매수 후 보유'],
+                labels: ['나의 전략', '매수 후 보유'],
                 datasets: [{
                     label: '총 수익률 (%)',
                     data: [kellyReturn, buyHoldReturn],
