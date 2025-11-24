@@ -220,6 +220,41 @@ public class DataPipelineController {
     }
 
     /**
+     * AI 예측 데이터 조회 API
+     * @param modelName 모델명 (선택)
+     * @param foldNumber Fold 번호 (선택)
+     */
+    @GetMapping("/predictions")
+    public ResponseEntity<?> getPredictions(
+        @RequestParam(required = false) String modelName,
+        @RequestParam(required = false) Integer foldNumber) {
+
+        try {
+            List<HistoricalAiPrediction> predictions;
+
+            if (modelName != null && foldNumber != null) {
+                // 모델 + Fold 필터링
+                predictions = aiPredictionRepository.findByMarketAndFoldNumberAndModelNameOrderByPredictionDateAsc(
+                    "KRW-ETH", foldNumber, modelName);
+            } else if (foldNumber != null) {
+                // Fold만 필터링
+                predictions = aiPredictionRepository.findByMarketAndFoldNumberOrderByPredictionDateAsc(
+                    "KRW-ETH", foldNumber);
+            } else {
+                // 전체 조회 (최대 1000건으로 제한)
+                predictions = aiPredictionRepository.findAll().stream()
+                    .limit(1000)
+                    .toList();
+            }
+
+            return ResponseEntity.ok(predictions);
+        } catch (Exception e) {
+            log.error("Failed to get predictions", e);
+            return ResponseEntity.internalServerError().body("Failed to get predictions: " + e.getMessage());
+        }
+    }
+
+    /**
      * 데이터 적재 상태 DTO
      */
     public record DataStatus(
