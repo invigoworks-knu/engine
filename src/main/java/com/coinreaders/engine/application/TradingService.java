@@ -7,6 +7,7 @@ import com.coinreaders.engine.domain.constant.OrderType;
 import com.coinreaders.engine.domain.constant.Side;
 import com.coinreaders.engine.domain.entity.Account;
 import com.coinreaders.engine.domain.entity.TradeOrder;
+import com.coinreaders.engine.domain.entity.TradingSettings;
 import com.coinreaders.engine.domain.repository.AccountRepository;
 import com.coinreaders.engine.domain.repository.TradeOrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,12 +39,7 @@ public class TradingService {
     private final AccountRepository accountRepository;
     private final TradeOrderRepository tradeOrderRepository;
     private final AccountService accountService;
-
-    // 안전장치 상수
-    private static final BigDecimal MIN_ORDER_AMOUNT = new BigDecimal("5000"); // 최소 5,000원
-    private static final BigDecimal MAX_ORDER_AMOUNT = new BigDecimal("10000"); // 최대 10,000원 (테스트용)
-    private static final int MAX_DAILY_TRADES = 10; // 일일 최대 거래 횟수
-    private static final String ALLOWED_MARKET = "KRW-ETH"; // 이더리움만 허용
+    private final TradingSettingsService tradingSettingsService;
 
     /**
      * 시장가 매수
@@ -56,10 +52,14 @@ public class TradingService {
     public UpbitOrderResponseDto marketBuy(String market, BigDecimal krwAmount) {
         log.info("[거래] 시장가 매수 요청: market={}, amount={} KRW", market, krwAmount);
 
+        // 안전장치 설정 조회
+        TradingSettings settings = tradingSettingsService.getDefaultSettings();
+
         // 안전장치 검증
-        validateMarket(market);
-        validateBuyAmount(krwAmount);
-        validateDailyTradeLimit(null); // Account는 나중에 구현
+        validateSettings(settings);
+        validateMarket(market, settings);
+        validateBuyAmount(krwAmount, settings);
+        validateDailyTradeLimit(null, settings); // Account는 나중에 구현
 
         // 잔고 확인
         BigDecimal krwBalance = accountService.getBalanceByCurrency("KRW");
@@ -97,10 +97,14 @@ public class TradingService {
     public UpbitOrderResponseDto marketSell(String market, BigDecimal volume) {
         log.info("[거래] 시장가 매도 요청: market={}, volume={} ETH", market, volume);
 
+        // 안전장치 설정 조회
+        TradingSettings settings = tradingSettingsService.getDefaultSettings();
+
         // 안전장치 검증
-        validateMarket(market);
+        validateSettings(settings);
+        validateMarket(market, settings);
         validateSellVolume(volume);
-        validateDailyTradeLimit(null); // Account는 나중에 구현
+        validateDailyTradeLimit(null, settings); // Account는 나중에 구현
 
         // 잔고 확인
         BigDecimal ethBalance = accountService.getBalanceByCurrency("ETH");
@@ -128,31 +132,40 @@ public class TradingService {
     }
 
     /**
-     * 마켓 검증 (KRW-ETH만 허용)
+     * 안전장치 활성화 여부 검증
      */
-    private void validateMarket(String market) {
-        if (!ALLOWED_MARKET.equals(market)) {
+    private void validateSettings(TradingSettings settings) {
+        if (!settings.getIsEnabled()) {
+            throw new IllegalArgumentException("안전장치가 비활성화되어 있습니다. 거래를 진행하려면 안전장치를 활성화해주세요.");
+        }
+    }
+
+    /**
+     * 마켓 검증 (설정된 마켓만 허용)
+     */
+    private void validateMarket(String market, TradingSettings settings) {
+        if (!settings.getAllowedMarket().equals(market)) {
             throw new IllegalArgumentException(
-                    String.format("허용되지 않은 마켓: %s (허용: %s)", market, ALLOWED_MARKET));
+                    String.format("허용되지 않은 마켓: %s (허용: %s)", market, settings.getAllowedMarket()));
         }
     }
 
     /**
      * 매수 금액 검증
      */
-    private void validateBuyAmount(BigDecimal amount) {
+    private void validateBuyAmount(BigDecimal amount, TradingSettings settings) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("매수 금액은 0보다 커야 합니다.");
         }
 
-        if (amount.compareTo(MIN_ORDER_AMOUNT) < 0) {
+        if (amount.compareTo(settings.getMinOrderAmount()) < 0) {
             throw new IllegalArgumentException(
-                    String.format("최소 주문금액: %s KRW (입력: %s KRW)", MIN_ORDER_AMOUNT, amount));
+                    String.format("최소 주문금액: %s KRW (입력: %s KRW)", settings.getMinOrderAmount(), amount));
         }
 
-        if (amount.compareTo(MAX_ORDER_AMOUNT) > 0) {
+        if (amount.compareTo(settings.getMaxOrderAmount()) > 0) {
             throw new IllegalArgumentException(
-                    String.format("최대 주문금액: %s KRW (입력: %s KRW)", MAX_ORDER_AMOUNT, amount));
+                    String.format("최대 주문금액: %s KRW (입력: %s KRW)", settings.getMaxOrderAmount(), amount));
         }
     }
 
@@ -171,7 +184,7 @@ public class TradingService {
     /**
      * 일일 거래 횟수 제한 검증
      */
-    private void validateDailyTradeLimit(Account account) {
+    private void validateDailyTradeLimit(Account account, TradingSettings settings) {
         if (account == null) {
             // Account가 없으면 검증 생략 (초기 구현 단계)
             return;
@@ -180,9 +193,9 @@ public class TradingService {
         LocalDateTime startOfDay = LocalDateTime.now().toLocalDate().atStartOfDay();
         long todayTradeCount = tradeOrderRepository.countByAccountAndCreatedAtAfter(account, startOfDay);
 
-        if (todayTradeCount >= MAX_DAILY_TRADES) {
+        if (todayTradeCount >= settings.getMaxDailyTrades()) {
             throw new IllegalArgumentException(
-                    String.format("일일 거래 횟수 초과: %d회 (최대: %d회)", todayTradeCount, MAX_DAILY_TRADES));
+                    String.format("일일 거래 횟수 초과: %d회 (최대: %d회)", todayTradeCount, settings.getMaxDailyTrades()));
         }
     }
 

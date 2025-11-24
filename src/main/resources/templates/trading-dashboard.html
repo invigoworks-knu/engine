@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>거래 대시보드 - AI 투자 엔진</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem 0;
+        }
+        .main-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .header-section {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header-section h1 {
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .nav-menu {
+            margin-bottom: 2rem;
+        }
+        .nav-menu .nav-link {
+            color: #667eea;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+        }
+        .nav-menu .nav-link.active {
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+        }
+        .balance-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .balance-card h3 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .info-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid #667eea;
+        }
+        .info-card h5 {
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+        .stat-label {
+            color: #666;
+            font-weight: 600;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #333;
+        }
+        .btn-trade {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 0.75rem 2rem;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 10px;
+            color: white;
+        }
+        .btn-trade:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .order-table {
+            background: white;
+            border-radius: 10px;
+        }
+        .badge-buy {
+            background-color: #28a745;
+        }
+        .badge-sell {
+            background-color: #dc3545;
+        }
+        .badge-filled {
+            background-color: #17a2b8;
+        }
+        .badge-pending {
+            background-color: #ffc107;
+        }
+        .badge-canceled {
+            background-color: #6c757d;
+        }
+        .refresh-btn {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        .refresh-btn:hover {
+            background: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <!-- 헤더 -->
+                <div class="main-card">
+                    <div class="header-section">
+                        <h1><i class="fas fa-chart-line"></i> 거래 대시보드</h1>
+                        <p>실시간 잔고 및 거래 현황</p>
+                    </div>
+
+                    <!-- 네비게이션 -->
+                    <ul class="nav nav-pills nav-menu justify-content-center">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/trading/dashboard">
+                                <i class="fas fa-home"></i> 대시보드
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/trading/mypage">
+                                <i class="fas fa-user-cog"></i> 마이페이지
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/trading/history">
+                                <i class="fas fa-history"></i> 거래 내역
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">
+                                <i class="fas fa-flask"></i> 백테스팅
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 잔고 정보 -->
+                <div class="main-card">
+                    <h4><i class="fas fa-wallet"></i> 보유 자산</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="balance-card">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <p class="mb-1">KRW (원화)</p>
+                                        <h3 id="krwBalance">-</h3>
+                                    </div>
+                                    <i class="fas fa-won-sign fa-3x opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="balance-card">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <p class="mb-1">ETH (이더리움)</p>
+                                        <h3 id="ethBalance">-</h3>
+                                    </div>
+                                    <i class="fab fa-ethereum fa-3x opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <button class="btn refresh-btn" onclick="loadBalance()">
+                            <i class="fas fa-sync-alt"></i> 잔고 새로고침
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 현재가 정보 -->
+                <div class="main-card">
+                    <h4><i class="fas fa-chart-area"></i> 시장 정보</h4>
+                    <div class="info-card">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="stat-item">
+                                    <span class="stat-label">현재가 (KRW-ETH)</span>
+                                    <span class="stat-value" id="currentPrice">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">24시간 변동률</span>
+                                    <span class="stat-value" id="changeRate">-</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-item">
+                                    <span class="stat-label">24시간 최고가</span>
+                                    <span class="stat-value" id="highPrice">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">24시간 최저가</span>
+                                    <span class="stat-value" id="lowPrice">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <button class="btn refresh-btn" onclick="loadMarketInfo()">
+                            <i class="fas fa-sync-alt"></i> 시장 정보 새로고침
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 빠른 거래 -->
+                <div class="main-card">
+                    <h4><i class="fas fa-exchange-alt"></i> 빠른 거래</h4>
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>주의:</strong> 실제 자금이 이동하는 거래입니다!
+                        안전장치는 <a href="/trading/mypage">마이페이지</a>에서 설정할 수 있습니다.
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-arrow-up text-success"></i> 매수</h5>
+                                    <div class="mb-3">
+                                        <label class="form-label">매수 금액 (KRW)</label>
+                                        <input type="number" class="form-control" id="buyAmount" placeholder="5000" min="5000" step="1000">
+                                        <small class="text-muted">최소: 5,000원 / 최대: 설정값에 따름</small>
+                                    </div>
+                                    <button class="btn btn-success w-100" onclick="marketBuy()">
+                                        <i class="fas fa-cart-plus"></i> 시장가 매수
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-arrow-down text-danger"></i> 매도</h5>
+                                    <div class="mb-3">
+                                        <label class="form-label">매도 수량 (ETH)</label>
+                                        <input type="number" class="form-control" id="sellVolume" placeholder="0.001" min="0.0001" step="0.0001">
+                                        <small class="text-muted">보유 수량 범위 내에서 입력</small>
+                                    </div>
+                                    <button class="btn btn-danger w-100" onclick="marketSell()">
+                                        <i class="fas fa-hand-holding-usd"></i> 시장가 매도
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 최근 주문 -->
+                <div class="main-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4><i class="fas fa-list"></i> 최근 주문 (최근 5건)</h4>
+                        <button class="btn refresh-btn btn-sm" onclick="loadRecentOrders()">
+                            <i class="fas fa-sync-alt"></i> 새로고침
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table order-table">
+                            <thead>
+                                <tr>
+                                    <th>시간</th>
+                                    <th>구분</th>
+                                    <th>마켓</th>
+                                    <th>수량/금액</th>
+                                    <th>상태</th>
+                                    <th>UUID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentOrdersTable">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">주문 내역을 불러오는 중...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="/trading/history" class="btn btn-outline-primary">
+                            <i class="fas fa-history"></i> 전체 거래 내역 보기
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 페이지 로드 시 모든 정보 불러오기
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBalance();
+            loadMarketInfo();
+            loadRecentOrders();
+        });
+
+        // 잔고 조회
+        function loadBalance() {
+            fetch('/api/v1/account/balance/summary')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('krwBalance').textContent =
+                        parseFloat(data.krw_balance).toLocaleString('ko-KR', {maximumFractionDigits: 2}) + ' KRW';
+                    document.getElementById('ethBalance').textContent =
+                        parseFloat(data.eth_balance).toFixed(8) + ' ETH';
+                })
+                .catch(error => {
+                    console.error('잔고 조회 실패:', error);
+                    alert('잔고 조회에 실패했습니다.');
+                });
+        }
+
+        // 시장 정보 조회
+        function loadMarketInfo() {
+            fetch('/api/v1/market/ticker/KRW-ETH')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('currentPrice').textContent =
+                        parseFloat(data.trade_price).toLocaleString('ko-KR') + ' KRW';
+
+                    const changeRate = (data.signed_change_rate * 100).toFixed(2);
+                    const changeRateElement = document.getElementById('changeRate');
+                    changeRateElement.textContent = changeRate + '%';
+                    changeRateElement.style.color = data.change === 'RISE' ? '#28a745' : '#dc3545';
+
+                    document.getElementById('highPrice').textContent =
+                        parseFloat(data.high_price).toLocaleString('ko-KR') + ' KRW';
+                    document.getElementById('lowPrice').textContent =
+                        parseFloat(data.low_price).toLocaleString('ko-KR') + ' KRW';
+                })
+                .catch(error => {
+                    console.error('시장 정보 조회 실패:', error);
+                    alert('시장 정보 조회에 실패했습니다.');
+                });
+        }
+
+        // 최근 주문 조회
+        function loadRecentOrders() {
+            fetch('/api/v1/trading/orders/local')
+                .then(response => response.json())
+                .then(orders => {
+                    const tbody = document.getElementById('recentOrdersTable');
+                    tbody.innerHTML = '';
+
+                    if (orders.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">주문 내역이 없습니다.</td></tr>';
+                        return;
+                    }
+
+                    // 최근 5건만 표시
+                    orders.slice(-5).reverse().forEach(order => {
+                        const row = document.createElement('tr');
+
+                        const createdAt = new Date(order.createdAt);
+                        const timeStr = createdAt.toLocaleString('ko-KR', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+
+                        const sideBadge = order.side === 'BUY' ?
+                            '<span class="badge badge-buy">매수</span>' :
+                            '<span class="badge badge-sell">매도</span>';
+
+                        let statusBadge = '';
+                        switch(order.status) {
+                            case 'FILLED':
+                                statusBadge = '<span class="badge badge-filled">체결</span>';
+                                break;
+                            case 'PENDING':
+                                statusBadge = '<span class="badge badge-pending">대기</span>';
+                                break;
+                            case 'CANCELED':
+                                statusBadge = '<span class="badge badge-canceled">취소</span>';
+                                break;
+                            default:
+                                statusBadge = '<span class="badge bg-secondary">' + order.status + '</span>';
+                        }
+
+                        const amount = order.amount ? parseFloat(order.amount).toFixed(8) : '-';
+
+                        row.innerHTML = `
+                            <td>${timeStr}</td>
+                            <td>${sideBadge}</td>
+                            <td>${order.market}</td>
+                            <td>${amount}</td>
+                            <td>${statusBadge}</td>
+                            <td><small>${order.upbitOrderUuid ? order.upbitOrderUuid.substring(0, 8) + '...' : '-'}</small></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(error => {
+                    console.error('주문 조회 실패:', error);
+                    document.getElementById('recentOrdersTable').innerHTML =
+                        '<tr><td colspan="6" class="text-center text-danger">주문 내역 조회에 실패했습니다.</td></tr>';
+                });
+        }
+
+        // 시장가 매수
+        function marketBuy() {
+            const amount = document.getElementById('buyAmount').value;
+
+            if (!amount || amount <= 0) {
+                alert('매수 금액을 입력해주세요.');
+                return;
+            }
+
+            if (!confirm(`${parseFloat(amount).toLocaleString('ko-KR')}원으로 ETH를 시장가 매수하시겠습니까?`)) {
+                return;
+            }
+
+            fetch('/api/v1/trading/market-buy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    market: 'KRW-ETH',
+                    amount: amount
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'error') {
+                    alert('매수 실패: ' + data.message);
+                } else {
+                    alert('매수 주문이 성공적으로 실행되었습니다!');
+                    document.getElementById('buyAmount').value = '';
+                    loadBalance();
+                    loadRecentOrders();
+                }
+            })
+            .catch(error => {
+                console.error('매수 실패:', error);
+                alert('매수 주문에 실패했습니다.');
+            });
+        }
+
+        // 시장가 매도
+        function marketSell() {
+            const volume = document.getElementById('sellVolume').value;
+
+            if (!volume || volume <= 0) {
+                alert('매도 수량을 입력해주세요.');
+                return;
+            }
+
+            if (!confirm(`${volume} ETH를 시장가 매도하시겠습니까?`)) {
+                return;
+            }
+
+            fetch('/api/v1/trading/market-sell', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    market: 'KRW-ETH',
+                    volume: volume
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'error') {
+                    alert('매도 실패: ' + data.message);
+                } else {
+                    alert('매도 주문이 성공적으로 실행되었습니다!');
+                    document.getElementById('sellVolume').value = '';
+                    loadBalance();
+                    loadRecentOrders();
+                }
+            })
+            .catch(error => {
+                console.error('매도 실패:', error);
+                alert('매도 주문에 실패했습니다.');
+            });
+        }
+    </script>
+</body>
+</html>
