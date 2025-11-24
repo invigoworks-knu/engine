@@ -7,168 +7,233 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --border-color: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+        }
+
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
-            padding: 2rem 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .main-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 2rem;
-            margin-bottom: 2rem;
+
+        .top-navbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
         }
-        .header-section {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .header-section h1 {
-            color: #667eea;
+
+        .top-navbar .brand {
+            font-size: 1.5rem;
             font-weight: bold;
-            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        .nav-menu {
-            margin-bottom: 2rem;
+
+        .top-navbar .nav-link {
+            color: var(--text-secondary);
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            margin: 0 0.25rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s;
         }
-        .nav-menu .nav-link {
-            color: #667eea;
-            font-weight: 600;
-            padding: 0.75rem 1.5rem;
+
+        .top-navbar .nav-link:hover {
+            color: var(--text-primary);
+            background: rgba(99, 102, 241, 0.1);
         }
-        .nav-menu .nav-link.active {
-            color: white;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
+
+        .top-navbar .nav-link.active {
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
         }
-        .settings-card {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 1.5rem;
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
             margin-bottom: 1.5rem;
-            border-left: 4px solid #667eea;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
         }
-        .settings-card h5 {
-            color: #667eea;
-            font-weight: bold;
-            margin-bottom: 1rem;
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
         }
-        .btn-save {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            padding: 0.75rem 2rem;
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: white;
+
+        .card-body {
+            padding: 1.5rem;
         }
-        .btn-save:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        .btn-reset {
-            background: #6c757d;
-            border: none;
-            padding: 0.75rem 2rem;
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: white;
-        }
+
         .status-badge {
             display: inline-block;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 2rem;
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 1.1rem;
         }
+
         .status-enabled {
-            background-color: #d4edda;
-            color: #155724;
+            background: var(--success);
+            color: white;
         }
+
         .status-disabled {
-            background-color: #f8d7da;
-            color: #721c24;
+            background: var(--danger);
+            color: white;
         }
-        .info-section {
-            background: #fff9e6;
-            border-left: 4px solid #ffc107;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid var(--info);
+            color: var(--info);
         }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--warning);
+            color: var(--warning);
+        }
+
+        .form-control, .form-select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
         .form-control:focus, .form-select:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            background: var(--bg-secondary);
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+        }
+
+        .form-label {
+            color: var(--text-primary);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border: none;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--text-secondary);
+            border: none;
+            font-weight: 600;
+        }
+
+        .btn-success {
+            background: var(--success);
+            border: none;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            border: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-                <!-- 헤더 -->
-                <div class="main-card">
-                    <div class="header-section">
-                        <h1><i class="fas fa-user-cog"></i> 마이페이지</h1>
-                        <p>거래 안전장치 설정</p>
-                    </div>
-
-                    <!-- 네비게이션 -->
-                    <ul class="nav nav-pills nav-menu justify-content-center">
-                        <li class="nav-item">
-                            <a class="nav-link" href="/trading/dashboard">
-                                <i class="fas fa-home"></i> 대시보드
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link active" href="/trading/mypage">
-                                <i class="fas fa-user-cog"></i> 마이페이지
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/trading/history">
-                                <i class="fas fa-history"></i> 거래 내역
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/">
-                                <i class="fas fa-flask"></i> 백테스팅
-                            </a>
-                        </li>
-                    </ul>
+    <!-- 상단 네비게이션 바 -->
+    <nav class="top-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="brand">
+                    <i class="fas fa-chart-line"></i> AI 투자 엔진
                 </div>
+                <ul class="nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/trading/dashboard">
+                            <i class="fas fa-home"></i> 대시보드
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/trading/mypage">
+                            <i class="fas fa-user-cog"></i> 마이페이지
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/trading/history">
+                            <i class="fas fa-history"></i> 거래내역
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/backtest">
+                            <i class="fas fa-flask"></i> 백테스팅
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
 
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
                 <!-- 안전장치 상태 -->
-                <div class="main-card">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4><i class="fas fa-shield-alt"></i> 안전장치 상태</h4>
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-shield-alt"></i> 안전장치 상태</span>
                         <span class="status-badge" id="statusBadge">확인 중...</span>
                     </div>
-                    <div class="info-section">
-                        <p class="mb-2">
+                    <div class="card-body">
+                        <div class="alert alert-info" role="alert">
                             <i class="fas fa-info-circle"></i>
                             <strong>안전장치란?</strong>
                             실수로 큰 금액을 거래하거나 과도하게 거래하는 것을 방지하는 보호 기능입니다.
-                        </p>
-                        <p class="mb-0">
+                        </div>
+                        <div class="alert alert-warning" role="alert">
                             <i class="fas fa-exclamation-triangle"></i>
                             안전장치가 비활성화되면 <strong>모든 거래가 차단</strong>됩니다.
-                        </p>
-                    </div>
-                    <div class="text-center">
-                        <button class="btn btn-lg" id="toggleBtn" onclick="toggleSafety()">
-                            <i class="fas fa-power-off"></i> <span id="toggleText">안전장치 토글</span>
-                        </button>
+                        </div>
+                        <div class="text-center">
+                            <button class="btn btn-lg" id="toggleBtn" onclick="toggleSafety()">
+                                <i class="fas fa-power-off"></i> <span id="toggleText">안전장치 토글</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- 안전장치 설정 -->
-                <div class="main-card">
-                    <h4><i class="fas fa-cog"></i> 안전장치 설정</h4>
-
-                    <form id="settingsForm">
-                        <!-- 주문 금액 제한 -->
-                        <div class="settings-card">
-                            <h5><i class="fas fa-won-sign"></i> 주문 금액 제한 (KRW)</h5>
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-cog"></i> 안전장치 설정
+                    </div>
+                    <div class="card-body">
+                        <form id="settingsForm">
+                            <!-- 주문 금액 제한 -->
+                            <h5 class="mb-3"><i class="fas fa-won-sign"></i> 주문 금액 제한 (KRW)</h5>
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">최소 주문 금액</label>
@@ -181,21 +246,21 @@
                                     <small class="text-muted">한 번에 주문할 수 있는 최대 금액</small>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- 거래 횟수 제한 -->
-                        <div class="settings-card">
-                            <h5><i class="fas fa-chart-bar"></i> 일일 거래 횟수 제한</h5>
+                            <hr style="border-color: var(--border-color);">
+
+                            <!-- 거래 횟수 제한 -->
+                            <h5 class="mb-3"><i class="fas fa-chart-bar"></i> 일일 거래 횟수 제한</h5>
                             <div class="mb-3">
                                 <label class="form-label">일일 최대 거래 횟수</label>
                                 <input type="number" class="form-control" id="maxDailyTrades" min="1" max="100" required>
                                 <small class="text-muted">하루에 매수/매도 합쳐서 최대 몇 번까지 거래할 수 있는지 설정</small>
                             </div>
-                        </div>
 
-                        <!-- 허용 마켓 -->
-                        <div class="settings-card">
-                            <h5><i class="fas fa-coins"></i> 허용 마켓</h5>
+                            <hr style="border-color: var(--border-color);">
+
+                            <!-- 허용 마켓 -->
+                            <h5 class="mb-3"><i class="fas fa-coins"></i> 허용 마켓</h5>
                             <div class="mb-3">
                                 <label class="form-label">거래 가능 마켓</label>
                                 <select class="form-select" id="allowedMarket" required>
@@ -205,24 +270,26 @@
                                 </select>
                                 <small class="text-muted">현재 시스템은 KRW-ETH만 지원합니다</small>
                             </div>
-                        </div>
 
-                        <!-- 버튼 -->
-                        <div class="text-center mt-4">
-                            <button type="button" class="btn btn-save me-2" onclick="saveSettings()">
-                                <i class="fas fa-save"></i> 설정 저장
-                            </button>
-                            <button type="button" class="btn btn-reset" onclick="resetSettings()">
-                                <i class="fas fa-undo"></i> 기본값으로 초기화
-                            </button>
-                        </div>
-                    </form>
+                            <!-- 버튼 -->
+                            <div class="text-center mt-4">
+                                <button type="button" class="btn btn-primary btn-lg me-2" onclick="saveSettings()">
+                                    <i class="fas fa-save"></i> 설정 저장
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-lg" onclick="resetSettings()">
+                                    <i class="fas fa-undo"></i> 기본값으로 초기화
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
 
                 <!-- 현재 설정 정보 -->
-                <div class="main-card">
-                    <h4><i class="fas fa-info-circle"></i> 현재 설정 정보</h4>
-                    <div class="settings-card">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-info-circle"></i> 현재 설정 정보
+                    </div>
+                    <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
                                 <p><strong>최소 주문 금액:</strong> <span id="currentMin">-</span> KRW</p>
@@ -242,23 +309,19 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // 페이지 로드 시 설정 불러오기
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
         });
 
-        // 설정 불러오기
         function loadSettings() {
             fetch('/api/v1/settings')
                 .then(response => response.json())
                 .then(settings => {
-                    // 폼에 값 설정
                     document.getElementById('minOrderAmount').value = settings.minOrderAmount;
                     document.getElementById('maxOrderAmount').value = settings.maxOrderAmount;
                     document.getElementById('maxDailyTrades').value = settings.maxDailyTrades;
                     document.getElementById('allowedMarket').value = settings.allowedMarket;
 
-                    // 현재 설정 정보 표시
                     document.getElementById('currentMin').textContent =
                         parseFloat(settings.minOrderAmount).toLocaleString('ko-KR');
                     document.getElementById('currentMax').textContent =
@@ -268,7 +331,6 @@
                     document.getElementById('lastUpdate').textContent =
                         new Date(settings.updatedAt).toLocaleString('ko-KR');
 
-                    // 안전장치 상태 표시
                     updateStatusBadge(settings.isEnabled);
                 })
                 .catch(error => {
@@ -277,7 +339,6 @@
                 });
         }
 
-        // 안전장치 상태 표시 업데이트
         function updateStatusBadge(isEnabled) {
             const badge = document.getElementById('statusBadge');
             const toggleBtn = document.getElementById('toggleBtn');
@@ -296,7 +357,6 @@
             }
         }
 
-        // 안전장치 토글
         function toggleSafety() {
             fetch('/api/v1/settings')
                 .then(response => response.json())
@@ -333,7 +393,6 @@
                 });
         }
 
-        // 설정 저장
         function saveSettings() {
             const settings = {
                 minOrderAmount: document.getElementById('minOrderAmount').value,
@@ -342,7 +401,6 @@
                 allowedMarket: document.getElementById('allowedMarket').value
             };
 
-            // 유효성 검사
             if (parseFloat(settings.minOrderAmount) > parseFloat(settings.maxOrderAmount)) {
                 alert('최소 주문 금액이 최대 주문 금액보다 클 수 없습니다.');
                 return;
@@ -368,7 +426,7 @@
                     alert('설정 저장 실패: ' + data.message);
                 } else {
                     alert('설정이 성공적으로 저장되었습니다!');
-                    loadSettings(); // 설정 다시 불러오기
+                    loadSettings();
                 }
             })
             .catch(error => {
@@ -377,7 +435,6 @@
             });
         }
 
-        // 기본값으로 초기화
         function resetSettings() {
             if (!confirm('설정을 기본값으로 초기화하시겠습니까?\n\n기본값:\n- 최소: 5,000원\n- 최대: 10,000원\n- 일일 거래: 10회\n- 마켓: KRW-ETH')) {
                 return;
@@ -392,7 +449,7 @@
                     alert('초기화 실패: ' + data.message);
                 } else {
                     alert('설정이 기본값으로 초기화되었습니다!');
-                    loadSettings(); // 설정 다시 불러오기
+                    loadSettings();
                 }
             })
             .catch(error => {
