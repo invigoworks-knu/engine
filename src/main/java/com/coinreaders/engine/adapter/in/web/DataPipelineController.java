@@ -2,6 +2,7 @@ package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.DataPipelineService;
 import com.coinreaders.engine.application.AiPredictionDataService;
+import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
 import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
 import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Slf4j
 @RestController
