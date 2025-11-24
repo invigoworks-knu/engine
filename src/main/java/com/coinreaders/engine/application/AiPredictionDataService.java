@@ -81,6 +81,7 @@ public class AiPredictionDataService {
                         MARKET,
                         predictionDate,
                         foldNumber,
+                        "GRU",  // 레거시 데이터는 GRU 모델
                         actualDirection,
                         actualReturn,
                         predDirection,
@@ -88,7 +89,9 @@ public class AiPredictionDataService {
                         predProbaDown,
                         maxProba,
                         confidence,
-                        correct
+                        correct,
+                        null,  // takeProfitPrice: 레거시 CSV에는 없음
+                        null   // stopLossPrice: 레거시 CSV에는 없음
                     );
 
                     predictionRepository.save(prediction);
