@@ -187,12 +187,12 @@ public class AiPredictionDataService {
                     BigDecimal actualReturn = new BigDecimal(nextLine[2].trim());
                     BigDecimal takeProfitPrice = new BigDecimal(nextLine[3].trim());
                     BigDecimal stopLossPrice = new BigDecimal(nextLine[4].trim());
-                    Integer predDirection = Integer.parseInt(nextLine[5].trim());
+                    Integer predDirection = (int) Double.parseDouble(nextLine[5].trim()); // 1.0 → 1 (모델별 형식 통일)
                     BigDecimal predProbaUp = new BigDecimal(nextLine[6].trim());
                     BigDecimal predProbaDown = new BigDecimal(nextLine[7].trim());
                     BigDecimal maxProba = new BigDecimal(nextLine[8].trim());
                     BigDecimal confidence = new BigDecimal(nextLine[9].trim());
-                    Integer correct = Integer.parseInt(nextLine[10].trim());
+                    Integer correct = (int) Double.parseDouble(nextLine[10].trim()); // 1.0 → 1 (모델별 형식 통일)
 
                     HistoricalAiPrediction prediction = HistoricalAiPrediction.of(
                         MARKET,
