@@ -11,9 +11,10 @@
             --bg-primary: #0f172a;
             --bg-secondary: #1e293b;
             --bg-card: #1e293b;
-            --border-color: #334155;
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
+            --border-color: #475569;
+            --text-primary: #e2e8f0;
+            --text-secondary: #cbd5e1;
+            --text-heading: #f8fafc;
             --accent-primary: #6366f1;
             --accent-secondary: #8b5cf6;
             --success: #10b981;
@@ -27,17 +28,24 @@
             color: var(--text-primary);
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-heading);
+            font-weight: 700;
         }
 
         /* 상단 네비게이션 바 */
         .top-navbar {
             background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-            padding: 1rem 0;
+            border-bottom: 2px solid var(--border-color);
+            padding: 1.25rem 0;
             position: sticky;
             top: 0;
             z-index: 1000;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
         }
 
         .top-navbar .brand {
