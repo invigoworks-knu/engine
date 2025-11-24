@@ -9,7 +9,11 @@
 build/
 
 # Environment variables
-.env 
+.env
+application-local.properties
 
 # Log files
 *.log
+
+# API Keys (보안)
+**/upbit-keys.txt
