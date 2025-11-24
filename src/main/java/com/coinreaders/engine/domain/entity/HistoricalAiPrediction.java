@@ -15,7 +15,7 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "historical_ai_predictions", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_market_date_fold", columnNames = {"market", "predictionDate", "foldNumber"})
+    @UniqueConstraint(name = "uk_market_date_fold_model", columnNames = {"market", "predictionDate", "foldNumber", "modelName"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -34,6 +34,9 @@ public class HistoricalAiPrediction extends BaseTimeEntity {
 
     @Column(nullable = false)
     private Integer foldNumber;
+
+    @Column(nullable = false, length = 64)
+    private String modelName; // 모델명: GRU, LSTM, XGBoost, etc.
 
     // 실제 결과
     @Column(nullable = false)
@@ -61,13 +64,22 @@ public class HistoricalAiPrediction extends BaseTimeEntity {
     @Column(nullable = false)
     private Integer correct; // 예측 정확도 (0: 틀림, 1: 맞음)
 
-    private HistoricalAiPrediction(String market, LocalDate predictionDate, Integer foldNumber,
+    // 리스크 관리
+    @Column(precision = 15, scale = 2)
+    private BigDecimal takeProfitPrice; // 익절 목표가 (현재가 × 1.015)
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal stopLossPrice; // 손절 기준가 (현재가 × 0.99)
+
+    private HistoricalAiPrediction(String market, LocalDate predictionDate, Integer foldNumber, String modelName,
                                    Integer actualDirection, BigDecimal actualReturn,
                                    Integer predDirection, BigDecimal predProbaUp, BigDecimal predProbaDown,
-                                   BigDecimal maxProba, BigDecimal confidence, Integer correct) {
+                                   BigDecimal maxProba, BigDecimal confidence, Integer correct,
+                                   BigDecimal takeProfitPrice, BigDecimal stopLossPrice) {
         this.market = market;
         this.predictionDate = predictionDate;
         this.foldNumber = foldNumber;
+        this.modelName = modelName;
         this.actualDirection = actualDirection;
         this.actualReturn = actualReturn;
         this.predDirection = predDirection;
@@ -76,13 +88,17 @@ public class HistoricalAiPrediction extends BaseTimeEntity {
         this.maxProba = maxProba;
         this.confidence = confidence;
         this.correct = correct;
+        this.takeProfitPrice = takeProfitPrice;
+        this.stopLossPrice = stopLossPrice;
     }
 
-    public static HistoricalAiPrediction of(String market, LocalDate predictionDate, Integer foldNumber,
+    public static HistoricalAiPrediction of(String market, LocalDate predictionDate, Integer foldNumber, String modelName,
                                             Integer actualDirection, BigDecimal actualReturn,
                                             Integer predDirection, BigDecimal predProbaUp, BigDecimal predProbaDown,
-                                            BigDecimal maxProba, BigDecimal confidence, Integer correct) {
-        return new HistoricalAiPrediction(market, predictionDate, foldNumber, actualDirection, actualReturn,
-            predDirection, predProbaUp, predProbaDown, maxProba, confidence, correct);
+                                            BigDecimal maxProba, BigDecimal confidence, Integer correct,
+                                            BigDecimal takeProfitPrice, BigDecimal stopLossPrice) {
+        return new HistoricalAiPrediction(market, predictionDate, foldNumber, modelName, actualDirection, actualReturn,
+            predDirection, predProbaUp, predProbaDown, maxProba, confidence, correct,
+            takeProfitPrice, stopLossPrice);
     }
 }
