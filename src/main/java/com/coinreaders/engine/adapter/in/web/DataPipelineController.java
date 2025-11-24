@@ -175,6 +175,51 @@ public class DataPipelineController {
     }
 
     /**
+     * (신규) 다중 모델 AI 예측 데이터 적재 - direction_l8_p1.5_s1.0 폴더
+     * - 12개 ML 모델 (GRU, LSTM, BiLSTM, XGBoost, LightGBM, CatBoost, etc.)
+     * - Look-ahead 8일 예측
+     * - 익절 1.5%, 손절 1.0% 포함
+     * - Fold 1-7: 각 95건 × 12모델 = 7,980건
+     * - Fold 8: 211건 × 12모델 = 2,532건
+     * - 총 10,512건
+     */
+    @PostMapping("/init-multi-model-predictions-all")
+    public ResponseEntity<String> initializeAllMultiModelPredictions() {
+        try {
+            // 중복 적재 방지: 특정 모델의 데이터 개수 확인 (XGBoost 기준)
+            long existingCount = aiPredictionRepository.countByMarketAndModelName("KRW-ETH", "XGBoost");
+            if (existingCount >= 800) {  // 876건 중 800건 이상이면 이미 적재됨
+                log.info("다중 모델 AI 예측 데이터가 이미 적재되어 있습니다. (XGBoost: {}건)", existingCount);
+                long totalCount = aiPredictionRepository.count();
+                return ResponseEntity.ok(
+                    String.format("다중 모델 AI 예측 데이터가 이미 적재되어 있습니다. (총 %d건)", totalCount)
+                );
+            }
+
+            int totalRecords = 0;
+
+            // Fold 1-7: walk_forward_rolling_reverse
+            for (int fold = 1; fold <= 7; fold++) {
+                aiPredictionDataService.loadMultiModelPredictionsFromCsv(fold);
+                totalRecords += (95 * 12);  // 95건 × 12모델
+                log.info("Loaded Fold {} successfully (95 records × 12 models = 1,140 records)", fold);
+            }
+
+            // Fold 8: final_holdout
+            aiPredictionDataService.loadMultiModelPredictionsFromCsv(8);
+            totalRecords += (211 * 12);  // 211건 × 12모델
+            log.info("Loaded Fold 8 successfully (211 records × 12 models = 2,532 records)");
+
+            return ResponseEntity.ok(
+                String.format("다중 모델 AI 예측 데이터 적재 완료. 총 %d건 (12개 모델 × 876개 예측)", totalRecords)
+            );
+        } catch (Exception e) {
+            log.error("Failed to load multi-model AI prediction data", e);
+            return ResponseEntity.internalServerError().body("Failed to load multi-model AI data: " + e.getMessage());
+        }
+    }
+
+    /**
      * 데이터 적재 상태 DTO
      */
     public record DataStatus(
