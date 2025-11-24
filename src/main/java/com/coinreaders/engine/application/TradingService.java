@@ -78,7 +78,7 @@ public class TradingService {
         );
 
         // DB에 주문 기록 저장 (Account는 나중에 연결)
-        saveTradeOrder(null, response, market, Side.BID, OrderType.MARKET, krwAmount);
+        saveTradeOrder(null, response, market, Side.BUY, OrderType.MARKET, krwAmount);
 
         log.info("[거래] 시장가 매수 성공: uuid={}, market={}, amount={} KRW",
                 response.getUuid(), market, krwAmount);
@@ -119,7 +119,7 @@ public class TradingService {
         );
 
         // DB에 주문 기록 저장 (Account는 나중에 연결)
-        saveTradeOrder(null, response, market, Side.ASK, OrderType.MARKET, volume);
+        saveTradeOrder(null, response, market, Side.SELL, OrderType.MARKET, volume);
 
         log.info("[거래] 시장가 매도 성공: uuid={}, market={}, volume={} ETH",
                 response.getUuid(), market, volume);
@@ -215,7 +215,7 @@ public class TradingService {
         return switch (upbitState) {
             case "wait" -> OrderStatus.PENDING;
             case "done" -> OrderStatus.FILLED;
-            case "cancel" -> OrderStatus.CANCELLED;
+            case "cancel" -> OrderStatus.CANCELED;
             default -> OrderStatus.PENDING;
         };
     }
