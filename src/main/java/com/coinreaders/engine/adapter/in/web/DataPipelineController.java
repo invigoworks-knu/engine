@@ -257,9 +257,14 @@ public class DataPipelineController {
                 log.info("모델+Fold 필터링: KRW-ETH, Fold {}, {}", foldNumber, modelName);
                 predictions = aiPredictionRepository.findByMarketAndFoldNumberAndModelNameOrderByPredictionDateAsc(
                     "KRW-ETH", foldNumber, modelName);
+            } else if (modelName != null) {
+                // 모델만 필터링 (모든 Fold)
+                log.info("모델 필터링: KRW-ETH, {} (전체 Fold)", modelName);
+                predictions = aiPredictionRepository.findByMarketAndModelNameOrderByPredictionDateAsc(
+                    "KRW-ETH", modelName);
             } else if (foldNumber != null) {
-                // Fold만 필터링
-                log.info("Fold만 필터링: KRW-ETH, Fold {}", foldNumber);
+                // Fold만 필터링 (모든 모델)
+                log.info("Fold 필터링: KRW-ETH, Fold {} (전체 모델)", foldNumber);
                 predictions = aiPredictionRepository.findByMarketAndFoldNumberOrderByPredictionDateAsc(
                     "KRW-ETH", foldNumber);
             } else {

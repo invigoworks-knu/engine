@@ -16,6 +16,8 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -159,17 +161,23 @@ public class AiPredictionDataService {
 
         try (CSVReader reader = new CSVReader(new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
             String[] nextLine;
-            reader.readNext(); // 헤더 건너뛰기
+            String[] header = reader.readNext(); // 헤더 읽기
+
+            // BOM 제거 (UTF-8 BOM이 있을 경우)
+            if (header != null && header.length > 0 && header[0].startsWith("\ufeff")) {
+                header[0] = header[0].substring(1);
+            }
 
             int count = 0;
+            int failCount = 0;
+            List<HistoricalAiPrediction> batchList = new ArrayList<>();
 
             // CSV 구조: date, actual_direction, actual_return, take_profit_price, stop_loss_price,
             //           pred_direction, pred_proba_up, pred_proba_down, max_proba, confidence, correct
             while ((nextLine = reader.readNext()) != null) {
                 // 컬럼 개수 검증 (11개)
                 if (nextLine.length < 11) {
-                    log.warn("[{}] 잘못된 CSV 행 형식 (컬럼 수 부족: {}): {}",
-                        modelName, nextLine.length, String.join(",", nextLine));
+                    failCount++;
                     continue;
                 }
 
@@ -203,18 +211,33 @@ public class AiPredictionDataService {
                         stopLossPrice
                     );
 
-                    predictionRepository.save(prediction);
+                    batchList.add(prediction);
                     count++;
 
+                    // 배치 저장 (100개 단위)
+                    if (batchList.size() >= 100) {
+                        predictionRepository.saveAll(batchList);
+                        batchList.clear();
+                    }
+
                 } catch (Exception e) {
-                    log.warn("[{}] CSV 행 파싱 실패 (건너뜀): {}", modelName, String.join(",", nextLine), e);
+                    failCount++;
                 }
+            }
+
+            // 남은 데이터 저장
+            if (!batchList.isEmpty()) {
+                predictionRepository.saveAll(batchList);
+            }
+
+            if (failCount > 0) {
+                log.warn("Fold {} - {}: {}건 성공, {}건 실패", foldNumber, modelName, count, failCount);
             }
 
             return count;
 
         } catch (IOException | CsvValidationException e) {
-            log.error("[{}] CSV 파일 읽기 실패: {}", modelName, filePath, e);
+            log.error("Fold {} - {}: CSV 파일 읽기 실패 ({})", foldNumber, modelName, filePath, e);
             throw new RuntimeException(String.format("[%s] CSV 파일 처리 중 오류 발생", modelName), e);
         }
     }

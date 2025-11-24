@@ -54,4 +54,12 @@ public interface HistoricalAiPredictionRepository extends JpaRepository<Historic
      * @return 데이터 개수
      */
     long countByMarketAndModelName(String market, String modelName);
+
+    /**
+     * 특정 시장의 특정 모델 전체 데이터를 조회합니다 (모든 Fold).
+     * @param market "KRW-ETH"
+     * @param modelName "GRU", "LSTM", "XGBoost", etc.
+     * @return 예측 데이터 리스트
+     */
+    List<HistoricalAiPrediction> findByMarketAndModelNameOrderByPredictionDateAsc(String market, String modelName);
 }
