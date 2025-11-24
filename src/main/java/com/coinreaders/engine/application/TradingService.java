@@ -209,6 +209,106 @@ public class TradingService {
     }
 
     /**
+     * 특정 주문 조회 (업비트 API)
+     *
+     * @param uuid 주문 UUID
+     * @return 주문 상세 정보
+     */
+    public UpbitOrderResponseDto getOrder(String uuid) {
+        log.info("[거래] 주문 조회 시작: uuid={}", uuid);
+        return upbitApiClient.fetchOrder(uuid);
+    }
+
+    /**
+     * 주문 목록 조회 (업비트 API)
+     *
+     * @param state 주문 상태 (wait, done, cancel)
+     * @return 주문 목록
+     */
+    public java.util.List<UpbitOrderResponseDto> getOrders(String state) {
+        log.info("[거래] 주문 목록 조회 시작: state={}", state);
+        return upbitApiClient.fetchOrders(state, null)
+                .collectList()
+                .block();
+    }
+
+    /**
+     * DB에 저장된 주문 목록 조회
+     *
+     * @return 주문 목록
+     */
+    public java.util.List<TradeOrder> getLocalOrders() {
+        log.info("[거래] DB 주문 목록 조회");
+        return tradeOrderRepository.findAll();
+    }
+
+    /**
+     * 주문 상태 동기화 (업비트 API → DB)
+     *
+     * @param uuid 주문 UUID
+     * @return 동기화된 주문
+     */
+    @Transactional
+    public TradeOrder syncOrderStatus(String uuid) {
+        log.info("[거래] 주문 상태 동기화 시작: uuid={}", uuid);
+
+        // 업비트 API에서 최신 주문 정보 조회
+        UpbitOrderResponseDto upbitOrder = upbitApiClient.fetchOrder(uuid);
+
+        // DB에서 주문 조회
+        TradeOrder localOrder = tradeOrderRepository.findByUpbitOrderUuid(uuid);
+
+        if (localOrder == null) {
+            log.warn("[거래] DB에 주문이 없음: uuid={}", uuid);
+            throw new IllegalArgumentException("주문을 찾을 수 없습니다: " + uuid);
+        }
+
+        // 상태 업데이트
+        OrderStatus newStatus = mapOrderStatus(upbitOrder.getState());
+        if (!localOrder.getStatus().equals(newStatus)) {
+            localOrder.updateStatus(newStatus);
+            tradeOrderRepository.save(localOrder);
+            log.info("[거래] 주문 상태 동기화 완료: uuid={}, {} → {}",
+                    uuid, localOrder.getStatus(), newStatus);
+        } else {
+            log.info("[거래] 주문 상태 변경 없음: uuid={}, status={}",
+                    uuid, localOrder.getStatus());
+        }
+
+        return localOrder;
+    }
+
+    /**
+     * 모든 대기 중인 주문 상태 동기화
+     *
+     * @return 동기화된 주문 수
+     */
+    @Transactional
+    public int syncAllPendingOrders() {
+        log.info("[거래] 모든 대기 중인 주문 동기화 시작");
+
+        java.util.List<TradeOrder> pendingOrders = tradeOrderRepository.findAll().stream()
+                .filter(order -> order.getStatus() == OrderStatus.PENDING)
+                .toList();
+
+        int syncCount = 0;
+        for (TradeOrder order : pendingOrders) {
+            try {
+                syncOrderStatus(order.getUpbitOrderUuid());
+                syncCount++;
+            } catch (Exception e) {
+                log.error("[거래] 주문 동기화 실패: uuid={}, error={}",
+                        order.getUpbitOrderUuid(), e.getMessage());
+            }
+        }
+
+        log.info("[거래] 모든 대기 중인 주문 동기화 완료: {}/{} 건",
+                syncCount, pendingOrders.size());
+
+        return syncCount;
+    }
+
+    /**
      * 업비트 주문 상태를 내부 OrderStatus로 매핑
      */
     private OrderStatus mapOrderStatus(String upbitState) {

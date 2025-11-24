@@ -159,6 +159,156 @@ public class TradingController {
         return ResponseEntity.ok(limits);
     }
 
+    /**
+     * 특정 주문 조회 (업비트 API)
+     *
+     * GET /api/v1/trading/orders/{uuid}
+     *
+     * @param uuid 주문 UUID
+     * @return 주문 상세 정보
+     */
+    @GetMapping("/orders/{uuid}")
+    public ResponseEntity<?> getOrder(@PathVariable String uuid) {
+        log.info("[API] 주문 조회 요청: uuid={}", uuid);
+
+        try {
+            UpbitOrderResponseDto order = tradingService.getOrder(uuid);
+            log.info("[API] 주문 조회 성공: uuid={}", uuid);
+            return ResponseEntity.ok(order);
+
+        } catch (Exception e) {
+            log.error("[API] 주문 조회 실패: uuid={}, error={}", uuid, e.getMessage());
+
+            Map<String, String> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", "주문 조회 실패: " + e.getMessage());
+
+            return ResponseEntity.status(404).body(error);
+        }
+    }
+
+    /**
+     * 주문 목록 조회 (업비트 API)
+     *
+     * GET /api/v1/trading/orders?state=done
+     *
+     * @param state 주문 상태 (wait, done, cancel)
+     * @return 주문 목록
+     */
+    @GetMapping("/orders")
+    public ResponseEntity<?> getOrders(
+            @RequestParam(defaultValue = "done") String state) {
+
+        log.info("[API] 주문 목록 조회 요청: state={}", state);
+
+        try {
+            List<UpbitOrderResponseDto> orders = tradingService.getOrders(state);
+            log.info("[API] 주문 목록 조회 성공: {} 건", orders.size());
+            return ResponseEntity.ok(orders);
+
+        } catch (Exception e) {
+            log.error("[API] 주문 목록 조회 실패: {}", e.getMessage());
+
+            Map<String, String> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", "주문 목록 조회 실패: " + e.getMessage());
+
+            return ResponseEntity.status(500).body(error);
+        }
+    }
+
+    /**
+     * DB에 저장된 주문 목록 조회
+     *
+     * GET /api/v1/trading/orders/local
+     *
+     * @return DB 주문 목록
+     */
+    @GetMapping("/orders/local")
+    public ResponseEntity<?> getLocalOrders() {
+        log.info("[API] DB 주문 목록 조회 요청");
+
+        try {
+            List<com.coinreaders.engine.domain.entity.TradeOrder> orders =
+                    tradingService.getLocalOrders();
+            log.info("[API] DB 주문 목록 조회 성공: {} 건", orders.size());
+            return ResponseEntity.ok(orders);
+
+        } catch (Exception e) {
+            log.error("[API] DB 주문 목록 조회 실패: {}", e.getMessage());
+
+            Map<String, String> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", "DB 주문 목록 조회 실패: " + e.getMessage());
+
+            return ResponseEntity.status(500).body(error);
+        }
+    }
+
+    /**
+     * 주문 상태 동기화
+     *
+     * POST /api/v1/trading/orders/{uuid}/sync
+     *
+     * @param uuid 주문 UUID
+     * @return 동기화된 주문
+     */
+    @PostMapping("/orders/{uuid}/sync")
+    public ResponseEntity<?> syncOrderStatus(@PathVariable String uuid) {
+        log.info("[API] 주문 상태 동기화 요청: uuid={}", uuid);
+
+        try {
+            com.coinreaders.engine.domain.entity.TradeOrder order =
+                    tradingService.syncOrderStatus(uuid);
+            log.info("[API] 주문 상태 동기화 성공: uuid={}, status={}",
+                    uuid, order.getStatus());
+            return ResponseEntity.ok(order);
+
+        } catch (Exception e) {
+            log.error("[API] 주문 상태 동기화 실패: uuid={}, error={}",
+                    uuid, e.getMessage());
+
+            Map<String, String> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", "주문 상태 동기화 실패: " + e.getMessage());
+
+            return ResponseEntity.status(400).body(error);
+        }
+    }
+
+    /**
+     * 모든 대기 중인 주문 상태 동기화
+     *
+     * POST /api/v1/trading/orders/sync-all
+     *
+     * @return 동기화 결과
+     */
+    @PostMapping("/orders/sync-all")
+    public ResponseEntity<Map<String, Object>> syncAllPendingOrders() {
+        log.info("[API] 모든 대기 중인 주문 동기화 요청");
+
+        try {
+            int syncCount = tradingService.syncAllPendingOrders();
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("status", "ok");
+            result.put("synced_count", syncCount);
+            result.put("message", syncCount + "건의 주문이 동기화되었습니다.");
+
+            log.info("[API] 모든 대기 중인 주문 동기화 성공: {} 건", syncCount);
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            log.error("[API] 모든 대기 중인 주문 동기화 실패: {}", e.getMessage());
+
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", "동기화 실패: " + e.getMessage());
+
+            return ResponseEntity.status(500).body(error);
+        }
+    }
+
     // ==================== Request DTO ====================
 
     /**

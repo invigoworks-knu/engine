@@ -157,6 +157,75 @@ public class UpbitApiClient {
                 .block(); // 동기 처리
     }
 
+    /**
+     * 업비트 개별 주문 조회 (인증 필요)
+     *
+     * @param uuid 주문 UUID
+     * @return 주문 상세 정보
+     */
+    public UpbitOrderResponseDto fetchOrder(String uuid) {
+        String fullUrl = UPBIT_API_URL + "/order";
+
+        // Query Parameters 구성
+        java.util.Map<String, String> queryParams = new java.util.HashMap<>();
+        queryParams.put("uuid", uuid);
+
+        // JWT 토큰 생성 (Query Parameters 포함)
+        String token = UpbitAuthUtil.generateToken(accessKey, secretKey, queryParams);
+
+        log.info("업비트 주문 조회 시작: uuid={}", uuid);
+
+        return webClient.get()
+                .uri(fullUrl, uriBuilder -> {
+                    uriBuilder.queryParam("uuid", uuid);
+                    return uriBuilder.build();
+                })
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .bodyToMono(UpbitOrderResponseDto.class)
+                .doOnSuccess(order -> log.info("주문 조회 성공: uuid={}, state={}, volume={}",
+                        order.getUuid(), order.getState(), order.getVolume()))
+                .doOnError(error -> log.error("주문 조회 실패: {}", error.getMessage()))
+                .block(); // 동기 처리
+    }
+
+    /**
+     * 업비트 주문 목록 조회 (인증 필요)
+     *
+     * @param state 주문 상태 (wait: 대기, done: 완료, cancel: 취소)
+     * @param page 페이지 번호 (선택사항, 기본값 1)
+     * @return 주문 목록
+     */
+    public Flux<UpbitOrderResponseDto> fetchOrders(String state, Integer page) {
+        String fullUrl = UPBIT_API_URL + "/orders";
+
+        // Query Parameters 구성
+        java.util.Map<String, String> queryParams = new java.util.HashMap<>();
+        queryParams.put("state", state);
+        if (page != null) {
+            queryParams.put("page", page.toString());
+        }
+
+        // JWT 토큰 생성 (Query Parameters 포함)
+        String token = UpbitAuthUtil.generateToken(accessKey, secretKey, queryParams);
+
+        log.info("업비트 주문 목록 조회 시작: state={}, page={}", state, page);
+
+        return webClient.get()
+                .uri(fullUrl, uriBuilder -> {
+                    uriBuilder.queryParam("state", state);
+                    if (page != null) {
+                        uriBuilder.queryParam("page", page);
+                    }
+                    return uriBuilder.build();
+                })
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .bodyToFlux(UpbitOrderResponseDto.class)
+                .doOnComplete(() -> log.info("주문 목록 조회 완료"))
+                .doOnError(error -> log.error("주문 목록 조회 실패: {}", error.getMessage()));
+    }
+
     // ==================== DTO 클래스 ====================
 
     // API 응답을 매핑할 DTO (Data Transfer Object)
