@@ -6,6 +6,7 @@ import com.coinreaders.engine.domain.constant.OrderType;
 import com.coinreaders.engine.domain.constant.Side;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -26,6 +27,12 @@ public class TradeOrder extends BaseTimeEntity {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
+    @Column(length = 64)
+    private String upbitOrderUuid; // 업비트 주문 UUID
+
+    @Column(nullable = false, length = 32)
+    private String market; // 마켓 코드 (예: KRW-ETH)
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private OrderType orderType;
@@ -44,4 +51,31 @@ public class TradeOrder extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private OrderStatus status;
 
+    @Builder
+    public TradeOrder(Account account, String upbitOrderUuid, String market,
+                      OrderType orderType, Side side, BigDecimal price,
+                      BigDecimal amount, OrderStatus status) {
+        this.account = account;
+        this.upbitOrderUuid = upbitOrderUuid;
+        this.market = market;
+        this.orderType = orderType;
+        this.side = side;
+        this.price = price;
+        this.amount = amount;
+        this.status = status;
+    }
+
+    /**
+     * 주문 상태 업데이트
+     */
+    public void updateStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+    }
+
+    /**
+     * 업비트 주문 UUID 설정
+     */
+    public void setUpbitOrderUuid(String uuid) {
+        this.upbitOrderUuid = uuid;
+    }
 }

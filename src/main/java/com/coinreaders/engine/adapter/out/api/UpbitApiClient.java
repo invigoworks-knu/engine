@@ -97,6 +97,66 @@ public class UpbitApiClient {
                 .doOnError(error -> log.error("잔고 조회 실패: {}", error.getMessage()));
     }
 
+    /**
+     * 업비트 주문하기 (인증 필요)
+     *
+     * @param market 마켓 코드 (예: "KRW-ETH")
+     * @param side 주문 종류 (bid: 매수, ask: 매도)
+     * @param ordType 주문 타입 (price: 시장가 매수, market: 시장가 매도)
+     * @param price 주문 금액 (시장가 매수 시 사용, KRW)
+     * @param volume 주문 수량 (시장가 매도 시 사용, ETH)
+     * @return 주문 결과
+     */
+    public UpbitOrderResponseDto placeOrder(String market, String side, String ordType,
+                                             BigDecimal price, BigDecimal volume) {
+        String fullUrl = UPBIT_API_URL + "/orders";
+
+        // Query Parameters 구성
+        java.util.Map<String, String> queryParams = new java.util.HashMap<>();
+        queryParams.put("market", market);
+        queryParams.put("side", side);
+        queryParams.put("ord_type", ordType);
+
+        if (price != null) {
+            queryParams.put("price", price.toPlainString());
+        }
+        if (volume != null) {
+            queryParams.put("volume", volume.toPlainString());
+        }
+
+        // JWT 토큰 생성 (Query Parameters 포함)
+        String token = UpbitAuthUtil.generateToken(accessKey, secretKey, queryParams);
+
+        log.info("업비트 주문 요청: market={}, side={}, ordType={}, price={}, volume={}",
+                market, side, ordType, price, volume);
+
+        return webClient.post()
+                .uri(uriBuilder -> {
+                    uriBuilder.scheme("https")
+                            .host("api.upbit.com")
+                            .path("/v1/orders")
+                            .queryParam("market", market)
+                            .queryParam("side", side)
+                            .queryParam("ord_type", ordType);
+
+                    if (price != null) {
+                        uriBuilder.queryParam("price", price.toPlainString());
+                    }
+                    if (volume != null) {
+                        uriBuilder.queryParam("volume", volume.toPlainString());
+                    }
+
+                    return uriBuilder.build();
+                })
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .bodyToMono(UpbitOrderResponseDto.class)
+                .doOnSuccess(order -> log.info("주문 성공: uuid={}, side={}, price={}, volume={}",
+                        order.getUuid(), order.getSide(), order.getPrice(), order.getVolume()))
+                .doOnError(error -> log.error("주문 실패: {}", error.getMessage()))
+                .block(); // 동기 처리
+    }
+
     // ==================== DTO 클래스 ====================
 
     // API 응답을 매핑할 DTO (Data Transfer Object)
@@ -142,6 +202,61 @@ public class UpbitApiClient {
 
         @JsonProperty("unit_currency")
         private String unitCurrency; // 평단가 기준 화폐 (보통 KRW)
+    }
+
+    /**
+     * 업비트 주문 응답 DTO
+     */
+    @Getter
+    @ToString
+    public static class UpbitOrderResponseDto {
+        @JsonProperty("uuid")
+        private String uuid; // 주문 고유 아이디
+
+        @JsonProperty("side")
+        private String side; // 주문 종류 (bid: 매수, ask: 매도)
+
+        @JsonProperty("ord_type")
+        private String ordType; // 주문 타입 (limit: 지정가, price: 시장가 매수, market: 시장가 매도)
+
+        @JsonProperty("price")
+        private BigDecimal price; // 주문 금액 (지정가, 시장가 매수 시)
+
+        @JsonProperty("avg_price")
+        private BigDecimal avgPrice; // 평균 체결 가격
+
+        @JsonProperty("state")
+        private String state; // 주문 상태 (wait: 대기, done: 체결 완료, cancel: 취소)
+
+        @JsonProperty("market")
+        private String market; // 마켓 코드 (KRW-ETH)
+
+        @JsonProperty("created_at")
+        private String createdAt; // 주문 생성 시각
+
+        @JsonProperty("volume")
+        private BigDecimal volume; // 주문 수량
+
+        @JsonProperty("remaining_volume")
+        private BigDecimal remainingVolume; // 체결 후 남은 수량
+
+        @JsonProperty("reserved_fee")
+        private BigDecimal reservedFee; // 수수료로 예약된 금액
+
+        @JsonProperty("remaining_fee")
+        private BigDecimal remainingFee; // 남은 수수료
+
+        @JsonProperty("paid_fee")
+        private BigDecimal paidFee; // 사용된 수수료
+
+        @JsonProperty("locked")
+        private BigDecimal locked; // 거래에 사용 중인 금액
+
+        @JsonProperty("executed_volume")
+        private BigDecimal executedVolume; // 체결된 수량
+
+        @JsonProperty("trades_count")
+        private Integer tradesCount; // 체결 건수
     }
 
     /**
