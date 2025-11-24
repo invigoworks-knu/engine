@@ -24,10 +24,19 @@ public class WebViewController {
     private final BacktestService backtestService;
 
     /**
-     * 메인 페이지 (백테스팅 입력 폼)
+     * 메인 페이지 (대시보드로 리다이렉트)
      */
     @GetMapping("/")
-    public String index(Model model) {
+    public String home() {
+        log.info("[Web] 메인 페이지 요청 - 대시보드로 리다이렉트");
+        return "redirect:/trading/dashboard";
+    }
+
+    /**
+     * 백테스팅 입력 폼 페이지
+     */
+    @GetMapping("/backtest")
+    public String backtestForm(Model model) {
         model.addAttribute("folds", FoldConfig.getAllFolds());
         return "index";
     }
@@ -41,9 +50,9 @@ public class WebViewController {
     }
 
     /**
-     * 단일 Fold 백테스팅 결과 페이지
+     * 단일 Fold 백테스팅 실행 및 결과 페이지
      */
-    @GetMapping("/backtest")
+    @GetMapping("/backtest/result")
     public String backtest(
         @RequestParam Integer foldNumber,
         @RequestParam(required = false, defaultValue = "10000") BigDecimal initialCapital,
@@ -103,9 +112,9 @@ public class WebViewController {
     }
 
     /**
-     * 연속 백테스팅 결과 페이지 (Fold 1~7)
+     * 연속 백테스팅 실행 및 결과 페이지 (Fold 1~7)
      */
-    @GetMapping("/backtest-sequential")
+    @GetMapping("/backtest/sequential-result")
     public String backtestSequential(
         @RequestParam(required = false, defaultValue = "1") Integer startFold,
         @RequestParam(required = false, defaultValue = "7") Integer endFold,
