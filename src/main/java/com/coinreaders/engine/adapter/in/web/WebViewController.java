@@ -33,6 +33,14 @@ public class WebViewController {
     }
 
     /**
+     * AI 예측 데이터 조회 페이지
+     */
+    @GetMapping("/predictions")
+    public String predictions() {
+        return "predictions";
+    }
+
+    /**
      * 단일 Fold 백테스팅 결과 페이지
      */
     @GetMapping("/backtest")

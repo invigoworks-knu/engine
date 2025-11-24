@@ -201,9 +201,12 @@
                                 <button class="btn btn-primary btn-data-init" onclick="loadOhlcvData()" id="btnOhlcv">
                                     <i class="fas fa-download"></i> OHLCV 데이터 적재
                                 </button>
-                                <button class="btn btn-success btn-data-init" onclick="loadAiData()" id="btnAi">
-                                    <i class="fas fa-download"></i> AI 예측 데이터 적재
+                                <button class="btn btn-success btn-data-init" onclick="loadMultiModelData()" id="btnMultiModel">
+                                    <i class="fas fa-layer-group"></i> AI 예측 데이터 적재
                                 </button>
+                                <a href="/predictions" class="btn btn-info btn-data-init">
+                                    <i class="fas fa-table"></i> 데이터 확인
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -474,7 +477,8 @@
                         aiStatus.textContent = '적재 완료';
                         aiStatus.className = 'status-badge loaded';
                         aiCount.textContent = `(${data.aiPredictionCount.toLocaleString()}건)`;
-                        document.getElementById('btnAi').disabled = true;
+                        const btnMultiModel = document.getElementById('btnMultiModel');
+                        if (btnMultiModel) btnMultiModel.disabled = true;
                     } else {
                         aiStatus.textContent = '미적재';
                         aiStatus.className = 'status-badge not-loaded';
@@ -548,24 +552,23 @@
                 });
         }
 
-        // AI 예측 데이터 적재
-        function loadAiData() {
-            const btn = document.getElementById('btnAi');
+        // AI 예측 데이터 적재 (다중 모델)
+        function loadMultiModelData() {
+            const btn = document.getElementById('btnMultiModel');
             const originalHtml = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중... (12개 모델)';
 
-            fetch('/api/v1/data/init-ai-predictions-all', { method: 'POST' })
+            fetch('/api/v1/data/init-multi-model-predictions-all', { method: 'POST' })
                 .then(response => response.text())
                 .then(message => {
                     btn.innerHTML = originalHtml;
 
-                    // 메시지에 따라 제목과 내용 설정
                     if (message.includes('이미 적재')) {
                         showToast('데이터 확인', message, true);
                         btn.disabled = true;
                     } else {
-                        showToast('적재 완료', 'AI 예측 데이터가 성공적으로 적재되었습니다!', true);
+                        showToast('적재 완료', '다중 모델 AI 예측 데이터가 성공적으로 적재되었습니다! (12개 모델, 10,512건)', true);
                     }
 
                     checkDataStatus(); // 상태 다시 확인
@@ -573,8 +576,8 @@
                 .catch(error => {
                     btn.disabled = false;
                     btn.innerHTML = originalHtml;
-                    showToast('적재 실패', 'AI 예측 데이터 적재에 실패했습니다. 다시 시도해주세요.', false);
-                    console.error('AI 적재 오류:', error);
+                    showToast('적재 실패', '다중 모델 데이터 적재에 실패했습니다. 다시 시도해주세요.', false);
+                    console.error('다중 모델 적재 오류:', error);
                 });
         }
 

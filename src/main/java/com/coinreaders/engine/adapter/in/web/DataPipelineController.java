@@ -2,6 +2,7 @@ package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.DataPipelineService;
 import com.coinreaders.engine.application.AiPredictionDataService;
+import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
 import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
 import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -37,7 +41,11 @@ public class DataPipelineController {
 
             // 데이터 적재 여부 판단 (임계값 기준)
             boolean ohlcvLoaded = ohlcvCount >= 2000; // 최소 2000개 이상
-            boolean aiPredictionsLoaded = aiPredictionCount >= 1000; // 최소 1000개 이상 (전체는 1104개)
+            boolean aiPredictionsLoaded = aiPredictionCount >= 1000; // 최소 1000개 이상 (다중 모델: 10,512개)
+
+            log.info("데이터 상태 조회: OHLCV {}건 ({}), AI 예측 {}건 ({})",
+                ohlcvCount, ohlcvLoaded ? "적재완료" : "미적재",
+                aiPredictionCount, aiPredictionsLoaded ? "적재완료" : "미적재");
 
             DataStatus status = new DataStatus(
                 ohlcvLoaded,
@@ -48,7 +56,7 @@ public class DataPipelineController {
 
             return ResponseEntity.ok(status);
         } catch (Exception e) {
-            log.error("Failed to get data status", e);
+            log.error("데이터 상태 조회 실패", e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -171,6 +179,105 @@ public class DataPipelineController {
         } catch (Exception e) {
             log.error("Failed to load AI prediction data", e);
             return ResponseEntity.internalServerError().body("Failed to load AI data: " + e.getMessage());
+        }
+    }
+
+    /**
+     * (신규) 다중 모델 AI 예측 데이터 적재 - direction_l8_p1.5_s1.0 폴더
+     * - 12개 ML 모델 (GRU, LSTM, BiLSTM, XGBoost, LightGBM, CatBoost, etc.)
+     * - Look-ahead 8일 예측
+     * - 익절 1.5%, 손절 1.0% 포함
+     * - Fold 1-7: 각 95건 × 12모델 = 7,980건
+     * - Fold 8: 211건 × 12모델 = 2,532건
+     * - 총 10,512건
+     */
+    @PostMapping("/init-multi-model-predictions-all")
+    public ResponseEntity<String> initializeAllMultiModelPredictions() {
+        try {
+            log.info("=== 다중 모델 AI 예측 데이터 적재 시작 ===");
+
+            // 중복 적재 방지: 특정 모델의 데이터 개수 확인 (XGBoost 기준)
+            long existingCount = aiPredictionRepository.countByMarketAndModelName("KRW-ETH", "XGBoost");
+            log.info("기존 XGBoost 데이터: {}건", existingCount);
+
+            if (existingCount >= 800) {  // 876건 중 800건 이상이면 이미 적재됨
+                long totalCount = aiPredictionRepository.count();
+                log.info("다중 모델 AI 예측 데이터가 이미 적재되어 있습니다. (총 {}건)", totalCount);
+                return ResponseEntity.ok(
+                    String.format("다중 모델 AI 예측 데이터가 이미 적재되어 있습니다. (총 %d건)", totalCount)
+                );
+            }
+
+            int totalRecords = 0;
+
+            // Fold 1-7: walk_forward_rolling_reverse
+            for (int fold = 1; fold <= 7; fold++) {
+                log.info("Fold {} 적재 시작...", fold);
+                int foldCount = aiPredictionDataService.loadMultiModelPredictionsFromCsv(fold);
+                totalRecords += foldCount;
+                log.info("✓ Fold {} 완료 (실제 {}건 적재)", fold, foldCount);
+            }
+
+            // Fold 8: final_holdout
+            log.info("Fold 8 (Final Holdout) 적재 시작...");
+            int fold8Count = aiPredictionDataService.loadMultiModelPredictionsFromCsv(8);
+            totalRecords += fold8Count;
+            log.info("✓ Fold 8 완료 (실제 {}건 적재)", fold8Count);
+
+            // 최종 확인
+            long finalCount = aiPredictionRepository.count();
+            log.info("=== 적재 완료: 총 {}건 (DB 확인: {}건) ===", totalRecords, finalCount);
+
+            return ResponseEntity.ok(
+                String.format("다중 모델 AI 예측 데이터 적재 완료. 총 %d건 (12개 모델 × 876개 예측)", finalCount)
+            );
+        } catch (Exception e) {
+            log.error("Failed to load multi-model AI prediction data", e);
+            return ResponseEntity.internalServerError().body("Failed to load multi-model AI data: " + e.getMessage());
+        }
+    }
+
+    /**
+     * AI 예측 데이터 조회 API
+     * @param modelName 모델명 (선택)
+     * @param foldNumber Fold 번호 (선택)
+     */
+    @GetMapping("/predictions")
+    public ResponseEntity<?> getPredictions(
+        @RequestParam(required = false) String modelName,
+        @RequestParam(required = false) Integer foldNumber) {
+
+        try {
+            log.info("데이터 조회 요청: modelName={}, foldNumber={}", modelName, foldNumber);
+
+            List<HistoricalAiPrediction> predictions;
+
+            if (modelName != null && foldNumber != null) {
+                // 모델 + Fold 필터링
+                log.info("모델+Fold 필터링: KRW-ETH, Fold {}, {}", foldNumber, modelName);
+                predictions = aiPredictionRepository.findByMarketAndFoldNumberAndModelNameOrderByPredictionDateAsc(
+                    "KRW-ETH", foldNumber, modelName);
+            } else if (modelName != null) {
+                // 모델만 필터링 (모든 Fold)
+                log.info("모델 필터링: KRW-ETH, {} (전체 Fold)", modelName);
+                predictions = aiPredictionRepository.findByMarketAndModelNameOrderByPredictionDateAsc(
+                    "KRW-ETH", modelName);
+            } else if (foldNumber != null) {
+                // Fold만 필터링 (모든 모델)
+                log.info("Fold 필터링: KRW-ETH, Fold {} (전체 모델)", foldNumber);
+                predictions = aiPredictionRepository.findByMarketAndFoldNumberOrderByPredictionDateAsc(
+                    "KRW-ETH", foldNumber);
+            } else {
+                // 전체 조회
+                log.info("전체 조회 (전체 데이터)");
+                predictions = aiPredictionRepository.findAll();
+            }
+
+            log.info("조회 결과: {}건 반환", predictions.size());
+            return ResponseEntity.ok(predictions);
+        } catch (Exception e) {
+            log.error("데이터 조회 실패: modelName={}, foldNumber={}", modelName, foldNumber, e);
+            return ResponseEntity.internalServerError().body("Failed to get predictions: " + e.getMessage());
         }
     }
 
