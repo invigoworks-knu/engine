@@ -38,6 +38,9 @@ public class HistoricalAiPrediction extends BaseTimeEntity {
     @Column(nullable = false, length = 64)
     private String modelName; // 모델명: GRU, LSTM, XGBoost, etc.
 
+    @Column(length = 32)
+    private String aiModelVersion; // 레거시 필드 (더 이상 사용하지 않음, modelName 사용)
+
     // 실제 결과
     @Column(nullable = false)
     private Integer actualDirection; // 0: DOWN, 1: UP
