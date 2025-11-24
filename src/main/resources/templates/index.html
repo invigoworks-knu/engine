@@ -477,7 +477,8 @@
                         aiStatus.textContent = '적재 완료';
                         aiStatus.className = 'status-badge loaded';
                         aiCount.textContent = `(${data.aiPredictionCount.toLocaleString()}건)`;
-                        document.getElementById('btnAi').disabled = true;
+                        const btnMultiModel = document.getElementById('btnMultiModel');
+                        if (btnMultiModel) btnMultiModel.disabled = true;
                     } else {
                         aiStatus.textContent = '미적재';
                         aiStatus.className = 'status-badge not-loaded';

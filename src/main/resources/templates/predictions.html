@@ -262,8 +262,19 @@
             if (fold) url += `foldNumber=${fold}&`;
 
             fetch(url)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    // 데이터가 배열인지 확인
+                    if (!Array.isArray(data)) {
+                        console.error('Invalid data format:', data);
+                        data = [];
+                    }
+
                     displayPredictions(data);
                     calculateStats(data);
                     document.getElementById('loading').style.display = 'none';
@@ -272,6 +283,12 @@
                 .catch(error => {
                     console.error('Error:', error);
                     document.getElementById('loading').style.display = 'none';
+
+                    // 에러 시 통계 초기화
+                    calculateStats([]);
+                    displayPredictions([]);
+                    document.getElementById('predictionsTable').style.display = 'table';
+
                     alert('데이터 로딩 실패: ' + error.message);
                 });
         }

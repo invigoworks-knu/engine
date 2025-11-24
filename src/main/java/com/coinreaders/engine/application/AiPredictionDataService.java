@@ -114,9 +114,10 @@ public class AiPredictionDataService {
     /**
      * 새로운 구조: direction_l8_p1.5_s1.0 폴더에서 특정 Fold의 모든 모델 데이터 적재
      * @param foldNumber 1~8
+     * @return 적재된 총 레코드 수
      */
     @Transactional
-    public void loadMultiModelPredictionsFromCsv(int foldNumber) {
+    public int loadMultiModelPredictionsFromCsv(int foldNumber) {
         log.info("다중 모델 AI 예측 데이터 적재 시작: Fold {}", foldNumber);
 
         // Fold 폴더명 결정
@@ -139,6 +140,7 @@ public class AiPredictionDataService {
         }
 
         log.info("다중 모델 AI 예측 데이터 적재 완료: Fold {}. 총 {}건", foldNumber, totalCount);
+        return totalCount;
     }
 
     /**

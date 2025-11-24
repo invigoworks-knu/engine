@@ -213,20 +213,20 @@ public class DataPipelineController {
             // Fold 1-7: walk_forward_rolling_reverse
             for (int fold = 1; fold <= 7; fold++) {
                 log.info("Fold {} 적재 시작...", fold);
-                aiPredictionDataService.loadMultiModelPredictionsFromCsv(fold);
-                totalRecords += (95 * 12);  // 95건 × 12모델
-                log.info("✓ Fold {} 완료 (95건 × 12모델 = 1,140건)", fold);
+                int foldCount = aiPredictionDataService.loadMultiModelPredictionsFromCsv(fold);
+                totalRecords += foldCount;
+                log.info("✓ Fold {} 완료 (실제 {}건 적재)", fold, foldCount);
             }
 
             // Fold 8: final_holdout
             log.info("Fold 8 (Final Holdout) 적재 시작...");
-            aiPredictionDataService.loadMultiModelPredictionsFromCsv(8);
-            totalRecords += (211 * 12);  // 211건 × 12모델
-            log.info("✓ Fold 8 완료 (211건 × 12모델 = 2,532건)");
+            int fold8Count = aiPredictionDataService.loadMultiModelPredictionsFromCsv(8);
+            totalRecords += fold8Count;
+            log.info("✓ Fold 8 완료 (실제 {}건 적재)", fold8Count);
 
             // 최종 확인
             long finalCount = aiPredictionRepository.count();
-            log.info("=== 적재 완료: 예상 {}건, 실제 DB {}건 ===", totalRecords, finalCount);
+            log.info("=== 적재 완료: 총 {}건 (DB 확인: {}건) ===", totalRecords, finalCount);
 
             return ResponseEntity.ok(
                 String.format("다중 모델 AI 예측 데이터 적재 완료. 총 %d건 (12개 모델 × 876개 예측)", finalCount)
@@ -268,11 +268,9 @@ public class DataPipelineController {
                 predictions = aiPredictionRepository.findByMarketAndFoldNumberOrderByPredictionDateAsc(
                     "KRW-ETH", foldNumber);
             } else {
-                // 전체 조회 (최대 1000건으로 제한)
-                log.info("전체 조회 (최대 1000건)");
-                predictions = aiPredictionRepository.findAll().stream()
-                    .limit(1000)
-                    .toList();
+                // 전체 조회
+                log.info("전체 조회 (전체 데이터)");
+                predictions = aiPredictionRepository.findAll();
             }
 
             log.info("조회 결과: {}건 반환", predictions.size());
