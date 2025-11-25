@@ -12,9 +12,10 @@
             --bg-secondary: #1e293b;
             --bg-card: #1e293b;
             --border-color: #475569;
-            --text-primary: #e2e8f0;
-            --text-secondary: #cbd5e1;
-            --text-heading: #f8fafc;
+            --text-primary: #f1f5f9;
+            --text-secondary: #e2e8f0;
+            --text-heading: #ffffff;
+            --text-muted: #cbd5e1;
             --accent-primary: #6366f1;
             --accent-secondary: #8b5cf6;
             --success: #10b981;
@@ -55,6 +56,14 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .top-navbar .brand:hover {
+            opacity: 0.8;
+            transform: translateY(-2px);
         }
 
         .top-navbar .nav-link {
@@ -113,17 +122,19 @@
             font-size: 2.5rem;
             font-weight: bold;
             margin-bottom: 0.5rem;
+            color: white;
         }
 
         .balance-card p {
             font-size: 1rem;
-            opacity: 0.9;
+            opacity: 0.95;
+            color: white;
         }
 
         /* 통계 카드 */
         .stat-card {
             background: var(--bg-card);
-            border: 1px solid var(--border-color);
+            border: 2px solid var(--border-color);
             border-radius: 1rem;
             padding: 1.5rem;
             text-align: center;
@@ -142,6 +153,7 @@
         .stat-card p {
             color: var(--text-secondary);
             margin: 0;
+            font-weight: 600;
         }
 
         /* 버튼 */
@@ -170,10 +182,20 @@
             color: white;
         }
 
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
         .btn-danger {
             background: var(--danger);
             border: none;
             color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
         }
 
         .btn-outline-primary {
@@ -198,6 +220,11 @@
             border-bottom: 2px solid var(--border-color);
         }
 
+        .table thead th {
+            color: var(--text-heading);
+            font-weight: 700;
+        }
+
         .table tbody tr {
             border-bottom: 1px solid var(--border-color);
         }
@@ -206,23 +233,30 @@
             background: rgba(99, 102, 241, 0.05);
         }
 
+        .table tbody td {
+            color: var(--text-primary);
+        }
+
         /* 배지 */
         .badge {
             padding: 0.5rem 1rem;
-            font-weight: 600;
+            font-weight: 700;
             border-radius: 0.5rem;
         }
 
         .badge-buy {
             background: var(--success);
+            color: white;
         }
 
         .badge-sell {
             background: var(--danger);
+            color: white;
         }
 
         .badge-filled {
             background: var(--info);
+            color: white;
         }
 
         .badge-pending {
@@ -231,14 +265,21 @@
         }
 
         .badge-canceled {
-            background: var(--text-secondary);
+            background: #64748b;
+            color: white;
         }
 
         /* 폼 */
         .form-control, .form-select {
             background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
+            border: 2px solid var(--border-color);
             color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-control::placeholder {
+            color: var(--text-muted);
+            opacity: 1;
         }
 
         .form-control:focus, .form-select:focus {
@@ -249,22 +290,47 @@
         }
 
         .form-label {
-            color: var(--text-primary);
-            font-weight: 600;
+            color: var(--text-heading);
+            font-weight: 700;
             margin-bottom: 0.5rem;
+        }
+
+        small, .text-muted {
+            color: var(--text-muted) !important;
+            font-weight: 500;
         }
 
         /* 알림 */
         .alert-warning {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid var(--warning);
+            background: rgba(245, 158, 11, 0.15);
+            border: 2px solid var(--warning);
+            color: var(--text-heading);
+        }
+
+        .alert-warning a {
             color: var(--warning);
+            font-weight: 700;
+            text-decoration: underline;
+        }
+
+        .text-center.text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        .text-center.text-danger {
+            color: var(--danger) !important;
+            font-weight: 700;
         }
 
         /* 반응형 */
         @media (max-width: 768px) {
             .balance-card h3 {
                 font-size: 1.75rem;
+            }
+
+            .top-navbar .nav-link {
+                font-size: 0.9rem;
+                padding: 0.6rem 1rem;
             }
         }
     </style>
@@ -274,9 +340,9 @@
     <nav class="top-navbar">
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
-                <div class="brand">
+                <a href="/trading/dashboard" class="brand text-decoration-none">
                     <i class="fas fa-chart-line"></i> AI 투자 엔진
-                </div>
+                </a>
                 <ul class="nav">
                     <li class="nav-item">
                         <a class="nav-link active" href="/trading/dashboard">
@@ -284,13 +350,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/trading/mypage">
-                            <i class="fas fa-user-cog"></i> 마이페이지
+                        <a class="nav-link" href="/trading/history">
+                            <i class="fas fa-history"></i> 거래내역
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/trading/history">
-                            <i class="fas fa-history"></i> 거래내역
+                        <a class="nav-link" href="/trading/mypage">
+                            <i class="fas fa-user-cog"></i> 마이페이지
                         </a>
                     </li>
                     <li class="nav-item">
@@ -397,7 +463,7 @@
                         <div class="alert alert-warning" role="alert">
                             <i class="fas fa-exclamation-triangle"></i>
                             <strong>주의:</strong> 실제 자금이 이동하는 거래입니다!
-                            안전장치는 <a href="/trading/mypage" style="color: var(--warning);">마이페이지</a>에서 설정할 수 있습니다.
+                            안전장치는 <a href="/trading/mypage">마이페이지</a>에서 설정할 수 있습니다.
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -480,14 +546,13 @@
             loadRecentOrders();
         });
 
-        // 잔고 조회 (NaN 수정)
+        // 잔고 조회
         function loadBalance() {
             fetch('/api/v1/account/balance/summary')
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Balance data:', data); // 디버깅용
+                    console.log('Balance data:', data);
 
-                    // API 응답 필드명에 맞춰 수정
                     const krwBalance = parseFloat(data.krw_balance || data.krwBalance || 0);
                     const ethBalance = parseFloat(data.eth_balance || data.ethBalance || 0);
 
@@ -508,7 +573,7 @@
             fetch('/api/v1/market/ticker/KRW-ETH')
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Market data:', data); // 디버깅용
+                    console.log('Market data:', data);
 
                     document.getElementById('currentPrice').textContent =
                         parseFloat(data.trade_price || 0).toLocaleString('ko-KR') + ' KRW';

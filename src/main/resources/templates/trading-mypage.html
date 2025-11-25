@@ -12,9 +12,10 @@
             --bg-secondary: #1e293b;
             --bg-card: #1e293b;
             --border-color: #475569;
-            --text-primary: #e2e8f0;
-            --text-secondary: #cbd5e1;
-            --text-heading: #f8fafc;
+            --text-primary: #f1f5f9;
+            --text-secondary: #e2e8f0;
+            --text-heading: #ffffff;
+            --text-muted: #cbd5e1;
             --accent-primary: #6366f1;
             --accent-secondary: #8b5cf6;
             --success: #10b981;
@@ -54,6 +55,14 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .top-navbar .brand:hover {
+            opacity: 0.8;
+            transform: translateY(-2px);
         }
 
         .top-navbar .nav-link {
@@ -116,15 +125,15 @@
         }
 
         .alert-info {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid var(--info);
-            color: var(--info);
+            background: rgba(59, 130, 246, 0.15);
+            border: 2px solid var(--info);
+            color: var(--text-heading);
         }
 
         .alert-warning {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid var(--warning);
-            color: var(--warning);
+            background: rgba(245, 158, 11, 0.15);
+            border: 2px solid var(--warning);
+            color: var(--text-heading);
         }
 
         .form-control, .form-select {
@@ -143,7 +152,7 @@
         }
 
         .form-label {
-            color: var(--text-primary);
+            color: var(--text-heading);
             font-weight: 700;
             margin-bottom: 0.5rem;
             font-size: 1rem;
@@ -169,9 +178,14 @@
         }
 
         .btn-secondary {
-            background: var(--text-secondary);
+            background: #64748b;
             border: none;
             color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+            transform: translateY(-2px);
         }
 
         .btn-success {
@@ -180,10 +194,38 @@
             color: white;
         }
 
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
         .btn-danger {
             background: var(--danger);
             border: none;
             color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+
+        small, .text-muted {
+            color: var(--text-muted) !important;
+            font-weight: 500;
+        }
+
+        hr {
+            border-color: var(--border-color);
+            opacity: 1;
+        }
+
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .top-navbar .nav-link {
+                font-size: 0.9rem;
+                padding: 0.6rem 1rem;
+            }
         }
     </style>
 </head>
@@ -192,9 +234,9 @@
     <nav class="top-navbar">
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
-                <div class="brand">
+                <a href="/trading/dashboard" class="brand text-decoration-none">
                     <i class="fas fa-chart-line"></i> AI 투자 엔진
-                </div>
+                </a>
                 <ul class="nav">
                     <li class="nav-item">
                         <a class="nav-link" href="/trading/dashboard">
@@ -202,13 +244,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="/trading/mypage">
-                            <i class="fas fa-user-cog"></i> 마이페이지
+                        <a class="nav-link" href="/trading/history">
+                            <i class="fas fa-history"></i> 거래내역
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/trading/history">
-                            <i class="fas fa-history"></i> 거래내역
+                        <a class="nav-link active" href="/trading/mypage">
+                            <i class="fas fa-user-cog"></i> 마이페이지
                         </a>
                     </li>
                     <li class="nav-item">
@@ -270,7 +312,7 @@
                                 </div>
                             </div>
 
-                            <hr style="border-color: var(--border-color);">
+                            <hr>
 
                             <!-- 거래 횟수 제한 -->
                             <h5 class="mb-3"><i class="fas fa-chart-bar"></i> 일일 거래 횟수 제한</h5>
@@ -280,7 +322,7 @@
                                 <small class="text-muted">하루에 매수/매도 합쳐서 최대 몇 번까지 거래할 수 있는지 설정</small>
                             </div>
 
-                            <hr style="border-color: var(--border-color);">
+                            <hr>
 
                             <!-- 허용 마켓 -->
                             <h5 class="mb-3"><i class="fas fa-coins"></i> 허용 마켓</h5>

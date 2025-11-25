@@ -12,9 +12,10 @@
             --bg-secondary: #1e293b;
             --bg-card: #1e293b;
             --border-color: #475569;
-            --text-primary: #e2e8f0;
-            --text-secondary: #cbd5e1;
-            --text-heading: #f8fafc;
+            --text-primary: #f1f5f9;
+            --text-secondary: #e2e8f0;
+            --text-heading: #ffffff;
+            --text-muted: #cbd5e1;
             --accent-primary: #6366f1;
             --accent-secondary: #8b5cf6;
             --success: #10b981;
@@ -50,6 +51,14 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .top-navbar .brand:hover {
+            opacity: 0.8;
+            transform: translateY(-2px);
         }
 
         .top-navbar .nav-link {
@@ -281,23 +290,26 @@
         .alert-info {
             background: rgba(59, 130, 246, 0.15);
             border-color: var(--info);
-            color: var(--info);
+            color: var(--text-heading);
         }
 
         .alert-warning {
             background: rgba(245, 158, 11, 0.15);
             border-color: var(--warning);
-            color: var(--warning);
+            color: var(--text-heading);
         }
 
         /* 텍스트 */
         .text-muted {
-            color: var(--text-secondary) !important;
+            color: var(--text-muted) !important;
             font-size: 0.95rem;
+            font-weight: 500;
         }
 
         small {
             font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 500;
         }
 
         /* 토스트 */
@@ -341,9 +353,9 @@
     <nav class="top-navbar">
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
-                <div class="brand">
+                <a href="/trading/dashboard" class="brand text-decoration-none">
                     <i class="fas fa-chart-line"></i> AI 투자 엔진
-                </div>
+                </a>
                 <ul class="nav">
                     <li class="nav-item">
                         <a class="nav-link" href="/trading/dashboard">
@@ -351,13 +363,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/trading/mypage">
-                            <i class="fas fa-user-cog"></i> 마이페이지
+                        <a class="nav-link" href="/trading/history">
+                            <i class="fas fa-history"></i> 거래내역
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/trading/history">
-                            <i class="fas fa-history"></i> 거래내역
+                        <a class="nav-link" href="/trading/mypage">
+                            <i class="fas fa-user-cog"></i> 마이페이지
                         </a>
                     </li>
                     <li class="nav-item">
