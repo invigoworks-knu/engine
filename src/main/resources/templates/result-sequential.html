@@ -2,487 +2,159 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 기반 투자 전략 엔진 - 연속 백테스팅 결과 Fold [[${startFold}]]-[[${endFold}]]</title>
+    <title>연속 테스트 결과</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        .tooltip-inner {
-            text-align: left;
-            max-width: 350px;
-            width: 350px;
-            word-break: keep-all;
-            white-space: normal;
-        }
-        body {
-            background: #f5f7fa;
-            padding: 2rem 0;
-        }
-        .result-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem;
-            border-radius: 15px;
-            margin-bottom: 2rem;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-            height: 100%;
-        }
-        .stat-card.kelly-card {
-            border-top: 4px solid #667eea;
-        }
-        .stat-card.buyhold-card {
-            border-top: 4px solid #ffc107;
-        }
-        .stat-value-large {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin: 0.5rem 0;
-        }
-        .stat-label {
-            color: #6c757d;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .positive {
-            color: #28a745;
-        }
-        .negative {
-            color: #dc3545;
-        }
-        .chart-container {
-            background: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-        .fold-table {
-            background: white;
-            border-radius: 10px;
-            padding: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .table-winner-row {
-            background-color: #d4edda;
-            font-weight: bold;
-        }
-        .back-button {
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
-            padding: 0.75rem 2rem;
-            font-weight: bold;
-        }
-        .back-button:hover {
-            background: #667eea;
-            color: white;
-        }
-        .badge-regime {
-            font-size: 0.75rem;
-        }
+        :root { --bg-main: #FFFFFF; --text-main: #313647; --nav-bg: #313647; --accent-green: #A3B087; --accent-cream: #FFF8D4; }
+        body { background-color: var(--bg-main); color: var(--text-main); font-family: 'Segoe UI', sans-serif; }
+
+        /* Sub Header */
+        .navbar { background-color: var(--nav-bg); padding: 0.8rem 0; }
+        .btn-back { color: #FFFFFF; font-weight: 600; text-decoration: none; }
+        .btn-back:hover { color: var(--accent-green); }
+
+        .card { border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: #FFFFFF; margin-bottom: 20px; }
+        .card-header { background-color: var(--text-main); color: #FFFFFF; border-radius: 12px 12px 0 0 !important; font-weight: 600; padding: 1rem 1.5rem; }
+
+        .display-val { font-size: 2.5rem; font-weight: 800; }
+        .table thead th { background-color: #f8f9fa; border-bottom: 2px solid var(--text-main); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="result-header">
-            <h1><i class="fas fa-stream"></i> 연속 백테스팅 결과</h1>
-            <p class="mb-0">Fold [[${startFold}]] - [[${endFold}]] | 연속 거래 전략</p>
-            <small class="mt-2 d-block">각 구간의 최종 자산이 다음 구간의 초기 자산이 됩니다</small>
-        </div>
+<nav class="navbar sticky-top">
+    <div class="container-fluid px-4">
+        <a class="btn-back" href="/backtest"><i class="fas fa-chevron-left me-2"></i>백테스팅 페이지로 이동</a>
+    </div>
+</nav>
 
-        <!-- Overall Summary -->
-        <div class="row">
-            <div class="col-md-6">
-                <div class="stat-card kelly-card">
-                    <h5><i class="fas fa-brain"></i> 나의 전략
-                        <span th:if="${positionSizePercent != null}" class="badge bg-info">[[${positionSizePercent}]]% 고정</span>
-                        <span th:if="${positionSizePercent == null}" class="badge bg-primary">켈리 자동</span>
-                    </h5>
-                    <div class="stat-label">총 수익률</div>
-                    <div th:class="${result.kellyComparison.totalReturnPct >= 0 ? 'stat-value-large positive' : 'stat-value-large negative'}">
-                        [[${#numbers.formatDecimal(result.kellyComparison.totalReturnPct, 1, 2)}]]%
-                    </div>
-                    <hr>
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="stat-label">초기 자산</div>
-                            <div style="font-size: 1.2rem; font-weight: bold;">
-                                ₩[[${#numbers.formatDecimal(result.kellyComparison.initialCapital, 1, 0)}]]
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="stat-label">최종 자산</div>
-                            <div style="font-size: 1.2rem; font-weight: bold;" class="positive">
-                                ₩[[${#numbers.formatDecimal(result.kellyComparison.finalCapital, 1, 0)}]]
-                            </div>
-                        </div>
-                    </div>
-                    <hr>
+<div class="container py-4">
+    <h3 class="fw-bold mb-4">연속 구간 테스트 (Fold [[${startFold}]]-[[${endFold}]])</h3>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header" style="background-color: var(--accent-green);">AI 전략 (복리)</div>
+                <div class="card-body text-center py-5">
+                    <div class="text-muted mb-2">총 수익률</div>
+                    <div class="display-val text-dark">[[${#numbers.formatDecimal(result.kellyComparison.totalReturnPct, 1, 2)}]]%</div>
+                    <hr class="my-4">
                     <div class="row">
                         <div class="col-4">
-                            <div class="stat-label"
-                                 data-bs-toggle="tooltip"
-                                 data-bs-placement="top"
-                                 title="승률: 전체 거래 중 수익을 낸 거래의 비율입니다.">
-                                승률 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
-                            </div>
-                            <div style="font-size: 1.1rem; font-weight: bold;" class="positive">
-                                [[${#numbers.formatDecimal(result.kellyComparison.overallWinRate, 1, 1)}]]%
-                            </div>
-                            <small class="text-muted">([[${result.kellyComparison.totalWins}]]승/[[${result.kellyComparison.totalLosses}]]패)</small>
+                            <div class="small text-muted">최종 자산</div>
+                            <div class="fw-bold">[[${#numbers.formatDecimal(result.kellyComparison.finalCapital, 1, 0)}]]</div>
                         </div>
                         <div class="col-4">
-                            <div class="stat-label">총 거래</div>
-                            <div style="font-size: 1.1rem; font-weight: bold;">
-                                [[${result.kellyComparison.totalTrades}]]건
-                            </div>
-                            <small class="text-muted">전체 기간</small>
+                            <div class="small text-muted">MDD</div>
+                            <div class="fw-bold" style="color: #435663;">-[[${#numbers.formatDecimal(result.kellyComparison.overallMaxDrawdown, 1, 2)}]]%</div>
                         </div>
                         <div class="col-4">
-                            <div class="stat-label"
-                                 data-bs-toggle="tooltip"
-                                 data-bs-placement="top"
-                                 title="MDD: 최고점에서 최저점까지의 최대 낙폭입니다.">
-                                MDD <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
-                            </div>
-                            <div style="font-size: 1.1rem; font-weight: bold;" class="negative">
-                                -[[${#numbers.formatDecimal(result.kellyComparison.overallMaxDrawdown, 1, 2)}]]%
-                            </div>
-                            <small class="text-muted">최대 손실</small>
-                        </div>
-                    </div>
-                    <hr>
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="stat-label"
-                                 data-bs-toggle="tooltip"
-                                 data-bs-placement="top"
-                                 title="샤프 비율: 위험 대비 수익률입니다. 1 이상이면 양호, 2 이상이면 우수합니다.">
-                                샤프 비율 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
-                            </div>
-                            <div th:class="${result.kellyComparison.overallSharpeRatio >= 1 ? 'positive' : ''}"
-                                 style="font-size: 1.1rem; font-weight: bold;">
-                                [[${#numbers.formatDecimal(result.kellyComparison.overallSharpeRatio, 1, 2)}]]
-                            </div>
-                            <small class="text-muted">위험대비수익</small>
-                        </div>
-                        <div class="col-6">
-                            <div class="stat-label"
-                                 data-bs-toggle="tooltip"
-                                 data-bs-placement="top"
-                                 title="알파: 매수 후 보유 대비 초과 수익률입니다.">
-                                알파 <i class="fas fa-info-circle text-muted" style="font-size: 0.7rem;"></i>
-                            </div>
-                            <div th:class="${result.kellyComparison.totalAlpha >= 0 ? 'positive' : 'negative'}"
-                                 style="font-size: 1.1rem; font-weight: bold;">
-                                [[${#numbers.formatDecimal(result.kellyComparison.totalAlpha, 1, 2)}]]%
-                            </div>
-                            <small class="text-muted">초과수익</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="stat-card buyhold-card">
-                    <h5><i class="fas fa-hand-holding-usd"></i> 매수 후 보유 전략</h5>
-                    <div class="stat-label">총 수익률</div>
-                    <div th:class="${result.buyHoldComparison.totalReturnPct >= 0 ? 'stat-value-large positive' : 'stat-value-large negative'}">
-                        [[${#numbers.formatDecimal(result.buyHoldComparison.totalReturnPct, 1, 2)}]]%
-                    </div>
-                    <hr>
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="stat-label">초기 자산</div>
-                            <div style="font-size: 1.2rem; font-weight: bold;">
-                                ₩[[${#numbers.formatDecimal(result.buyHoldComparison.initialCapital, 1, 0)}]]
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="stat-label">최종 자산</div>
-                            <div style="font-size: 1.2rem; font-weight: bold;"
-                                 th:class="${result.buyHoldComparison.totalReturnPct >= 0 ? 'positive' : 'negative'}">
-                                ₩[[${#numbers.formatDecimal(result.buyHoldComparison.finalCapital, 1, 0)}]]
-                            </div>
-                        </div>
-                    </div>
-                    <hr>
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="stat-label">전략</div>
-                            <div style="font-size: 1rem;">
-                                전체 기간 보유 (구간별 리밸런싱)
-                            </div>
+                            <div class="small text-muted">승률</div>
+                            <div class="fw-bold">[[${#numbers.formatDecimal(result.kellyComparison.overallWinRate, 1, 1)}]]%</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Fold-by-Fold Return Chart -->
-        <div class="chart-container">
-            <h5><i class="fas fa-chart-bar"></i> 구간별 수익률 비교</h5>
-            <canvas id="foldReturnChart"></canvas>
-        </div>
-
-        <!-- Capital Growth Chart -->
-        <div class="chart-container">
-            <h5><i class="fas fa-chart-line"></i> 시간에 따른 자산 증가</h5>
-            <canvas id="capitalGrowthChart"></canvas>
-        </div>
-
-        <!-- Detailed Fold Results Table -->
-        <div class="fold-table">
-            <h5><i class="fas fa-table"></i> 구간별 상세 결과</h5>
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Fold</th>
-                            <th>레짐</th>
-                            <th>기간</th>
-                            <th>나의 수익률</th>
-                            <th>나의 거래</th>
-                            <th>나의 승률</th>
-                            <th>나의 MDD</th>
-                            <th>매수보유 수익률</th>
-                            <th>매수보유 MDD</th>
-                            <th>알파</th>
-                            <th>승자</th>
-                            <th>나의 최종</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="fold : ${result.foldResults}"
-                            th:class="${fold.winner == 'KELLY' ? 'table-winner-row' : ''}">
-                            <td><strong>[[${fold.foldNumber}]]</strong></td>
-                            <td>
-                                <span th:class="${'badge ' + (fold.regime == 'BULL' ? 'bg-success' : (fold.regime == 'BEAR' ? 'bg-danger' : 'bg-info'))} + ' badge-regime'">
-                                    [[${fold.regime}]]
-                                </span>
-                            </td>
-                            <td><small>[[${fold.dateRange}]]</small></td>
-                            <td th:class="${fold.kellyReturnPct >= 0 ? 'positive' : 'negative'}">
-                                <strong>[[${#numbers.formatDecimal(fold.kellyReturnPct, 1, 2)}]]%</strong>
-                            </td>
-                            <td>
-                                <strong>[[${fold.kellyTrades}]]건</strong>
-                            </td>
-                            <td class="positive">
-                                [[${#numbers.formatDecimal(fold.kellyWinRate, 1, 1)}]]%
-                                <br><small class="text-muted">([[${fold.kellyWins}]]승/[[${fold.kellyLosses}]]패)</small>
-                            </td>
-                            <td class="negative">
-                                -[[${#numbers.formatDecimal(fold.kellyMdd, 1, 2)}]]%
-                            </td>
-                            <td th:class="${fold.buyHoldReturnPct >= 0 ? 'positive' : 'negative'}">
-                                [[${#numbers.formatDecimal(fold.buyHoldReturnPct, 1, 2)}]]%
-                            </td>
-                            <td class="negative">
-                                -[[${#numbers.formatDecimal(fold.buyHoldMdd, 1, 2)}]]%
-                            </td>
-                            <td th:class="${fold.alpha >= 0 ? 'positive' : 'negative'}">
-                                [[${#numbers.formatDecimal(fold.alpha, 1, 2)}]]%
-                            </td>
-                            <td>
-                                <span th:if="${fold.winner == 'KELLY'}" class="badge bg-success">
-                                    <i class="fas fa-trophy"></i> 나의 전략
-                                </span>
-                                <span th:if="${fold.winner != 'KELLY'}" class="badge bg-warning text-dark">
-                                    매수보유
-                                </span>
-                            </td>
-                            <td>₩[[${#numbers.formatDecimal(fold.kellyFinalCapital, 1, 0)}]]</td>
-                        </tr>
-                    </tbody>
-                    <tfoot class="table-secondary">
-                        <tr>
-                            <td colspan="3"><strong>합계</strong></td>
-                            <td class="positive"><strong>[[${#numbers.formatDecimal(result.kellyComparison.totalReturnPct, 1, 2)}]]%</strong></td>
-                            <td><strong>[[${result.kellyComparison.totalTrades}]]건</strong></td>
-                            <td class="positive">
-                                <strong>[[${#numbers.formatDecimal(result.kellyComparison.overallWinRate, 1, 1)}]]%</strong>
-                                <br><small class="text-muted">([[${result.kellyComparison.totalWins}]]승/[[${result.kellyComparison.totalLosses}]]패)</small>
-                            </td>
-                            <td class="negative">-[[${#numbers.formatDecimal(result.kellyComparison.overallMaxDrawdown, 1, 2)}]]%</td>
-                            <td>[[${#numbers.formatDecimal(result.buyHoldComparison.totalReturnPct, 1, 2)}]]%</td>
-                            <td>-</td>
-                            <td th:class="${result.kellyComparison.totalAlpha >= 0 ? 'positive' : 'negative'}">
-                                <strong>[[${#numbers.formatDecimal(result.kellyComparison.totalAlpha, 1, 2)}]]%</strong>
-                            </td>
-                            <td>
-                                <span th:if="${result.kellyComparison.totalAlpha >= 0}" class="badge bg-success">
-                                    <i class="fas fa-trophy"></i> 나의 전략
-                                </span>
-                                <span th:if="${result.kellyComparison.totalAlpha < 0}" class="badge bg-warning text-dark">
-                                    매수보유
-                                </span>
-                            </td>
-                            <td>₩[[${#numbers.formatDecimal(result.kellyComparison.finalCapital, 1, 0)}]]</td>
-                        </tr>
-                    </tfoot>
-                </table>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-secondary">단순 보유</div>
+                <div class="card-body text-center py-5">
+                    <div class="text-muted mb-2">총 수익률</div>
+                    <div class="display-val text-secondary">[[${#numbers.formatDecimal(result.buyHoldComparison.totalReturnPct, 1, 2)}]]%</div>
+                    <hr class="my-4">
+                    <div>
+                        <div class="small text-muted">최종 자산</div>
+                        <div class="fw-bold">[[${#numbers.formatDecimal(result.buyHoldComparison.finalCapital, 1, 0)}]]</div>
+                    </div>
+                </div>
             </div>
-        </div>
-
-        <!-- Back Button -->
-        <div class="text-center mt-4 mb-4">
-            <a href="/" class="btn back-button">
-                <i class="fas fa-arrow-left"></i> 홈으로 돌아가기
-            </a>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.js"></script>
-    <script>
-        // Enable Bootstrap tooltips
-        document.addEventListener('DOMContentLoaded', function() {
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
-            })
-        });
-    </script>
-    <script th:inline="javascript">
-        // Fold-by-Fold Return Chart
-        const foldLabels = /*[[${result.foldResults.![foldNumber]}]]*/ [];
-        const kellyReturns = /*[[${result.foldResults.![kellyReturnPct]}]]*/ [];
-        const buyHoldReturns = /*[[${result.foldResults.![buyHoldReturnPct]}]]*/ [];
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">구간별 수익률</div>
+                <div class="card-body"><canvas id="foldChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">자산 성장 그래프</div>
+                <div class="card-body"><canvas id="growthChart"></canvas></div>
+            </div>
+        </div>
+    </div>
 
-        const ctx1 = document.getElementById('foldReturnChart').getContext('2d');
-        new Chart(ctx1, {
-            type: 'bar',
-            data: {
-                labels: foldLabels.map(f => 'Fold ' + f),
-                datasets: [
-                    {
-                        label: '나의 전략',
-                        data: kellyReturns,
-                        backgroundColor: 'rgba(102, 126, 234, 0.7)',
-                        borderColor: 'rgba(102, 126, 234, 1)',
-                        borderWidth: 2
-                    },
-                    {
-                        label: '매수 후 보유',
-                        data: buyHoldReturns,
-                        backgroundColor: 'rgba(255, 193, 7, 0.7)',
-                        borderColor: 'rgba(255, 193, 7, 1)',
-                        borderWidth: 2
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    },
-                    title: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        title: {
-                            display: true,
-                            text: '수익률 (%)'
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    }
-                }
-            }
-        });
+    <div class="card">
+        <div class="card-header">상세 결과</div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 text-center align-middle">
+                <thead>
+                <tr>
+                    <th>Fold</th>
+                    <th>시장상태</th>
+                    <th>AI 수익률</th>
+                    <th>승률</th>
+                    <th>MDD</th>
+                    <th>B&H 수익률</th>
+                    <th>승자</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="f : ${result.foldResults}">
+                    <td class="fw-bold">[[${f.foldNumber}]]</td>
+                    <td><span class="badge bg-light text-dark border">[[${f.regime}]]</span></td>
+                    <td class="fw-bold" style="color: var(--text-main);">[[${#numbers.formatDecimal(f.kellyReturnPct, 1, 2)}]]%</td>
+                    <td>[[${#numbers.formatDecimal(f.kellyWinRate, 1, 1)}]]%</td>
+                    <td class="text-muted">-[[${#numbers.formatDecimal(f.kellyMdd, 1, 2)}]]%</td>
+                    <td class="text-muted">[[${#numbers.formatDecimal(f.buyHoldReturnPct, 1, 2)}]]%</td>
+                    <td>
+                        <span th:if="${f.winner == 'KELLY'}" class="badge" style="background-color: var(--accent-green);">AI</span>
+                        <span th:if="${f.winner != 'KELLY'}" class="badge bg-secondary">B&H</span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-        // Capital Growth Chart
-        const kellyCapitals = /*[[${result.foldResults.![kellyFinalCapital]}]]*/ [];
-        const buyHoldCapitals = /*[[${result.foldResults.![buyHoldFinalCapital]}]]*/ [];
-        const initialCapital = /*[[${result.initialCapital}]]*/ 10000;
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script th:inline="javascript">
+    const labels = /*[[${result.foldResults.![foldNumber]}]]*/ [];
+    const kRet = /*[[${result.foldResults.![kellyReturnPct]}]]*/ [];
+    const bRet = /*[[${result.foldResults.![buyHoldReturnPct]}]]*/ [];
 
-        // Add initial capital at the beginning
-        kellyCapitals.unshift(initialCapital);
-        buyHoldCapitals.unshift(initialCapital);
+    new Chart(document.getElementById('foldChart'), {
+        type: 'bar',
+        data: {
+            labels: labels.map(f=>'F'+f),
+            datasets: [
+                { label: 'AI', data: kRet, backgroundColor: '#313647' },
+                { label: 'B&H', data: bRet, backgroundColor: '#e0e0e0' }
+            ]
+        },
+        options: { scales: { y: { grid: {color:'#f0f0f0'} }, x: { grid: {display:false} } } }
+    });
 
-        const growthLabels = ['시작'].concat(foldLabels.map(f => 'Fold ' + f));
+    const kCap = /*[[${result.foldResults.![kellyFinalCapital]}]]*/ [];
+    const bCap = /*[[${result.foldResults.![buyHoldFinalCapital]}]]*/ [];
+    kCap.unshift(/*[[${result.initialCapital}]]*/ 10000);
+    bCap.unshift(/*[[${result.initialCapital}]]*/ 10000);
 
-        const ctx2 = document.getElementById('capitalGrowthChart').getContext('2d');
-        new Chart(ctx2, {
-            type: 'line',
-            data: {
-                labels: growthLabels,
-                datasets: [
-                    {
-                        label: '나의 전략',
-                        data: kellyCapitals,
-                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
-                        borderColor: 'rgba(102, 126, 234, 1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 5,
-                        pointHoverRadius: 7
-                    },
-                    {
-                        label: '매수 후 보유',
-                        data: buyHoldCapitals,
-                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
-                        borderColor: 'rgba(255, 193, 7, 1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 5,
-                        pointHoverRadius: 7
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ₩' + context.parsed.y.toLocaleString();
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: false,
-                        title: {
-                            display: true,
-                            text: '자산 (₩)'
-                        },
-                        ticks: {
-                            callback: function(value) {
-                                return '₩' + value.toLocaleString();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    </script>
+    new Chart(document.getElementById('growthChart'), {
+        type: 'line',
+        data: {
+            labels: ['Start'].concat(labels.map(f=>'F'+f)),
+            datasets: [
+                { label: 'AI', data: kCap, borderColor: '#313647', backgroundColor: 'rgba(49, 54, 71, 0.1)', fill: true },
+                { label: 'B&H', data: bCap, borderColor: '#999', borderDash: [5,5], fill: false }
+            ]
+        },
+        options: { scales: { y: { grid: {color:'#f0f0f0'} }, x: { grid: {display:false} } } }
+    });
+</script>
 </body>
 </html>

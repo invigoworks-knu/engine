@@ -2,771 +2,260 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>백테스팅 - AI 투자 엔진</title>
+    <title>백테스팅</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-card: #1e293b;
-            --border-color: #475569;
-            --text-primary: #f1f5f9;
-            --text-secondary: #e2e8f0;
-            --text-heading: #ffffff;
-            --text-muted: #cbd5e1;
-            --accent-primary: #6366f1;
-            --accent-secondary: #8b5cf6;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --info: #3b82f6;
+            --bg-main: #FFFFFF;
+            --text-main: #313647;
+            --nav-bg: #313647;
+            --accent-dark: #435663;
+            --accent-green: #A3B087;
         }
+        body { background-color: var(--bg-main); color: var(--text-main); font-family: 'Segoe UI', sans-serif; }
 
-        body {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 1rem;
-            line-height: 1.7;
-        }
+        /* Navbar 수정됨 */
+        .navbar { background-color: var(--nav-bg) !important; padding: 1rem 0; }
+        .navbar-brand { color: #FFFFFF !important; font-weight: 800; }
+        .navbar .nav-link { color: rgba(255,255,255,0.6) !important; padding: 0.5rem 1rem; margin: 0 0.2rem; transition: all 0.3s; }
+        .navbar .nav-link:hover { color: #FFFFFF !important; }
+        .navbar .nav-link.active { background-color: var(--accent-green); color: #FFFFFF !important; font-weight: 700; border-radius: 8px; }
 
-        /* 상단 네비게이션 바 */
-        .top-navbar {
-            background: var(--bg-secondary);
-            border-bottom: 2px solid var(--border-color);
-            padding: 1.25rem 0;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-        }
+        .card { border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: #FFFFFF; margin-bottom: 20px; }
+        .card-header { background-color: var(--accent-dark); color: #FFFFFF; border-radius: 12px 12px 0 0 !important; font-weight: 600; padding: 1rem 1.5rem; }
 
-        .top-navbar .brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
+        .btn-primary { background-color: var(--text-main); border: none; }
+        .btn-success { background-color: var(--accent-green); border: none; }
 
-        .top-navbar .brand:hover {
-            opacity: 0.8;
-            transform: translateY(-2px);
-        }
-
-        .top-navbar .nav-link {
-            color: var(--text-secondary);
-            font-weight: 600;
-            padding: 0.75rem 1.25rem;
-            margin: 0 0.25rem;
-            border-radius: 0.5rem;
-            transition: all 0.3s;
-            font-size: 1rem;
-        }
-
-        .top-navbar .nav-link:hover {
-            color: var(--text-heading);
-            background: rgba(99, 102, 241, 0.15);
-        }
-
-        .top-navbar .nav-link.active {
-            color: var(--text-heading);
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-        }
-
-        /* 카드 */
-        .card {
-            background: var(--bg-card);
-            border: 2px solid var(--border-color);
-            border-radius: 1rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-        }
-
-        .card-header {
-            background: rgba(99, 102, 241, 0.1);
-            border-bottom: 2px solid var(--border-color);
-            padding: 1.5rem;
-            font-size: 1.35rem;
-            font-weight: 700;
-            color: var(--text-heading);
-        }
-
-        .card-body {
-            padding: 2rem;
-        }
-
-        /* 헤딩 */
-        h1, h2, h3, h4, h5, h6 {
-            color: var(--text-heading);
-            font-weight: 700;
-        }
-
-        h5 {
-            font-size: 1.2rem;
-            margin-bottom: 1rem;
-        }
-
-        /* 배지 */
-        .fold-badge {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.95rem;
-            font-weight: 700;
-            margin: 0.25rem;
-        }
-
-        .fold-badge.bull {
-            background-color: var(--success);
-            color: white;
-        }
-
-        .fold-badge.bear {
-            background-color: var(--danger);
-            color: white;
-        }
-
-        .fold-badge.sideways {
-            background-color: var(--info);
-            color: white;
-        }
-
-        .fold-badge.mixed {
-            background-color: var(--warning);
-            color: #000;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-size: 1rem;
-            font-weight: 700;
-            margin-left: 0.5rem;
-        }
-
-        .status-badge.loaded {
-            background-color: var(--success);
-            color: white;
-        }
-
-        .status-badge.not-loaded {
-            background-color: var(--danger);
-            color: white;
-        }
-
-        /* 폼 */
-        .form-label {
-            color: var(--text-heading);
-            font-weight: 700;
-            margin-bottom: 0.75rem;
-            font-size: 1.05rem;
-        }
-
-        .form-control, .form-select {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 0.75rem 1rem;
-            font-size: 1rem;
-        }
-
-        .form-control:focus, .form-select:focus {
-            background: var(--bg-secondary);
-            border-color: var(--accent-primary);
-            color: var(--text-heading);
-            box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
-        }
-
-        .form-control::placeholder {
-            color: var(--text-secondary);
-        }
-
-        /* 버튼 */
-        .btn {
-            padding: 1rem 2rem;
-            font-size: 1.1rem;
-            font-weight: 700;
-            border-radius: 0.75rem;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border: none;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
-        }
-
-        .btn-success {
-            background: var(--success);
-            border: none;
-            color: white;
-        }
-
-        .btn-info {
-            background: var(--info);
-            border: none;
-            color: white;
-        }
-
-        .btn-outline-primary {
-            border: 2px solid var(--accent-primary);
-            color: var(--accent-primary);
-            background: transparent;
-        }
-
-        .btn-outline-primary:hover {
-            background: var(--accent-primary);
-            color: white;
-        }
-
-        .btn-outline-success {
-            border: 2px solid var(--success);
-            color: var(--success);
-            background: transparent;
-        }
-
-        .btn-outline-success:hover {
-            background: var(--success);
-            color: white;
-        }
-
-        /* 버튼 그룹 */
-        .btn-group .btn {
-            padding: 0.75rem 1.5rem;
-        }
-
-        .btn-check:checked + .btn {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            color: white;
-            border-color: var(--accent-primary);
-        }
-
-        /* 탭 */
-        .nav-tabs {
-            border-bottom: 2px solid var(--border-color);
-        }
-
+        /* Tabs Customization */
         .nav-tabs .nav-link {
-            color: var(--text-secondary);
-            font-weight: 700;
-            padding: 1rem 1.5rem;
-            border: none;
-            font-size: 1.1rem;
-        }
-
-        .nav-tabs .nav-link:hover {
-            color: var(--text-heading);
-            background: rgba(99, 102, 241, 0.1);
-        }
-
-        .nav-tabs .nav-link.active {
-            color: var(--text-heading);
-            background: var(--bg-card);
-            border-bottom: 3px solid var(--accent-primary);
-        }
-
-        /* 알림 */
-        .alert {
-            border-radius: 0.75rem;
-            padding: 1.25rem;
-            border-width: 2px;
+            color: rgba(49, 54, 71, 0.5) !important;
             font-weight: 600;
+            border: none;
         }
-
-        .alert-info {
-            background: rgba(59, 130, 246, 0.15);
-            border-color: var(--info);
-            color: var(--text-heading);
+        .nav-tabs .nav-link:hover {
+            color: var(--text-main) !important;
         }
-
-        .alert-warning {
-            background: rgba(245, 158, 11, 0.15);
-            border-color: var(--warning);
-            color: var(--text-heading);
-        }
-
-        /* 텍스트 */
-        .text-muted {
-            color: var(--text-muted) !important;
-            font-size: 0.95rem;
-            font-weight: 500;
-        }
-
-        small {
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            font-weight: 500;
-        }
-
-        /* 토스트 */
-        .toast {
-            min-width: 350px;
-            background: var(--bg-card);
-            color: var(--text-primary);
-            border: 2px solid var(--border-color);
-        }
-
-        .toast-success {
-            border-left: 4px solid var(--success);
-        }
-
-        .toast-error {
-            border-left: 4px solid var(--danger);
-        }
-
-        /* 툴팁 */
-        .tooltip-icon {
-            cursor: help;
-            color: var(--accent-primary);
-            margin-left: 0.5rem;
-        }
-
-        .tooltip-inner {
-            text-align: left;
-            max-width: 350px;
-            width: 350px;
-            word-break: keep-all;
-            white-space: normal;
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            padding: 1rem;
-            font-size: 0.95rem;
+        .nav-tabs .nav-link.active {
+            color: var(--text-main) !important;
+            border-bottom: 3px solid var(--accent-green);
+            font-weight: 800;
+            background: transparent;
         }
     </style>
 </head>
 <body>
-    <!-- 상단 네비게이션 바 -->
-    <nav class="top-navbar">
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center">
-                <a href="/trading/dashboard" class="brand text-decoration-none">
-                    <i class="fas fa-chart-line"></i> AI 투자 엔진
-                </a>
-                <ul class="nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/trading/dashboard">
-                            <i class="fas fa-home"></i> 대시보드
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/trading/history">
-                            <i class="fas fa-history"></i> 거래내역
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/trading/mypage">
-                            <i class="fas fa-user-cog"></i> 마이페이지
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/backtest">
-                            <i class="fas fa-flask"></i> 백테스팅
-                        </a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-
-    <!-- 토스트 알림 -->
-    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999; margin-top: 80px;">
-        <div id="dataToast" class="toast" role="alert">
-            <div class="toast-header" style="background: var(--bg-secondary); color: var(--text-primary); border-bottom: 1px solid var(--border-color);">
-                <i id="toastIcon" class="fas fa-check-circle me-2"></i>
-                <strong id="toastTitle" class="me-auto">알림</strong>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
-            </div>
-            <div class="toast-body" id="toastMessage">
-                메시지
-            </div>
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="/trading/dashboard"><i class="fas fa-chart-line me-2"></i>AI Engine</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="/trading/dashboard">대시보드</a></li>
+                <li class="nav-item"><a class="nav-link" href="/trading/history">거래내역</a></li>
+                <li class="nav-item"><a class="nav-link" href="/trading/mypage">마이페이지</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/backtest">백테스팅</a></li>
+            </ul>
         </div>
     </div>
+</nav>
 
-    <div class="container mt-4">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-                <!-- 데이터 초기화 섹션 -->
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-database"></i> 데이터 초기화
-                        <i class="fas fa-question-circle tooltip-icon" data-bs-toggle="tooltip" title="백테스팅을 실행하기 전에 데이터를 먼저 적재해야 합니다. 데이터는 한 번만 적재하면 됩니다."></i>
-                    </div>
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col-md-6">
-                                <p class="mb-2">
-                                    <strong>OHLCV 데이터:</strong>
-                                    <span class="status-badge" id="ohlcvStatus">확인 중...</span>
-                                    <span id="ohlcvCount" class="text-muted small"></span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong>AI 예측 데이터:</strong>
-                                    <span class="status-badge" id="aiStatus">확인 중...</span>
-                                    <span id="aiCount" class="text-muted small"></span>
-                                </p>
-                            </div>
-                            <div class="col-md-6 text-end">
-                                <button class="btn btn-primary mb-2" onclick="loadOhlcvData()" id="btnOhlcv">
-                                    <i class="fas fa-download"></i> OHLCV 데이터 적재
-                                </button>
-                                <button class="btn btn-success mb-2" onclick="loadMultiModelData()" id="btnMultiModel">
-                                    <i class="fas fa-layer-group"></i> AI 예측 데이터 적재
-                                </button>
-                                <a href="/predictions" class="btn btn-info mb-2">
-                                    <i class="fas fa-table"></i> 데이터 확인
-                                </a>
-                            </div>
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100; margin-top: 60px;">
+    <div id="dataToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i id="toastIcon" class="fas fa-info-circle me-2"></i>
+            <strong class="me-auto" id="toastTitle">알림</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-database me-2"></i>데이터 준비</span>
+                    <a href="/predictions" class="btn btn-sm btn-outline-light">적재 데이터 확인 ></a>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <p class="mb-2">OHLCV 시세: <span id="ohlcvStatus" class="badge bg-secondary">확인 중</span> <span id="ohlcvCount" class="small text-muted"></span></p>
+                            <p class="mb-0">AI 예측값: <span id="aiStatus" class="badge bg-secondary">확인 중</span> <span id="aiCount" class="small text-muted"></span></p>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button class="btn btn-primary btn-sm me-2" onclick="loadOhlcvData()" id="btnOhlcv"><i class="fas fa-download me-1"></i> 시세 적재</button>
+                            <button class="btn btn-success btn-sm" onclick="loadMultiModelData()" id="btnMultiModel"><i class="fas fa-brain me-1"></i> AI 적재</button>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- 사용 가이드 -->
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-book"></i> 사용 가이드
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-info" role="alert">
-                            <strong><i class="fas fa-info-circle"></i> 백테스팅이란?</strong><br>
-                            과거 데이터로 투자 전략을 미리 테스트해보는 것입니다. 실제 돈을 쓰지 않고 "만약 이렇게 투자했다면 얼마를 벌거나 잃었을까?"를 확인할 수 있습니다.
-                        </div>
-                        <ol style="line-height: 2;">
-                            <li><strong>데이터 준비:</strong> 위의 두 버튼을 눌러 과거 거래 데이터를 먼저 불러오세요 (최초 1회)</li>
-                            <li><strong>테스트 기간 선택:</strong> 어떤 시기의 시장 상황을 시뮬레이션할지 선택하세요</li>
-                            <li><strong>투자 금액 입력:</strong> 얼마로 시작할지 입력하세요 (가상 금액)</li>
-                            <li><strong>AI 예측 신뢰 기준 설정:</strong> AI가 얼마나 확신할 때 투자할지 정하세요</li>
-                            <li><strong>실행:</strong> 백테스팅 실행 버튼을 누르면 결과를 볼 수 있습니다</li>
-                        </ol>
-                    </div>
-                </div>
+            <ul class="nav nav-tabs mb-4" id="backtestTabs" role="tablist">
+                <li class="nav-item"><button class="nav-link active" id="single-tab" data-bs-toggle="tab" data-bs-target="#single">단일 구간 (Fold)</button></li>
+                <li class="nav-item"><button class="nav-link" id="sequential-tab" data-bs-toggle="tab" data-bs-target="#sequential">연속 백테스팅</button></li>
+            </ul>
 
-                <!-- Fold 정보 -->
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-info-circle"></i> 사용 가능한 Fold
-                    </div>
-                    <div class="card-body">
-                        <div th:each="fold : ${folds}" class="mb-2">
-                            <strong>Fold [[${fold.foldNumber}]]:</strong>
-                            <span th:class="${'fold-badge ' + #strings.toLowerCase(fold.regime)}">[[${fold.regime}]]</span>
-                            <span class="text-muted">[[${fold.startDate}]] ~ [[${fold.endDate}]]</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 탭 메뉴 -->
-                <ul class="nav nav-tabs" id="backtestTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="single-tab" data-bs-toggle="tab" data-bs-target="#single" type="button">
-                            <i class="fas fa-layer-group"></i> 단일 Fold
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="sequential-tab" data-bs-toggle="tab" data-bs-target="#sequential" type="button">
-                            <i class="fas fa-stream"></i> 연속 백테스팅
-                        </button>
-                    </li>
-                </ul>
-
-                <div class="tab-content" id="backtestTabsContent">
-                    <!-- 단일 Fold 백테스팅 -->
-                    <div class="tab-pane fade show active" id="single" role="tabpanel">
-                        <div class="card">
-                            <div class="card-body">
-                                <form action="/backtest/result" method="get">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-folder"></i> 테스트 기간 선택
-                                            </label>
-                                            <select class="form-select" name="foldNumber" required>
-                                                <option value="">기간 선택...</option>
-                                                <option th:each="fold : ${folds}" th:value="${fold.foldNumber}"
-                                                        th:text="${'Fold ' + fold.foldNumber + ' (' + fold.regime + ')'}">
-                                                </option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-dollar-sign"></i> 초기 자본 (원)
-                                            </label>
-                                            <input type="number" class="form-control" name="initialCapital" value="10000" step="1000" min="1000" required>
-                                        </div>
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="single">
+                    <div class="card">
+                        <div class="card-body p-4">
+                            <h5 class="card-title mb-4 fw-bold text-dark">단일 구간 시뮬레이션</h5>
+                            <form action="/backtest/result" method="get">
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">기간 선택 (Fold)</label>
+                                        <select class="form-select" name="foldNumber" required>
+                                            <option value="" disabled selected>선택...</option>
+                                            <option th:each="fold : ${folds}" th:value="${fold.foldNumber}" th:text="${'Fold ' + fold.foldNumber + ' (' + fold.regime + ')'}"></option>
+                                        </select>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">
-                                            <i class="fas fa-database"></i> AI 예측 기준 선택
-                                        </label>
-                                        <div class="btn-group w-100" role="group">
-                                            <input type="radio" class="btn-check" name="confidenceColumn" id="colConfidence1" value="CONFIDENCE" checked autocomplete="off">
-                                            <label class="btn btn-outline-success" for="colConfidence1">확신도</label>
-
-                                            <input type="radio" class="btn-check" name="confidenceColumn" id="colPredProba1" value="PRED_PROBA_UP" autocomplete="off">
-                                            <label class="btn btn-outline-success" for="colPredProba1">상승 확률</label>
-                                        </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">초기 자본 (KRW)</label>
+                                        <input type="number" class="form-control" name="initialCapital" value="10000" step="1000">
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">
-                                            <i class="fas fa-filter"></i> 투자 기준 설정 방법
-                                        </label>
-                                        <div class="btn-group w-100" role="group">
-                                            <input type="radio" class="btn-check" name="thresholdMode" id="fixed1" value="FIXED" checked autocomplete="off">
-                                            <label class="btn btn-outline-primary" for="fixed1">고정값</label>
-
-                                            <input type="radio" class="btn-check" name="thresholdMode" id="quantile1" value="QUANTILE" autocomplete="off">
-                                            <label class="btn btn-outline-primary" for="quantile1">백분위수</label>
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-percent"></i> 투자 기준값
-                                            </label>
-                                            <input type="number" class="form-control" name="confidenceThreshold" value="0.1" step="0.01" min="0" max="0.5" required>
-                                            <small class="text-muted">이 값 이상일 때 투자</small>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-sliders-h"></i> 투자 비율 (%)
-                                            </label>
-                                            <input type="number" class="form-control" name="positionSizePercent" placeholder="비워두면 자동 계산" step="5" min="0" max="100">
-                                            <small class="text-muted">비워두면 최적 비율 자동 계산</small>
-                                        </div>
-                                    </div>
-                                    <div class="text-center mt-4">
-                                        <button type="submit" class="btn btn-primary btn-lg">
-                                            <i class="fas fa-play-circle"></i> 백테스팅 실행
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 연속 백테스팅 -->
-                    <div class="tab-pane fade" id="sequential" role="tabpanel">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="alert alert-info" role="alert">
-                                    <i class="fas fa-info-circle"></i> <strong>연속 백테스팅</strong>이란? 여러 기간을 연속으로 테스트하는 것입니다. 첫 번째 기간이 끝난 후 남은 금액으로 다음 기간을 시작합니다.
                                 </div>
-                                <form action="/backtest/sequential-result" method="get">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-play"></i> 시작 기간
-                                            </label>
-                                            <select class="form-select" name="startFold" required>
-                                                <option value="1" selected>Fold 1</option>
-                                                <option th:each="i : ${#numbers.sequence(2, 7)}" th:value="${i}" th:text="${'Fold ' + i}"></option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-stop"></i> 종료 기간
-                                            </label>
-                                            <select class="form-select" name="endFold" required>
-                                                <option th:each="i : ${#numbers.sequence(1, 7)}" th:value="${i}" th:text="${'Fold ' + i}" th:selected="${i == 7}"></option>
-                                            </select>
-                                        </div>
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label">진입 임계값 (0.0 ~ 0.5)</label>
+                                        <input type="number" class="form-control" name="confidenceThreshold" value="0.1" step="0.01">
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">
-                                            <i class="fas fa-database"></i> AI 예측 기준 선택
-                                        </label>
-                                        <div class="btn-group w-100" role="group">
-                                            <input type="radio" class="btn-check" name="confidenceColumn" id="colConfidence2" value="CONFIDENCE" checked autocomplete="off">
-                                            <label class="btn btn-outline-success" for="colConfidence2">확신도</label>
+                                    <div class="col-md-6">
+                                        <label class="form-label">포지션 비율 (%, 비우면 Kelly)</label>
+                                        <input type="number" class="form-control" name="positionSizePercent" placeholder="자동 계산">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">시뮬레이션 실행</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
 
-                                            <input type="radio" class="btn-check" name="confidenceColumn" id="colPredProba2" value="PRED_PROBA_UP" autocomplete="off">
-                                            <label class="btn btn-outline-success" for="colPredProba2">상승 확률</label>
-                                        </div>
+                <div class="tab-pane fade" id="sequential">
+                    <div class="card">
+                        <div class="card-body p-4">
+                            <h5 class="card-title mb-4 fw-bold text-dark">연속 구간 복리 테스트</h5>
+                            <form action="/backtest/sequential-result" method="get">
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">시작 Fold</label>
+                                        <select class="form-select" name="startFold">
+                                            <option value="1" selected>Fold 1</option>
+                                            <option th:each="i : ${#numbers.sequence(2,7)}" th:value="${i}" th:text="${'Fold ' + i}"></option>
+                                        </select>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">
-                                            <i class="fas fa-filter"></i> 투자 기준 설정 방법
-                                        </label>
-                                        <div class="btn-group w-100" role="group">
-                                            <input type="radio" class="btn-check" name="thresholdMode" id="fixed2" value="FIXED" checked autocomplete="off">
-                                            <label class="btn btn-outline-primary" for="fixed2">고정값</label>
-
-                                            <input type="radio" class="btn-check" name="thresholdMode" id="quantile2" value="QUANTILE" autocomplete="off">
-                                            <label class="btn btn-outline-primary" for="quantile2">백분위수</label>
-                                        </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">종료 Fold</label>
+                                        <select class="form-select" name="endFold">
+                                            <option th:each="i : ${#numbers.sequence(1,7)}" th:value="${i}" th:text="${'Fold ' + i}" th:selected="${i==7}"></option>
+                                        </select>
                                     </div>
-                                    <div class="row">
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-dollar-sign"></i> 초기 자본 (원)
-                                            </label>
-                                            <input type="number" class="form-control" name="initialCapital" value="10000" step="1000" min="1000" required>
-                                        </div>
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-percent"></i> 투자 기준값
-                                            </label>
-                                            <input type="number" class="form-control" name="confidenceThreshold" value="0.1" step="0.01" min="0" max="0.5" required>
-                                        </div>
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label">
-                                                <i class="fas fa-sliders-h"></i> 투자 비율 (%)
-                                            </label>
-                                            <input type="number" class="form-control" name="positionSizePercent" placeholder="자동 계산" step="5" min="0" max="100">
-                                        </div>
+                                </div>
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label">초기 자본</label>
+                                        <input type="number" class="form-control" name="initialCapital" value="10000" step="1000">
                                     </div>
-                                    <div class="text-center mt-4">
-                                        <button type="submit" class="btn btn-primary btn-lg">
-                                            <i class="fas fa-play-circle"></i> 연속 백테스팅 실행
-                                        </button>
+                                    <div class="col-md-6">
+                                        <label class="form-label">진입 임계값</label>
+                                        <input type="number" class="form-control" name="confidenceThreshold" value="0.1" step="0.01">
                                     </div>
-                                </form>
-                            </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">연속 테스트 실행</button>
+                            </form>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-            tooltips.forEach(tooltip => new bootstrap.Tooltip(tooltip));
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', checkDataStatus);
 
-            checkDataStatus();
-        });
+    function checkDataStatus() {
+        fetch('/api/v1/data/status').then(r=>r.json()).then(d => {
+            const ob = document.getElementById('ohlcvStatus');
+            const ab = document.getElementById('aiStatus');
+            const btnOh = document.getElementById('btnOhlcv');
+            const btnAi = document.getElementById('btnMultiModel');
 
-        function checkDataStatus() {
-            fetch('/api/v1/data/status')
-                .then(response => response.json())
-                .then(data => {
-                    const ohlcvStatus = document.getElementById('ohlcvStatus');
-                    const ohlcvCount = document.getElementById('ohlcvCount');
-                    if (data.ohlcvLoaded) {
-                        ohlcvStatus.textContent = '적재 완료';
-                        ohlcvStatus.className = 'status-badge loaded';
-                        ohlcvCount.textContent = `(${data.ohlcvCount.toLocaleString()}건)`;
-                        document.getElementById('btnOhlcv').disabled = true;
-                    } else {
-                        ohlcvStatus.textContent = '미적재';
-                        ohlcvStatus.className = 'status-badge not-loaded';
-                        ohlcvCount.textContent = data.ohlcvCount > 0 ? `(${data.ohlcvCount.toLocaleString()}건)` : '';
-                    }
-
-                    const aiStatus = document.getElementById('aiStatus');
-                    const aiCount = document.getElementById('aiCount');
-                    if (data.aiPredictionsLoaded) {
-                        aiStatus.textContent = '적재 완료';
-                        aiStatus.className = 'status-badge loaded';
-                        aiCount.textContent = `(${data.aiPredictionCount.toLocaleString()}건)`;
-                        const btnMultiModel = document.getElementById('btnMultiModel');
-                        if (btnMultiModel) btnMultiModel.disabled = true;
-                    } else {
-                        aiStatus.textContent = '미적재';
-                        aiStatus.className = 'status-badge not-loaded';
-                        aiCount.textContent = data.aiPredictionCount > 0 ? `(${data.aiPredictionCount.toLocaleString()}건)` : '';
-                    }
-                })
-                .catch(error => {
-                    console.error('데이터 상태 확인 실패:', error);
-                });
-        }
-
-        function showToast(title, message, isSuccess = true) {
-            const toast = document.getElementById('dataToast');
-            const toastIcon = document.getElementById('toastIcon');
-            const toastTitle = document.getElementById('toastTitle');
-            const toastMessage = document.getElementById('toastMessage');
-            const toastBody = toast.querySelector('.toast-body');
-
-            if (isSuccess) {
-                toastIcon.className = 'fas fa-check-circle me-2';
-                toastIcon.style.color = '#10b981';
+            if(d.ohlcvLoaded) {
+                ob.textContent='완료';
+                ob.className='badge bg-success';
+                document.getElementById('ohlcvCount').textContent=`(${d.ohlcvCount}건)`;
+                btnOh.disabled=true;
+                btnOh.innerHTML='<i class="fas fa-check me-1"></i> 적재 완료';
             } else {
-                toastIcon.className = 'fas fa-exclamation-circle me-2';
-                toastIcon.style.color = '#ef4444';
+                btnOh.disabled=false;
+                btnOh.innerHTML='<i class="fas fa-download me-1"></i> 시세 적재';
             }
 
-            toastTitle.textContent = title;
-            toastMessage.textContent = message;
+            if(d.aiPredictionsLoaded) {
+                ab.textContent='완료';
+                ab.className='badge bg-success';
+                document.getElementById('aiCount').textContent=`(${d.aiPredictionCount}건)`;
+                btnAi.disabled=true;
+                btnAi.innerHTML='<i class="fas fa-check me-1"></i> 적재 완료';
+            } else {
+                btnAi.disabled=false;
+                btnAi.innerHTML='<i class="fas fa-brain me-1"></i> AI 적재';
+            }
+        });
+    }
 
-            const bsToast = new bootstrap.Toast(toast, {
-                autohide: true,
-                delay: 5000
-            });
-            bsToast.show();
+    function showToast(msg, isSuccess = true) {
+        const t = document.getElementById('dataToast');
+        document.getElementById('toastMessage').textContent = msg;
+        const icon = document.getElementById('toastIcon');
+        if (isSuccess) {
+            icon.className = "fas fa-check-circle me-2 text-success";
+            document.getElementById('toastTitle').innerText = "완료";
+        } else {
+            icon.className = "fas fa-exclamation-circle me-2 text-danger";
+            document.getElementById('toastTitle').innerText = "오류";
         }
+        new bootstrap.Toast(t, { delay: 3000 }).show();
+    }
 
-        function loadOhlcvData() {
-            const btn = document.getElementById('btnOhlcv');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
+    function loadOhlcvData() {
+        const btn = document.getElementById('btnOhlcv');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
+        fetch('/api/v1/data/init-ohlcv-all', {method:'POST'})
+        .then(r=>r.text())
+        .then(m=>{
+            showToast(m, true);
+            checkDataStatus();
+        })
+        .catch(e => {
+            console.error(e);
+            showToast('데이터 적재 중 오류가 발생했습니다.', false);
+            checkDataStatus();
+        });
+    }
 
-            fetch('/api/v1/data/init-ohlcv-all', { method: 'POST' })
-                .then(response => response.text())
-                .then(message => {
-                    btn.innerHTML = originalHtml;
-
-                    if (message.includes('이미 적재')) {
-                        showToast('데이터 확인', message, true);
-                        btn.disabled = true;
-                    } else {
-                        showToast('적재 완료', 'OHLCV 데이터가 성공적으로 적재되었습니다!', true);
-                    }
-
-                    checkDataStatus();
-                })
-                .catch(error => {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    showToast('적재 실패', 'OHLCV 데이터 적재에 실패했습니다.', false);
-                    console.error('OHLCV 적재 오류:', error);
-                });
-        }
-
-        function loadMultiModelData() {
-            const btn = document.getElementById('btnMultiModel');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
-
-            fetch('/api/v1/data/init-multi-model-predictions-all', { method: 'POST' })
-                .then(response => response.text())
-                .then(message => {
-                    btn.innerHTML = originalHtml;
-
-                    if (message.includes('이미 적재')) {
-                        showToast('데이터 확인', message, true);
-                        btn.disabled = true;
-                    } else {
-                        showToast('적재 완료', '다중 모델 AI 예측 데이터가 성공적으로 적재되었습니다!', true);
-                    }
-
-                    checkDataStatus();
-                })
-                .catch(error => {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    showToast('적재 실패', '다중 모델 데이터 적재에 실패했습니다.', false);
-                    console.error('다중 모델 적재 오류:', error);
-                });
-        }
-    </script>
+    function loadMultiModelData() {
+        const btn = document.getElementById('btnMultiModel');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중...';
+        fetch('/api/v1/data/init-multi-model-predictions-all', {method:'POST'})
+        .then(r=>r.text())
+        .then(m=>{
+            showToast(m, true);
+            checkDataStatus();
+        })
+        .catch(e => {
+            console.error(e);
+            showToast('데이터 적재 중 오류가 발생했습니다.', false);
+            checkDataStatus();
+        });
+    }
+</script>
 </body>
 </html>

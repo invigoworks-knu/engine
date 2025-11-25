@@ -2,735 +2,353 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>거래 대시보드 - AI 투자 엔진</title>
+    <title>거래 대시보드</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-card: #1e293b;
-            --border-color: #475569;
-            --text-primary: #f1f5f9;
-            --text-secondary: #e2e8f0;
-            --text-heading: #ffffff;
-            --text-muted: #cbd5e1;
-            --accent-primary: #6366f1;
-            --accent-secondary: #8b5cf6;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --info: #3b82f6;
+            --bg-main: #FFFFFF;
+            --text-main: #313647;
+            --nav-bg: #313647;
+            --accent-dark: #435663;
+            --accent-green: #A3B087; /* Sage Green */
+            --accent-cream: #FFF8D4;
         }
+        body { background-color: var(--bg-main); color: var(--text-main); font-family: 'Segoe UI', sans-serif; }
 
-        body {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 1rem;
-            line-height: 1.7;
-        }
+        /* Navbar 수정: 현재 페이지(active) 강조 스타일 복구 */
+        .navbar { background-color: var(--nav-bg) !important; padding: 1rem 0; }
+        .navbar-brand { color: #FFFFFF !important; font-weight: 800; }
 
-        h1, h2, h3, h4, h5, h6 {
-            color: var(--text-heading);
-            font-weight: 700;
-        }
-
-        /* 상단 네비게이션 바 */
-        .top-navbar {
-            background: var(--bg-secondary);
-            border-bottom: 2px solid var(--border-color);
-            padding: 1.25rem 0;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-        }
-
-        .top-navbar .brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .top-navbar .brand:hover {
-            opacity: 0.8;
-            transform: translateY(-2px);
-        }
-
-        .top-navbar .nav-link {
-            color: var(--text-secondary);
-            font-weight: 600;
-            padding: 0.75rem 1.25rem;
-            margin: 0 0.25rem;
-            border-radius: 0.5rem;
-            transition: all 0.3s;
-            font-size: 1rem;
-        }
-
-        .top-navbar .nav-link:hover {
-            color: var(--text-heading);
-            background: rgba(99, 102, 241, 0.15);
-        }
-
-        .top-navbar .nav-link.active {
-            color: var(--text-heading);
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-        }
-
-        /* 카드 */
-        .card {
-            background: var(--bg-card);
-            border: 2px solid var(--border-color);
-            border-radius: 1rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-        }
-
-        .card-header {
-            background: rgba(99, 102, 241, 0.1);
-            border-bottom: 2px solid var(--border-color);
-            padding: 1.5rem;
-            font-size: 1.35rem;
-            font-weight: 700;
-            color: var(--text-heading);
-        }
-
-        .card-body {
-            padding: 1.75rem;
-        }
-
-        /* 잔고 카드 */
-        .balance-card {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border: none;
-            color: white;
-            padding: 2rem;
-            border-radius: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .balance-card h3 {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-            color: white;
-        }
-
-        .balance-card p {
-            font-size: 1rem;
-            opacity: 0.95;
-            color: white;
-        }
-
-        /* 통계 카드 */
-        .stat-card {
-            background: var(--bg-card);
-            border: 2px solid var(--border-color);
-            border-radius: 1rem;
-            padding: 1.5rem;
-            text-align: center;
-        }
-
-        .stat-card h4 {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .stat-card p {
-            color: var(--text-secondary);
-            margin: 0;
-            font-weight: 600;
-        }
-
-        /* 버튼 */
-        .btn {
-            padding: 0.85rem 1.75rem;
-            font-size: 1.05rem;
-            font-weight: 700;
-            border-radius: 0.75rem;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border: none;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
-        }
-
-        .btn-success {
-            background: var(--success);
-            border: none;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #059669;
-            transform: translateY(-2px);
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            border: none;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #dc2626;
-            transform: translateY(-2px);
-        }
-
-        .btn-outline-primary {
-            border: 2px solid var(--accent-primary);
-            color: var(--accent-primary);
-            background: transparent;
-        }
-
-        .btn-outline-primary:hover {
-            background: var(--accent-primary);
-            color: white;
-        }
-
-        /* 테이블 */
-        .table {
-            color: var(--text-primary);
-            margin-bottom: 0;
-        }
-
-        .table thead {
-            background: rgba(99, 102, 241, 0.1);
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .table thead th {
-            color: var(--text-heading);
-            font-weight: 700;
-        }
-
-        .table tbody tr {
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .table tbody tr:hover {
-            background: rgba(99, 102, 241, 0.05);
-        }
-
-        .table tbody td {
-            color: var(--text-primary);
-        }
-
-        /* 배지 */
-        .badge {
+        .navbar .nav-link {
+            color: rgba(255,255,255,0.6) !important;
             padding: 0.5rem 1rem;
+            margin: 0 0.2rem;
+            transition: all 0.3s;
+        }
+        .navbar .nav-link:hover { color: #FFFFFF !important; }
+
+        /* 활성화된 메뉴: 초록색 배경 + 흰색 글씨 */
+        .navbar .nav-link.active {
+            background-color: var(--accent-green) !important;
+            color: #FFFFFF !important;
             font-weight: 700;
-            border-radius: 0.5rem;
+            border-radius: 8px;
         }
 
-        .badge-buy {
-            background: var(--success);
-            color: white;
+        .card { border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: #FFFFFF; margin-bottom: 20px; }
+        .card-header { background-color: var(--text-main); color: #FFFFFF; border-bottom: none; font-weight: 600; border-radius: 12px 12px 0 0 !important; padding: 1rem 1.5rem; }
+
+        .balance-text { color: var(--text-main); font-weight: 800; }
+
+        /* 버튼 스타일 */
+        .btn-primary { background-color: var(--accent-dark); border: none; color: #FFFFFF; }
+        .btn-primary:hover { background-color: var(--text-main); }
+
+        .btn-success { background-color: var(--accent-green); border: none; color: #FFFFFF; font-weight: bold; }
+        .btn-success:hover { background-color: #8f9b75; color: #FFFFFF; }
+
+        .badge-buy { background-color: var(--accent-green); color: #FFFFFF; }
+        .badge-sell { background-color: var(--accent-cream); color: var(--text-main); }
+
+        /* 탭 디자인: 매수/매도 모두 초록색(Green)으로 통일 */
+        .nav-pills .nav-link {
+            color: #999;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin: 0 2px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        /* 탭 활성화 시 공통 스타일 */
+        .nav-pills .nav-link.active {
+            background-color: var(--accent-green) !important;
+            color: #FFFFFF !important;
         }
 
-        .badge-sell {
-            background: var(--danger);
-            color: white;
-        }
+        /* Tooltip & Modal */
+        [data-bs-toggle="tooltip"] { cursor: help; text-decoration: underline dotted; text-decoration-color: #ccc; }
+        .tooltip-inner { max-width: none; white-space: nowrap; }
 
-        .badge-filled {
-            background: var(--info);
-            color: white;
-        }
-
-        .badge-pending {
-            background: var(--warning);
-            color: #000;
-        }
-
-        .badge-canceled {
-            background: #64748b;
-            color: white;
-        }
-
-        /* 폼 */
-        .form-control, .form-select {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
-            color: var(--text-primary);
-            font-size: 1rem;
-        }
-
-        .form-control::placeholder {
-            color: var(--text-muted);
-            opacity: 1;
-        }
-
-        .form-control:focus, .form-select:focus {
-            background: var(--bg-secondary);
-            border-color: var(--accent-primary);
-            color: var(--text-primary);
-            box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
-        }
-
-        .form-label {
-            color: var(--text-heading);
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
-        small, .text-muted {
-            color: var(--text-muted) !important;
-            font-weight: 500;
-        }
-
-        /* 알림 */
-        .alert-warning {
-            background: rgba(245, 158, 11, 0.15);
-            border: 2px solid var(--warning);
-            color: var(--text-heading);
-        }
-
-        .alert-warning a {
-            color: var(--warning);
-            font-weight: 700;
-            text-decoration: underline;
-        }
-
-        .text-center.text-muted {
-            color: var(--text-secondary) !important;
-        }
-
-        .text-center.text-danger {
-            color: var(--danger) !important;
-            font-weight: 700;
-        }
-
-        /* 반응형 */
-        @media (max-width: 768px) {
-            .balance-card h3 {
-                font-size: 1.75rem;
-            }
-
-            .top-navbar .nav-link {
-                font-size: 0.9rem;
-                padding: 0.6rem 1rem;
-            }
-        }
+        .modal-content { border-radius: 15px; border: none; overflow: hidden; }
+        .modal-header { background-color: var(--text-main); color: white; border-bottom: none; }
+        .modal-footer { border-top: none; background-color: #f8f9fa; }
+        .btn-modal-cancel { background-color: #e0e0e0; color: var(--text-main); font-weight: 600; border: none; }
+        .btn-modal-confirm { background-color: var(--accent-green); color: white; font-weight: 600; border: none; }
+        .btn-modal-confirm:hover { background-color: #8f9b75; }
+        /* 모달 버튼도 통일성을 위해 danger 대신 confirm 클래스 사용 가능하나, 로직 유지를 위해 스타일만 맞춤 */
+        .btn-modal-confirm-danger { background-color: var(--accent-green); color: white; font-weight: 600; border: none; }
     </style>
 </head>
 <body>
-    <!-- 상단 네비게이션 바 -->
-    <nav class="top-navbar">
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center">
-                <a href="/trading/dashboard" class="brand text-decoration-none">
-                    <i class="fas fa-chart-line"></i> AI 투자 엔진
-                </a>
-                <ul class="nav">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/trading/dashboard">
-                            <i class="fas fa-home"></i> 대시보드
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/trading/history">
-                            <i class="fas fa-history"></i> 거래내역
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/trading/mypage">
-                            <i class="fas fa-user-cog"></i> 마이페이지
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/backtest">
-                            <i class="fas fa-flask"></i> 백테스팅
-                        </a>
-                    </li>
-                </ul>
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="/trading/dashboard"><i class="fas fa-chart-line me-2"></i>AI Engine</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link active" href="/trading/dashboard">대시보드</a></li>
+                <li class="nav-item"><a class="nav-link" href="/trading/history">거래내역</a></li>
+                <li class="nav-item"><a class="nav-link" href="/trading/mypage">마이페이지</a></li>
+                <li class="nav-item"><a class="nav-link" href="/backtest">백테스팅</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100; margin-top: 60px;">
+    <div id="dashToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i id="toastIcon" class="fas fa-info-circle me-2"></i>
+            <strong class="me-auto" id="toastTitle">알림</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="modalTitle">확인</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-4 text-center">
+                <p class="fs-5 mb-0" id="modalMessage">내용</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-modal-cancel px-4" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-modal-confirm px-4" id="btnModalConfirm">확인</button>
             </div>
         </div>
-    </nav>
+    </div>
+</div>
 
-    <div class="container-fluid mt-4">
-        <div class="row">
-            <!-- 왼쪽: 잔고 및 시장 정보 -->
-            <div class="col-lg-6">
-                <!-- 보유 자산 -->
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-wallet"></i> 보유 자산
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <div class="balance-card">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <p class="mb-1">KRW (원화)</p>
-                                            <h3 id="krwBalance">-</h3>
-                                        </div>
-                                        <i class="fas fa-won-sign fa-3x opacity-50"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <div class="balance-card">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <p class="mb-1">ETH (이더리움)</p>
-                                            <h3 id="ethBalance">-</h3>
-                                        </div>
-                                        <i class="fab fa-ethereum fa-3x opacity-50"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-center">
-                            <button class="btn btn-primary" onclick="loadBalance()">
-                                <i class="fas fa-sync-alt"></i> 잔고 새로고침
-                            </button>
-                        </div>
-                    </div>
+<div class="container py-4">
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-wallet me-2"></i>보유 자산</span>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadBalance()"><i class="fas fa-sync-alt"></i></button>
                 </div>
-
-                <!-- 시장 정보 -->
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-chart-area"></i> 시장 정보 (KRW-ETH)
+                <div class="card-body d-flex align-items-center justify-content-around text-center">
+                    <div>
+                        <small class="text-muted d-block mb-1">KRW (원화)</small>
+                        <h2 class="balance-text" id="krwBalance">-</h2>
                     </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <h4 id="currentPrice">-</h4>
-                                    <p>현재가</p>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <h4 id="changeRate">-</h4>
-                                    <p>24시간 변동률</p>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <h4 id="highPrice">-</h4>
-                                    <p>24시간 최고가</p>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <h4 id="lowPrice">-</h4>
-                                    <p>24시간 최저가</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-center mt-3">
-                            <button class="btn btn-primary" onclick="loadMarketInfo()">
-                                <i class="fas fa-sync-alt"></i> 시장 정보 새로고침
-                            </button>
-                        </div>
+                    <div style="width: 1px; height: 50px; background: #e0e0e0;"></div>
+                    <div>
+                        <small class="text-muted d-block mb-1">ETH (이더리움)</small>
+                        <h2 class="balance-text" id="ethBalance">-</h2>
                     </div>
                 </div>
             </div>
-
-            <!-- 오른쪽: 거래 및 주문 내역 -->
-            <div class="col-lg-6">
-                <!-- 빠른 거래 -->
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-exchange-alt"></i> 빠른 거래
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-warning" role="alert">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <strong>주의:</strong> 실제 자금이 이동하는 거래입니다!
-                            안전장치는 <a href="/trading/mypage">마이페이지</a>에서 설정할 수 있습니다.
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h5 class="mb-3"><i class="fas fa-arrow-up text-success"></i> 매수</h5>
-                                        <div class="mb-3">
-                                            <label class="form-label">매수 금액 (KRW)</label>
-                                            <input type="number" class="form-control" id="buyAmount" placeholder="5000" min="5000" step="1000">
-                                            <small class="text-muted">최소: 5,000원</small>
-                                        </div>
-                                        <button class="btn btn-success w-100" onclick="marketBuy()">
-                                            <i class="fas fa-cart-plus"></i> 시장가 매수
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h5 class="mb-3"><i class="fas fa-arrow-down text-danger"></i> 매도</h5>
-                                        <div class="mb-3">
-                                            <label class="form-label">매도 수량 (ETH)</label>
-                                            <input type="number" class="form-control" id="sellVolume" placeholder="0.001" min="0.0001" step="0.0001">
-                                            <small class="text-muted">보유 수량 범위 내</small>
-                                        </div>
-                                        <button class="btn btn-danger w-100" onclick="marketSell()">
-                                            <i class="fas fa-hand-holding-usd"></i> 시장가 매도
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background-color: var(--accent-dark);">
+                    <span><i class="fas fa-coins me-2"></i>현재가 (KRW-ETH)</span>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadMarketInfo()"><i class="fas fa-sync-alt"></i></button>
                 </div>
+                <div class="card-body text-center d-flex flex-column justify-content-center">
+                    <h3 class="fw-bold mb-0" id="currentPrice" style="color: var(--text-main);"
+                        data-bs-toggle="tooltip" data-bs-placement="top" title="현재 거래되고 있는 실시간 가격입니다.">-</h3>
 
-                <!-- 최근 주문 -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-list"></i> 최근 주문 (최근 5건)</span>
-                        <button class="btn btn-sm btn-primary" onclick="loadRecentOrders()">
-                            <i class="fas fa-sync-alt"></i> 새로고침
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>시간</th>
-                                        <th>구분</th>
-                                        <th>금액/수량</th>
-                                        <th>상태</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="recentOrdersTable">
-                                    <tr>
-                                        <td colspan="4" class="text-center text-muted">주문 내역을 불러오는 중...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="text-center mt-3">
-                            <a href="/trading/history" class="btn btn-outline-primary">
-                                <i class="fas fa-history"></i> 전체 거래 내역 보기
-                            </a>
-                        </div>
+                    <span id="changeRate" class="fs-5 fw-bold"
+                          data-bs-toggle="tooltip" data-bs-placement="bottom" title="금일 오전 9시 시가 기준 등락률입니다.">-</span>
+
+                    <div class="d-flex justify-content-between mt-3 px-4 text-muted small">
+                            <span data-bs-toggle="tooltip" title="최근 24시간 내 가장 높은 가격입니다.">
+                                고: <span id="highPrice">-</span>
+                            </span>
+                        <span data-bs-toggle="tooltip" title="최근 24시간 내 가장 낮은 가격입니다.">
+                                저: <span id="lowPrice">-</span>
+                            </span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // 페이지 로드 시 모든 정보 불러오기
-        document.addEventListener('DOMContentLoaded', function() {
-            loadBalance();
-            loadMarketInfo();
-            loadRecentOrders();
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-bolt me-2"></i>빠른 거래</div>
+                <div class="card-body">
+                    <div class="alert py-2 mb-3" style="background-color: var(--accent-cream); color: var(--text-main); border: 1px solid #e0e0e0;">
+                        <small><i class="fas fa-exclamation-triangle me-1"></i> <strong>주의:</strong> 실제 자금이 이동합니다.</small>
+                    </div>
+
+                    <ul class="nav nav-pills mb-3 nav-fill" id="pills-tab" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" id="pills-buy-tab" data-bs-toggle="pill" data-bs-target="#pills-buy" type="button">매수</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="pills-sell-tab" data-bs-toggle="pill" data-bs-target="#pills-sell" type="button">매도</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="pills-tabContent">
+                        <div class="tab-pane fade show active" id="pills-buy" role="tabpanel">
+                            <label class="form-label fw-bold">매수 금액 (KRW)</label>
+                            <div class="input-group mb-3">
+                                <input type="number" class="form-control" id="buyAmount" placeholder="5000" min="5000" step="1000">
+                                <button class="btn btn-success" onclick="marketBuy()">시장가 매수</button>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="pills-sell" role="tabpanel">
+                            <label class="form-label fw-bold">매도 수량 (ETH)</label>
+                            <div class="input-group mb-3">
+                                <input type="number" class="form-control" id="sellVolume" placeholder="0.001" min="0.0001" step="0.0001">
+                                <button class="btn btn-success" onclick="marketSell()">시장가 매도</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-list me-2"></i>최근 주문 (5건)</span>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadRecentOrders()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                            <tr>
+                                <th>시간</th>
+                                <th>구분</th>
+                                <th>금액/수량</th>
+                                <th>상태</th>
+                            </tr>
+                            </thead>
+                            <tbody id="recentOrdersTable">
+                            <tr><td colspan="4" class="text-center text-muted py-4">불러오는 중...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-top text-center">
+                    <a href="/trading/history" class="text-decoration-none fw-bold" style="color: var(--accent-dark);">전체 내역 보기 <i class="fas fa-arrow-right"></i></a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    let modalCallback = null;
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
         });
 
-        // 잔고 조회
-        function loadBalance() {
-            fetch('/api/v1/account/balance/summary')
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Balance data:', data);
+        loadBalance(); loadMarketInfo(); loadRecentOrders();
 
-                    const krwBalance = parseFloat(data.krw_balance || data.krwBalance || 0);
-                    const ethBalance = parseFloat(data.eth_balance || data.ethBalance || 0);
+        document.getElementById('btnModalConfirm').addEventListener('click', function() {
+            if (modalCallback) modalCallback();
+            confirmModal.hide();
+        });
+    });
 
-                    document.getElementById('krwBalance').textContent =
-                        krwBalance.toLocaleString('ko-KR', {maximumFractionDigits: 2}) + ' KRW';
-                    document.getElementById('ethBalance').textContent =
-                        ethBalance.toFixed(8) + ' ETH';
-                })
-                .catch(error => {
-                    console.error('잔고 조회 실패:', error);
-                    document.getElementById('krwBalance').textContent = '조회 실패';
-                    document.getElementById('ethBalance').textContent = '조회 실패';
-                });
+    function showConfirmModal(title, msg, callback, type = 'success') {
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalMessage').innerText = msg;
+        modalCallback = callback;
+
+        const btn = document.getElementById('btnModalConfirm');
+        // 매수/매도 모두 녹색 버튼 사용
+        if (type === 'danger') {
+            btn.className = 'btn btn-modal-confirm-danger px-4'; // CSS에서 녹색으로 덮어씌움
+        } else {
+            btn.className = 'btn btn-modal-confirm px-4';
         }
 
-        // 시장 정보 조회
-        function loadMarketInfo() {
-            fetch('/api/v1/market/ticker/KRW-ETH')
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Market data:', data);
+        confirmModal.show();
+    }
 
-                    document.getElementById('currentPrice').textContent =
-                        parseFloat(data.trade_price || 0).toLocaleString('ko-KR') + ' KRW';
-
-                    const changeRate = ((data.signed_change_rate || 0) * 100).toFixed(2);
-                    const changeRateElement = document.getElementById('changeRate');
-                    changeRateElement.textContent = changeRate + '%';
-                    changeRateElement.style.color = data.change === 'RISE' ? 'var(--success)' : 'var(--danger)';
-
-                    document.getElementById('highPrice').textContent =
-                        parseFloat(data.high_price || 0).toLocaleString('ko-KR') + ' KRW';
-                    document.getElementById('lowPrice').textContent =
-                        parseFloat(data.low_price || 0).toLocaleString('ko-KR') + ' KRW';
-                })
-                .catch(error => {
-                    console.error('시장 정보 조회 실패:', error);
-                    document.getElementById('currentPrice').textContent = '조회 실패';
-                });
+    function showToast(msg, isSuccess = true) {
+        const t = document.getElementById('dashToast');
+        document.getElementById('toastMessage').textContent = msg;
+        const icon = document.getElementById('toastIcon');
+        if (isSuccess) {
+            icon.className = "fas fa-check-circle me-2 text-success";
+            document.getElementById('toastTitle').innerText = "성공";
+        } else {
+            icon.className = "fas fa-exclamation-circle me-2 text-danger";
+            document.getElementById('toastTitle').innerText = "오류";
         }
+        new bootstrap.Toast(t, { delay: 3000 }).show();
+    }
 
-        // 최근 주문 조회
-        function loadRecentOrders() {
-            fetch('/api/v1/trading/orders/local')
-                .then(response => response.json())
-                .then(orders => {
-                    const tbody = document.getElementById('recentOrdersTable');
-                    tbody.innerHTML = '';
-
-                    if (orders.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">주문 내역이 없습니다.</td></tr>';
-                        return;
-                    }
-
-                    // 최근 5건만 표시
-                    orders.slice(-5).reverse().forEach(order => {
-                        const row = document.createElement('tr');
-
-                        const createdAt = new Date(order.createdAt);
-                        const timeStr = createdAt.toLocaleString('ko-KR', {
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-
-                        const sideBadge = order.side === 'BUY' ?
-                            '<span class="badge badge-buy">매수</span>' :
-                            '<span class="badge badge-sell">매도</span>';
-
-                        let statusBadge = '';
-                        switch(order.status) {
-                            case 'FILLED':
-                                statusBadge = '<span class="badge badge-filled">체결</span>';
-                                break;
-                            case 'PENDING':
-                                statusBadge = '<span class="badge badge-pending">대기</span>';
-                                break;
-                            case 'CANCELED':
-                                statusBadge = '<span class="badge badge-canceled">취소</span>';
-                                break;
-                            default:
-                                statusBadge = '<span class="badge bg-secondary">' + order.status + '</span>';
-                        }
-
-                        const amount = order.amount ? parseFloat(order.amount).toFixed(4) : '-';
-
-                        row.innerHTML = `
-                            <td>${timeStr}</td>
-                            <td>${sideBadge}</td>
-                            <td>${amount}</td>
-                            <td>${statusBadge}</td>
-                        `;
-                        tbody.appendChild(row);
-                    });
-                })
-                .catch(error => {
-                    console.error('주문 조회 실패:', error);
-                    document.getElementById('recentOrdersTable').innerHTML =
-                        '<tr><td colspan="4" class="text-center text-danger">주문 내역 조회에 실패했습니다.</td></tr>';
-                });
-        }
-
-        // 시장가 매수
-        function marketBuy() {
-            const amount = document.getElementById('buyAmount').value;
-
-            if (!amount || amount <= 0) {
-                alert('매수 금액을 입력해주세요.');
-                return;
-            }
-
-            if (!confirm(`${parseFloat(amount).toLocaleString('ko-KR')}원으로 ETH를 시장가 매수하시겠습니까?`)) {
-                return;
-            }
-
-            fetch('/api/v1/trading/market-buy', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    market: 'KRW-ETH',
-                    amount: amount
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'error') {
-                    alert('매수 실패: ' + data.message);
-                } else {
-                    alert('매수 주문이 성공적으로 실행되었습니다!');
-                    document.getElementById('buyAmount').value = '';
-                    loadBalance();
-                    loadRecentOrders();
-                }
-            })
-            .catch(error => {
-                console.error('매수 실패:', error);
-                alert('매수 주문에 실패했습니다.');
+    function loadBalance() {
+        fetch('/api/v1/account/balance/summary').then(r=>r.json()).then(d => {
+            const krw = parseFloat(d.krw_balance||d.krwBalance||0), eth = parseFloat(d.eth_balance||d.ethBalance||0);
+            document.getElementById('krwBalance').textContent = krw.toLocaleString('ko-KR',{maximumFractionDigits:0}) + ' KRW';
+            document.getElementById('ethBalance').textContent = eth.toFixed(6) + ' ETH';
+        });
+    }
+    function loadMarketInfo() {
+        fetch('/api/v1/market/ticker/KRW-ETH').then(r=>r.json()).then(d => {
+            document.getElementById('currentPrice').textContent = parseFloat(d.trade_price||0).toLocaleString('ko-KR') + ' KRW';
+            const rate = ((d.signed_change_rate||0)*100).toFixed(2);
+            const el = document.getElementById('changeRate');
+            el.textContent = (rate > 0 ? '+' : '') + rate + '%';
+            el.style.color = d.change==='RISE' ? '#c0392b' : (d.change==='FALL' ? '#2980b9' : '#333');
+            document.getElementById('highPrice').textContent = parseFloat(d.high_price).toLocaleString('ko-KR');
+            document.getElementById('lowPrice').textContent = parseFloat(d.low_price).toLocaleString('ko-KR');
+        });
+    }
+    function loadRecentOrders() {
+        fetch('/api/v1/trading/orders/local').then(r=>r.json()).then(orders => {
+            const tbody = document.getElementById('recentOrdersTable'); tbody.innerHTML = '';
+            if(!orders.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3">내역 없음</td></tr>'; return; }
+            orders.slice(-5).reverse().forEach(o => {
+                const row = document.createElement('tr');
+                const sideBadge = o.side==='BUY' ? '<span class="badge badge-buy">매수</span>' : '<span class="badge badge-sell">매도</span>';
+                const statusClass = o.status==='FILLED' ? 'text-success' : 'text-muted';
+                const amount = o.amount ? parseFloat(o.amount).toFixed(4) : '-';
+                row.innerHTML = `<td><small>${new Date(o.createdAt).toLocaleTimeString()}</small></td><td>${sideBadge}</td><td>${amount}</td><td class="${statusClass} fw-bold"><small>${o.status}</small></td>`;
+                tbody.appendChild(row);
             });
-        }
+        });
+    }
 
-        // 시장가 매도
-        function marketSell() {
-            const volume = document.getElementById('sellVolume').value;
+    function marketBuy() {
+        const amt = document.getElementById('buyAmount').value;
+        if(!amt) return showToast('매수할 금액을 입력해주세요.', false);
 
-            if (!volume || volume <= 0) {
-                alert('매도 수량을 입력해주세요.');
-                return;
-            }
-
-            if (!confirm(`${volume} ETH를 시장가 매도하시겠습니까?`)) {
-                return;
-            }
-
-            fetch('/api/v1/trading/market-sell', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    market: 'KRW-ETH',
-                    volume: volume
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'error') {
-                    alert('매도 실패: ' + data.message);
-                } else {
-                    alert('매도 주문이 성공적으로 실행되었습니다!');
-                    document.getElementById('sellVolume').value = '';
-                    loadBalance();
-                    loadRecentOrders();
-                }
-            })
-            .catch(error => {
-                console.error('매도 실패:', error);
-                alert('매도 주문에 실패했습니다.');
+        showConfirmModal('매수 확인', '정말 ' + parseInt(amt).toLocaleString() + ' KRW 매수를 진행하시겠습니까?', function() {
+            fetch('/api/v1/trading/market-buy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:'KRW-ETH',amount:amt})})
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='error') showToast(d.message, false);
+                else { showToast('매수 주문이 정상적으로 체결되었습니다.', true); loadBalance(); loadRecentOrders(); document.getElementById('buyAmount').value=''; }
             });
-        }
-    </script>
+        }, 'success');
+    }
+
+    function marketSell() {
+        const vol = document.getElementById('sellVolume').value;
+        if(!vol) return showToast('매도할 수량을 입력해주세요.', false);
+
+        // type='danger'를 넘겨도 CSS에서 녹색으로 처리됨
+        showConfirmModal('매도 확인', '정말 ' + vol + ' ETH 매도를 진행하시겠습니까?', function() {
+            fetch('/api/v1/trading/market-sell', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:'KRW-ETH',volume:vol})})
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='error') showToast(d.message, false);
+                else { showToast('매도 주문이 정상적으로 체결되었습니다.', true); loadBalance(); loadRecentOrders(); document.getElementById('sellVolume').value=''; }
+            });
+        }, 'danger');
+    }
+</script>
 </body>
 </html>

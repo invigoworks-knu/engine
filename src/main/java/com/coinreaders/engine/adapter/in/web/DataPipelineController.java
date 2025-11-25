@@ -86,7 +86,7 @@ public class DataPipelineController {
             }
 
             dataPipelineService.loadAllHistoricalOhlcv("KRW-ETH", "2017-11-09");
-            return ResponseEntity.ok("All historical data initialization completed successfully.");
+            return ResponseEntity.ok("모든 AI 모델 예측값 데이터를 적재했습니다.");
         } catch (Exception e) {
             log.error("Failed to load all historical data", e);
             return ResponseEntity.internalServerError().body("Failed to load data: " + e.getMessage());
