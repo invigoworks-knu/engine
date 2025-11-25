@@ -38,7 +38,7 @@ public class WebViewController {
     @GetMapping("/backtest")
     public String backtestForm(Model model) {
         model.addAttribute("folds", FoldConfig.getAllFolds());
-        return "index";
+        return "backtesting";
     }
 
     /**
