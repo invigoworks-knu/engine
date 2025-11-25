@@ -2,6 +2,9 @@ package com.coinreaders.engine.domain.repository;
 
 import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -29,6 +32,16 @@ public interface HistoricalAiPredictionRepository extends JpaRepository<Historic
      * @param modelName "GRU", "LSTM", "XGBoost", etc.
      */
     void deleteByMarketAndFoldNumberAndModelName(String market, Integer foldNumber, String modelName);
+
+    /**
+     * 배치 삭제 최적화: Bulk DELETE를 사용하여 한 번에 삭제 (성능 개선)
+     * @param market "KRW-ETH"
+     * @param foldNumber 1~8
+     * @param modelName "GRU", "LSTM", "XGBoost", etc.
+     */
+    @Modifying
+    @Query("DELETE FROM HistoricalAiPrediction p WHERE p.market = :market AND p.foldNumber = :foldNumber AND p.modelName = :modelName")
+    void deleteByMarketAndFoldNumberAndModelNameBatch(@Param("market") String market, @Param("foldNumber") Integer foldNumber, @Param("modelName") String modelName);
 
     /**
      * 특정 시장의 특정 Fold, 특정 모델 데이터를 조회합니다.

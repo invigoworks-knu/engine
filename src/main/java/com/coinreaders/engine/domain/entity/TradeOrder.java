@@ -13,7 +13,12 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "trade_order")
+@Table(name = "trade_order",
+    indexes = {
+        @Index(name = "idx_trade_order_account_created", columnList = "account_id, created_at"),
+        @Index(name = "idx_trade_order_uuid", columnList = "upbit_order_uuid")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TradeOrder extends BaseTimeEntity {

@@ -376,12 +376,24 @@ public class BacktestService {
             kellyFraction.multiply(new BigDecimal("100")),
             positionSizePercent);
 
+        // ✅ 성능 최적화: Fold 기간 전체 OHLCV 데이터를 한 번에 조회 (N+1 쿼리 문제 해결)
+        List<HistoricalOhlcv> allOhlcvData = ohlcvRepository.findByMarketAndDateRange(
+            MARKET, foldConfig.getStartDate(), foldConfig.getEndDate()
+        );
+        log.info("OHLCV 데이터 일괄 조회 완료: {}건", allOhlcvData.size());
+
+        // ✅ Map으로 변환하여 O(1) 조회 가능하도록 최적화
+        java.util.Map<LocalDate, HistoricalOhlcv> ohlcvMap = allOhlcvData.stream()
+            .collect(java.util.stream.Collectors.toMap(
+                ohlcv -> ohlcv.getCandleDateTimeKst().toLocalDate(),
+                ohlcv -> ohlcv
+            ));
+
         for (CsvPredictionData prediction : predictions) {
             LocalDate tradeDate = prediction.getDate();
 
-            // 업비트 OHLCV 데이터 조회
-            HistoricalOhlcv ohlcv = ohlcvRepository.findByMarketAndDate(MARKET, tradeDate)
-                .orElse(null);
+            // ✅ Map에서 O(1) 조회 (기존 N번 DB 쿼리 → 메모리 조회)
+            HistoricalOhlcv ohlcv = ohlcvMap.get(tradeDate);
 
             if (ohlcv == null) {
                 log.warn("거래 불가: {} - OHLCV 데이터 없음", tradeDate);

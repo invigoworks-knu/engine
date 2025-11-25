@@ -2,484 +2,204 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>거래 내역 - AI 투자 엔진</title>
+    <title>거래 내역</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-card: #1e293b;
-            --border-color: #475569;
-            --text-primary: #e2e8f0;
-            --text-secondary: #cbd5e1;
-            --text-heading: #f8fafc;
-            --accent-primary: #6366f1;
-            --accent-secondary: #8b5cf6;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --info: #3b82f6;
-        }
+        :root { --bg-main: #FFFFFF; --text-main: #313647; --nav-bg: #313647; --accent-dark: #435663; --accent-green: #A3B087; --accent-cream: #FFF8D4; }
+        body { background-color: var(--bg-main); color: var(--text-main); font-family: 'Segoe UI', sans-serif; }
+        /* Navbar 수정됨 */
+        .navbar { background-color: var(--nav-bg) !important; padding: 1rem 0; }
+        .navbar-brand { color: #FFFFFF !important; font-weight: 800; }
+        .navbar .nav-link { color: rgba(255,255,255,0.6) !important; padding: 0.5rem 1rem; margin: 0 0.2rem; transition: all 0.3s; }
+        .navbar .nav-link:hover { color: #FFFFFF !important; }
+        .navbar .nav-link.active { background-color: var(--accent-green); color: #FFFFFF !important; font-weight: 700; border-radius: 8px; }
 
-        body {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 1rem;
-            line-height: 1.7;
-        }
+        .card { border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: #FFFFFF; margin-bottom: 20px; }
+        .card-header { background-color: var(--accent-dark); color: #FFFFFF; border-radius: 12px 12px 0 0 !important; font-weight: 600; padding: 1rem 1.5rem; }
 
-        h1, h2, h3, h4, h5, h6 {
-            color: var(--text-heading);
-            font-weight: 700;
-        }
+        .table thead th { background-color: #f8f9fa; border-bottom: 2px solid var(--accent-dark); }
+        .btn-primary { background-color: var(--text-main); border: none; }
 
-        .top-navbar {
-            background: var(--bg-secondary);
-            border-bottom: 2px solid var(--border-color);
-            padding: 1.25rem 0;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-        }
-
-        .top-navbar .brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .top-navbar .nav-link {
-            color: var(--text-secondary);
-            font-weight: 600;
-            padding: 0.75rem 1.25rem;
-            margin: 0 0.25rem;
-            border-radius: 0.5rem;
-            transition: all 0.3s;
-            font-size: 1rem;
-        }
-
-        .top-navbar .nav-link:hover {
-            color: var(--text-heading);
-            background: rgba(99, 102, 241, 0.15);
-        }
-
-        .top-navbar .nav-link.active {
-            color: var(--text-heading);
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-        }
-
-        .card {
-            background: var(--bg-card);
-            border: 2px solid var(--border-color);
-            border-radius: 1rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-        }
-
-        .card-header {
-            background: rgba(99, 102, 241, 0.1);
-            border-bottom: 2px solid var(--border-color);
-            padding: 1.5rem;
-            font-size: 1.35rem;
-            font-weight: 700;
-            color: var(--text-heading);
-        }
-
-        .card-body {
-            padding: 1.75rem;
-        }
-
-        .stats-card {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border: none;
-            color: white;
-            padding: 2rem;
-            border-radius: 1rem;
-            text-align: center;
-        }
-
-        .stats-card h3 {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .table {
-            color: var(--text-primary);
-            margin-bottom: 0;
-        }
-
-        .table thead {
-            background: rgba(99, 102, 241, 0.1);
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .table tbody tr {
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .table tbody tr:hover {
-            background: rgba(99, 102, 241, 0.05);
-        }
-
-        .badge {
-            padding: 0.5rem 1rem;
-            font-weight: 600;
-            border-radius: 0.5rem;
-        }
-
-        .badge-buy {
-            background: var(--success);
-        }
-
-        .badge-sell {
-            background: var(--danger);
-        }
-
-        .badge-filled {
-            background: var(--info);
-        }
-
-        .badge-pending {
-            background: var(--warning);
-            color: #000;
-        }
-
-        .badge-canceled {
-            background: var(--text-secondary);
-        }
-
-        .form-control, .form-select {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
-            color: var(--text-primary);
-            font-size: 1rem;
-            padding: 0.75rem;
-        }
-
-        .form-control:focus, .form-select:focus {
-            background: var(--bg-secondary);
-            border-color: var(--accent-primary);
-            color: var(--text-primary);
-            box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
-        }
-
-        .form-label {
-            color: var(--text-primary);
-            font-weight: 700;
-            font-size: 1rem;
-        }
-
-        .btn {
-            padding: 0.85rem 1.75rem;
-            font-size: 1.05rem;
-            font-weight: 700;
-            border-radius: 0.75rem;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border: none;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
-        }
-
-        .btn-info {
-            background: var(--info);
-            border: none;
-            color: white;
-        }
-
-        .btn-outline-primary {
-            border: 2px solid var(--accent-primary);
-            color: var(--accent-primary);
-            background: transparent;
-        }
-
-        .btn-outline-primary:hover {
-            background: var(--accent-primary);
-            color: white;
-        }
+        /* Modal Styling */
+        .modal-content { border-radius: 15px; border: none; overflow: hidden; }
+        .modal-header { background-color: var(--text-main); color: white; border-bottom: none; }
+        .modal-footer { border-top: none; background-color: #f8f9fa; }
+        .btn-modal-cancel { background-color: #e0e0e0; color: var(--text-main); font-weight: 600; border: none; }
+        .btn-modal-confirm { background-color: var(--accent-green); color: white; font-weight: 600; border: none; }
     </style>
 </head>
 <body>
-    <!-- 상단 네비게이션 바 -->
-    <nav class="top-navbar">
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="brand">
-                    <i class="fas fa-chart-line"></i> AI 투자 엔진
-                </div>
-                <ul class="nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/trading/dashboard">
-                            <i class="fas fa-home"></i> 대시보드
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/trading/mypage">
-                            <i class="fas fa-user-cog"></i> 마이페이지
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/trading/history">
-                            <i class="fas fa-history"></i> 거래내역
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/backtest">
-                            <i class="fas fa-flask"></i> 백테스팅
-                        </a>
-                    </li>
-                </ul>
-            </div>
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="/trading/dashboard"><i class="fas fa-chart-line me-2"></i>AI Engine</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="/trading/dashboard">대시보드</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/trading/history">거래내역</a></li>
+                <li class="nav-item"><a class="nav-link" href="/trading/mypage">마이페이지</a></li>
+                <li class="nav-item"><a class="nav-link" href="/backtest">백테스팅</a></li>
+            </ul>
         </div>
-    </nav>
+    </div>
+</nav>
 
-    <div class="container-fluid mt-4">
-        <!-- 통계 요약 -->
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <h3 id="totalOrders">-</h3>
-                    <p>총 주문 수</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <h3 id="totalBuy">-</h3>
-                    <p>매수 주문</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <h3 id="totalSell">-</h3>
-                    <p>매도 주문</p>
-                </div>
-            </div>
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100; margin-top: 60px;">
+    <div id="histToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i id="toastIcon" class="fas fa-info-circle me-2"></i>
+            <strong class="me-auto" id="toastTitle">알림</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
         </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
 
-        <!-- 필터 및 액션 -->
-        <div class="card">
-            <div class="card-header">
-                <i class="fas fa-filter"></i> 필터 및 옵션
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="modalTitle">확인</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label class="form-label">주문 타입</label>
-                        <select class="form-select" id="sideFilter" onchange="filterOrders()">
-                            <option value="ALL">전체</option>
-                            <option value="BUY">매수만</option>
-                            <option value="SELL">매도만</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">주문 상태</label>
-                        <select class="form-select" id="statusFilter" onchange="filterOrders()">
-                            <option value="ALL">전체</option>
-                            <option value="FILLED">체결</option>
-                            <option value="PENDING">대기</option>
-                            <option value="CANCELED">취소</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6 d-flex gap-2">
-                        <button class="btn btn-primary" onclick="loadOrders()">
-                            <i class="fas fa-sync-alt"></i> 새로고침
-                        </button>
-                        <button class="btn btn-info" onclick="syncAllOrders()">
-                            <i class="fas fa-cloud-download-alt"></i> 업비트 동기화
-                        </button>
-                    </div>
-                </div>
+            <div class="modal-body py-4 text-center">
+                <p class="fs-5 mb-0" id="modalMessage">내용</p>
             </div>
-        </div>
-
-        <!-- 주문 목록 -->
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-list"></i> 주문 목록</span>
-                <span class="text-muted" id="orderCount">총 0건</span>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>주문 시간</th>
-                                <th>구분</th>
-                                <th>마켓</th>
-                                <th>주문 타입</th>
-                                <th>가격</th>
-                                <th>수량/금액</th>
-                                <th>상태</th>
-                                <th>UUID</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ordersTableBody">
-                            <tr>
-                                <td colspan="9" class="text-center text-muted">주문 내역을 불러오는 중...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-modal-cancel px-4" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-modal-confirm px-4" id="btnModalConfirm">확인</button>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        let allOrders = [];
+<div class="container py-4">
+    <div class="row mb-4 text-center">
+        <div class="col-4"><div class="card py-3"><h3 id="totalOrders">-</h3><small class="text-muted">총 주문</small></div></div>
+        <div class="col-4"><div class="card py-3"><h3 id="totalBuy" class="text-success">-</h3><small class="text-muted">매수</small></div></div>
+        <div class="col-4"><div class="card py-3"><h3 id="totalSell" class="text-danger">-</h3><small class="text-muted">매도</small></div></div>
+    </div>
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadOrders();
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-list me-2"></i>거래 기록</span>
+            <span id="orderCount" class="badge bg-light text-dark">0건</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 mb-4">
+                <div class="col-md-3">
+                    <select class="form-select" id="sideFilter" onchange="filterOrders()">
+                        <option value="ALL">전체 타입</option>
+                        <option value="BUY">매수</option>
+                        <option value="SELL">매도</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="statusFilter" onchange="filterOrders()">
+                        <option value="ALL">전체 상태</option>
+                        <option value="FILLED">체결</option>
+                        <option value="PENDING">대기</option>
+                        <option value="CANCELED">취소</option>
+                    </select>
+                </div>
+                <div class="col-md-6 text-end">
+                    <button class="btn btn-primary" onclick="loadOrders()"><i class="fas fa-sync me-1"></i> 새로고침</button>
+                    <button class="btn btn-outline-dark ms-2" onclick="syncAllOrders()"><i class="fas fa-cloud-download-alt me-1"></i> 동기화</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                    <tr>
+                        <th>시간</th>
+                        <th>구분</th>
+                        <th>마켓</th>
+                        <th>가격</th>
+                        <th>수량</th>
+                        <th>상태</th>
+                        <th>UUID</th>
+                    </tr>
+                    </thead>
+                    <tbody id="ordersTableBody">
+                    <tr><td colspan="7" class="text-center py-4">로딩 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let allOrders=[];
+    let modalCallback = null;
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadOrders();
+        document.getElementById('btnModalConfirm').addEventListener('click', function() {
+            if (modalCallback) modalCallback();
+            confirmModal.hide();
         });
+    });
 
-        function loadOrders() {
-            fetch('/api/v1/trading/orders/local')
-                .then(response => response.json())
-                .then(orders => {
-                    allOrders = orders;
-                    displayOrders(orders);
-                    updateStats(orders);
-                })
-                .catch(error => {
-                    console.error('주문 조회 실패:', error);
-                    document.getElementById('ordersTableBody').innerHTML =
-                        '<tr><td colspan="9" class="text-center text-danger">주문 내역 조회에 실패했습니다.</td></tr>';
-                });
+    function showConfirmModal(title, msg, callback) {
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalMessage').innerText = msg;
+        modalCallback = callback;
+        confirmModal.show();
+    }
+
+    function showToast(msg, isSuccess = true) {
+        const t = document.getElementById('histToast');
+        document.getElementById('toastMessage').textContent = msg;
+        const icon = document.getElementById('toastIcon');
+        if (isSuccess) {
+            icon.className = "fas fa-check-circle me-2 text-success";
+            document.getElementById('toastTitle').innerText = "완료";
+        } else {
+            icon.className = "fas fa-exclamation-circle me-2 text-danger";
+            document.getElementById('toastTitle').innerText = "알림";
         }
+        new bootstrap.Toast(t, { delay: 3000 }).show();
+    }
 
-        function displayOrders(orders) {
-            const tbody = document.getElementById('ordersTableBody');
-            tbody.innerHTML = '';
+    function loadOrders() { fetch('/api/v1/trading/orders/local').then(r=>r.json()).then(d=>{ allOrders=d; displayOrders(d); updateStats(d); }); }
+    function displayOrders(d) {
+        const b=document.getElementById('ordersTableBody'); b.innerHTML='';
+        if(!d.length){ b.innerHTML='<tr><td colspan="7" class="text-center py-4">내역 없음</td></tr>'; return; }
+        d.sort((x,y)=>new Date(y.createdAt)-new Date(x.createdAt));
+        d.forEach(o=>{
+            const r=document.createElement('tr');
+            const sb=o.side==='BUY'?'<span class="badge bg-success">매수</span>':'<span class="badge bg-danger">매도</span>';
+            r.innerHTML=`<td>${new Date(o.createdAt).toLocaleString()}</td><td>${sb}</td><td>${o.market}</td><td>${o.price?parseFloat(o.price).toLocaleString():'-'}</td><td>${o.amount?parseFloat(o.amount).toFixed(6):'-'}</td><td><span class="badge bg-secondary">${o.status}</span></td><td><small class="text-muted">${o.upbitOrderUuid?o.upbitOrderUuid.substring(0,8)+'...':'-'}</small></td>`;
+            b.appendChild(r);
+        });
+        document.getElementById('orderCount').textContent=`총 ${d.length}건`;
+    }
+    function updateStats(d) {
+        document.getElementById('totalOrders').textContent=d.length;
+        document.getElementById('totalBuy').textContent=d.filter(o=>o.side==='BUY').length;
+        document.getElementById('totalSell').textContent=d.filter(o=>o.side==='SELL').length;
+    }
+    function filterOrders() {
+        const s=document.getElementById('sideFilter').value, st=document.getElementById('statusFilter').value;
+        displayOrders(allOrders.filter(o=>(s==='ALL'||o.side===s)&&(st==='ALL'||o.status===st)));
+    }
 
-            if (orders.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">주문 내역이 없습니다.</td></tr>';
-                return;
-            }
-
-            orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-            orders.forEach(order => {
-                const row = document.createElement('tr');
-
-                const createdAt = new Date(order.createdAt);
-                const timeStr = createdAt.toLocaleString('ko-KR');
-
-                const sideBadge = order.side === 'BUY' ?
-                    '<span class="badge badge-buy">매수</span>' :
-                    '<span class="badge badge-sell">매도</span>';
-
-                let statusBadge = '';
-                switch(order.status) {
-                    case 'FILLED':
-                        statusBadge = '<span class="badge badge-filled">체결</span>';
-                        break;
-                    case 'PENDING':
-                        statusBadge = '<span class="badge badge-pending">대기</span>';
-                        break;
-                    case 'CANCELED':
-                        statusBadge = '<span class="badge badge-canceled">취소</span>';
-                        break;
-                    default:
-                        statusBadge = '<span class="badge bg-secondary">' + order.status + '</span>';
-                }
-
-                const price = order.price ? parseFloat(order.price).toLocaleString('ko-KR') + ' KRW' : '-';
-                const amount = order.amount ? parseFloat(order.amount).toFixed(8) : '-';
-                const uuid = order.upbitOrderUuid ?
-                    '<small class="text-muted">' + order.upbitOrderUuid.substring(0, 12) + '...</small>' : '-';
-
-                row.innerHTML = `
-                    <td>${order.id}</td>
-                    <td>${timeStr}</td>
-                    <td>${sideBadge}</td>
-                    <td>${order.market}</td>
-                    <td><span class="badge" style="background: var(--text-secondary);">${order.orderType}</span></td>
-                    <td>${price}</td>
-                    <td>${amount}</td>
-                    <td>${statusBadge}</td>
-                    <td>${uuid}</td>
-                `;
-                tbody.appendChild(row);
-            });
-
-            document.getElementById('orderCount').textContent = `총 ${orders.length}건`;
-        }
-
-        function updateStats(orders) {
-            const buyOrders = orders.filter(o => o.side === 'BUY').length;
-            const sellOrders = orders.filter(o => o.side === 'SELL').length;
-
-            document.getElementById('totalOrders').textContent = orders.length;
-            document.getElementById('totalBuy').textContent = buyOrders;
-            document.getElementById('totalSell').textContent = sellOrders;
-        }
-
-        function filterOrders() {
-            const sideFilter = document.getElementById('sideFilter').value;
-            const statusFilter = document.getElementById('statusFilter').value;
-
-            let filtered = allOrders;
-
-            if (sideFilter !== 'ALL') {
-                filtered = filtered.filter(o => o.side === sideFilter);
-            }
-
-            if (statusFilter !== 'ALL') {
-                filtered = filtered.filter(o => o.status === statusFilter);
-            }
-
-            displayOrders(filtered);
-        }
-
-        function syncAllOrders() {
-            if (!confirm('업비트 API에서 대기 중인 주문의 최신 상태를 가져와 동기화하시겠습니까?')) {
-                return;
-            }
-
-            const btn = event.target;
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 동기화 중...';
-
-            fetch('/api/v1/trading/orders/sync-all', {
-                method: 'POST'
+    function syncAllOrders() {
+        showConfirmModal('동기화 확인', '업비트 주문 상태를 동기화하시겠습니까?', function() {
+            fetch('/api/v1/trading/orders/sync-all',{method:'POST'})
+            .then(r=>r.json())
+            .then(d=>{
+                if(d.status === 'error') showToast(d.message, false);
+                else { showToast(`동기화 완료: ${d.synced_count}건`, true); loadOrders(); }
             })
-            .then(response => response.json())
-            .then(data => {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-
-                if (data.status === 'error') {
-                    alert('동기화 실패: ' + data.message);
-                } else {
-                    alert(`동기화 완료: ${data.synced_count}건의 주문이 업데이트되었습니다.`);
-                    loadOrders();
-                }
-            })
-            .catch(error => {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-                console.error('동기화 실패:', error);
-                alert('동기화에 실패했습니다.');
-            });
-        }
-    </script>
+            .catch(e => showToast('동기화 중 오류 발생', false));
+        });
+    }
+</script>
 </body>
 </html>
