@@ -338,6 +338,60 @@ public class DataPipelineController {
     }
 
     /**
+     * 1분봉 데이터 상세 분석 API (디버깅용)
+     */
+    @GetMapping("/minute-candles/debug")
+    public ResponseEntity<?> debugMinuteCandleData() {
+        try {
+            var oldest = minuteOhlcvRepository.findFirstByMarketOrderByCandleDateTimeKstAsc("KRW-ETH").orElse(null);
+            var latest = minuteOhlcvRepository.findFirstByMarketOrderByCandleDateTimeKstDesc("KRW-ETH").orElse(null);
+            long total = minuteOhlcvRepository.count();
+
+            return ResponseEntity.ok(java.util.Map.of(
+                "totalCount", total,
+                "oldestTime", oldest != null ? oldest.getCandleDateTimeKst().toString() : "N/A",
+                "latestTime", latest != null ? latest.getCandleDateTimeKst().toString() : "N/A",
+                "oldestData", oldest != null ? java.util.Map.of(
+                    "datetime", oldest.getCandleDateTimeKst(),
+                    "open", oldest.getOpeningPrice(),
+                    "close", oldest.getTradePrice()
+                ) : "N/A",
+                "latestData", latest != null ? java.util.Map.of(
+                    "datetime", latest.getCandleDateTimeKst(),
+                    "open", latest.getOpeningPrice(),
+                    "close", latest.getTradePrice()
+                ) : "N/A"
+            ));
+        } catch (Exception e) {
+            log.error("Failed to debug minute candle data", e);
+            return ResponseEntity.internalServerError().body("Failed to debug: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 1분봉 데이터 전체 삭제 API (초기화용 - 주의!)
+     */
+    @PostMapping("/minute-candles/clear")
+    public ResponseEntity<String> clearMinuteCandleData() {
+        try {
+            long beforeCount = minuteOhlcvRepository.count();
+            log.warn("=== 1분봉 데이터 전체 삭제 시작: {}건 ===", beforeCount);
+
+            minuteOhlcvRepository.deleteAll();
+
+            long afterCount = minuteOhlcvRepository.count();
+            log.info("=== 1분봉 데이터 삭제 완료: {}건 → {}건 ===", beforeCount, afterCount);
+
+            return ResponseEntity.ok(
+                String.format("1분봉 데이터 삭제 완료. (삭제 전: %d건, 삭제 후: %d건)", beforeCount, afterCount)
+            );
+        } catch (Exception e) {
+            log.error("Failed to clear minute candle data", e);
+            return ResponseEntity.internalServerError().body("Failed to clear data: " + e.getMessage());
+        }
+    }
+
+    /**
      * 데이터 적재 상태 DTO
      */
     public record DataStatus(
