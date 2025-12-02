@@ -2,9 +2,11 @@ package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.DataPipelineService;
 import com.coinreaders.engine.application.AiPredictionDataService;
+import com.coinreaders.engine.application.MinuteOhlcvDataService;
 import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
 import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
 import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
+import com.coinreaders.engine.domain.repository.HistoricalMinuteOhlcvRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -24,8 +26,10 @@ public class DataPipelineController {
 
     private final DataPipelineService dataPipelineService;
     private final AiPredictionDataService aiPredictionDataService;
+    private final MinuteOhlcvDataService minuteOhlcvDataService;
     private final HistoricalOhlcvRepository ohlcvRepository;
     private final HistoricalAiPredictionRepository aiPredictionRepository;
+    private final HistoricalMinuteOhlcvRepository minuteOhlcvRepository;
 
     /**
      * 데이터 적재 상태 확인 API
@@ -278,6 +282,58 @@ public class DataPipelineController {
         } catch (Exception e) {
             log.error("데이터 조회 실패: modelName={}, foldNumber={}", modelName, foldNumber, e);
             return ResponseEntity.internalServerError().body("Failed to get predictions: " + e.getMessage());
+        }
+    }
+
+    /**
+     * (신규) 1분봉 데이터 적재 - Fold 1~7 전체 기간
+     * - 백테스팅용 1분봉 데이터 (2022-12-07 ~ 2025-10-21)
+     * - 약 100만 개 데이터 (약 100MB)
+     * - 소요 시간: 약 15~20분
+     */
+    @PostMapping("/init-minute-candles")
+    public ResponseEntity<String> initializeMinuteCandles(
+        @RequestParam(required = false, defaultValue = "2022-12-07") String startDate,
+        @RequestParam(required = false, defaultValue = "2025-10-21") String endDate
+    ) {
+        try {
+            log.info("=== 1분봉 데이터 적재 시작: {} ~ {} ===", startDate, endDate);
+
+            // 중복 적재 방지: 이미 충분한 데이터가 있는지 확인
+            long existingCount = minuteOhlcvRepository.count();
+            if (existingCount >= 100000) {
+                String stats = minuteOhlcvDataService.getMinuteCandleStats();
+                log.info("1분봉 데이터가 이미 적재되어 있습니다. ({}건)", existingCount);
+                return ResponseEntity.ok(
+                    String.format("1분봉 데이터가 이미 적재되어 있습니다. %s", stats)
+                );
+            }
+
+            minuteOhlcvDataService.loadAllMinuteCandles(startDate, endDate);
+
+            String stats = minuteOhlcvDataService.getMinuteCandleStats();
+            log.info("=== 1분봉 데이터 적재 완료 ===");
+
+            return ResponseEntity.ok(
+                String.format("1분봉 데이터 적재 완료. %s", stats)
+            );
+        } catch (Exception e) {
+            log.error("Failed to load minute candles", e);
+            return ResponseEntity.internalServerError().body("Failed to load minute candles: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 1분봉 데이터 통계 조회 API
+     */
+    @GetMapping("/minute-candles/stats")
+    public ResponseEntity<String> getMinuteCandleStats() {
+        try {
+            String stats = minuteOhlcvDataService.getMinuteCandleStats();
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            log.error("Failed to get minute candle stats", e);
+            return ResponseEntity.internalServerError().body("Failed to get stats: " + e.getMessage());
         }
     }
 
