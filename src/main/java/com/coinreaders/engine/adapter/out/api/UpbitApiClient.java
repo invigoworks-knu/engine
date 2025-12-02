@@ -52,6 +52,31 @@ public class UpbitApiClient {
     }
 
     /**
+     * Upbit에서 1분봉(Minute Candle) 데이터를 가져옵니다.
+     * @param market (예: "KRW-ETH")
+     * @param count (가져올 개수, 최대 200)
+     * @param to (조회 마지막 캔들 시각. e.g., "2024-01-10T14:30:00". null이면 현재시각)
+     * @return 1분봉 데이터
+     */
+    public Flux<UpbitMinuteCandleDto> fetchMinuteCandles(String market, int count, String to) {
+        String fullUrl = UPBIT_API_URL + "/candles/minutes/1";
+
+        return webClient.get()
+            .uri(fullUrl, uriBuilder -> {
+                uriBuilder.queryParam("market", market)
+                    .queryParam("count", count);
+
+                // 'to' 파라미터가 있으면 쿼리에 추가
+                if (to != null && !to.isEmpty()) {
+                    uriBuilder.queryParam("to", to);
+                }
+                return uriBuilder.build();
+            })
+            .retrieve()
+            .bodyToFlux(UpbitMinuteCandleDto.class);
+    }
+
+    /**
      * 업비트 현재가 조회 (공개 API - 인증 불필요)
      *
      * @param markets 마켓 코드 (예: "KRW-ETH", 복수 가능: "KRW-ETH,KRW-BTC")
@@ -232,6 +257,28 @@ public class UpbitApiClient {
     @Getter
     @ToString
     public static class UpbitDayCandleDto {
+        @JsonProperty("market")
+        private String market; // 마켓 코드
+        @JsonProperty("candle_date_time_kst")
+        private String candleDateTimeKst; // 캔들 시간 (KST)
+        @JsonProperty("opening_price")
+        private BigDecimal openingPrice; // 시가
+        @JsonProperty("high_price")
+        private BigDecimal highPrice; // 고가
+        @JsonProperty("low_price")
+        private BigDecimal lowPrice; // 저가
+        @JsonProperty("trade_price")
+        private BigDecimal tradePrice; // 종가
+        @JsonProperty("candle_acc_trade_volume")
+        private BigDecimal candleAccTradeVolume; // 누적 거래량
+    }
+
+    /**
+     * 업비트 1분봉 캔들 조회 응답 DTO
+     */
+    @Getter
+    @ToString
+    public static class UpbitMinuteCandleDto {
         @JsonProperty("market")
         private String market; // 마켓 코드
         @JsonProperty("candle_date_time_kst")
