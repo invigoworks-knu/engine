@@ -66,7 +66,17 @@ public class UpbitApiClient {
                 return uri;
             })
             .retrieve()
-            .bodyToFlux(UpbitMinuteCandleDto.class);
+            .bodyToFlux(UpbitMinuteCandleDto.class)
+            .collectList()
+            .doOnSuccess(candles -> {
+                if (candles != null && !candles.isEmpty()) {
+                    log.info("📊 API 응답 - 총 {}개, 첫번째(최신): {}, 마지막(가장 오래된): {}",
+                        candles.size(),
+                        candles.get(0).getCandleDateTimeKst(),
+                        candles.get(candles.size() - 1).getCandleDateTimeKst());
+                }
+            })
+            .flatMapMany(reactor.core.publisher.Flux::fromIterable);
     }
 
     /**
