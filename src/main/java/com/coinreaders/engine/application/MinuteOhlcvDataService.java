@@ -8,11 +8,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -46,22 +52,30 @@ public class MinuteOhlcvDataService {
 
         // 2. 데이터가 있다면, 그 시간부터 더 과거를 가져오도록 설정 (이어하기)
         if (oldestData != null) {
-            lastFetchedTime = oldestData.getCandleDateTimeKst().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-            log.info("기존 데이터 발견! {} 부터 과거 데이터 적재를 이어갑니다.", lastFetchedTime);
+            // KST를 UTC로 변환하여 전송 (Upbit API는 타임존 없는 시각을 UTC로 해석)
+            Instant instant = oldestData.getCandleDateTimeKst().atZone(ZoneId.of("Asia/Seoul")).toInstant();
+            lastFetchedTime = instant.atZone(ZoneId.of("UTC"))
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
+            log.info("기존 데이터 발견! KST {} → UTC {} 부터 과거 데이터 적재를 이어갑니다.",
+                oldestData.getCandleDateTimeKst(), lastFetchedTime);
         } else {
             // 3. 데이터가 없다면, 원래대로 입력받은 endDate부터 시작
-            lastFetchedTime = end.atTime(23, 59, 59).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-            log.info("기존 데이터 없음. {} 부터 적재를 시작합니다.", lastFetchedTime);
+            // KST를 UTC로 변환
+            Instant instant = end.atTime(23, 59, 59).atZone(ZoneId.of("Asia/Seoul")).toInstant();
+            lastFetchedTime = instant.atZone(ZoneId.of("UTC"))
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
+            log.info("기존 데이터 없음. KST {} 23:59:59 → UTC {} 부터 적재를 시작합니다.", end, lastFetchedTime);
         }
 
 
         long totalCount = 0;
         int batchCount = 0;
+        int consecutiveSkipBatches = 0; // 연속으로 모든 데이터가 스킵된 배치 수
 
         while (true) {
-            // 1. API 호출 (T 제거)
+            // 1. API 호출 (ISO 8601 형식 유지)
             List<UpbitApiClient.UpbitMinuteCandleDto> candles = upbitApiClient
-                .fetchMinuteCandles(MARKET, BATCH_SIZE, lastFetchedTime != null ? lastFetchedTime.replace("T", " ") : null)
+                .fetchMinuteCandles(MARKET, BATCH_SIZE, lastFetchedTime)
                 .collectList()
                 .block();
 
@@ -80,27 +94,78 @@ public class MinuteOhlcvDataService {
                 }
             }
 
-            // 3. [중요 변경] 한 건씩 저장 (중복 에러나도 무시하고 다음 것 저장)
+            if (entities.isEmpty()) {
+                log.info("변환된 엔티티가 없습니다. 다음 배치로 이동.");
+                break;
+            }
+
+            // 3. [개선된 로직] 사전 중복 체크 후 필터링
+            // 3-1. 모든 timestamp 추출
+            List<LocalDateTime> dateTimes = entities.stream()
+                .map(HistoricalMinuteOhlcv::getCandleDateTimeKst)
+                .collect(Collectors.toList());
+
+            // 3-2. DB에 이미 존재하는 timestamp 조회
+            Set<LocalDateTime> existingDateTimes = new HashSet<>(
+                minuteOhlcvRepository.findExistingDateTimes(MARKET, dateTimes)
+            );
+
+            // 3-3. 존재하지 않는 것만 필터링
+            List<HistoricalMinuteOhlcv> newEntities = entities.stream()
+                .filter(entity -> !existingDateTimes.contains(entity.getCandleDateTimeKst()))
+                .collect(Collectors.toList());
+
+            // 3-4. 새로운 데이터만 배치로 저장
             int savedInBatch = 0;
-            for (HistoricalMinuteOhlcv entity : entities) {
-                try {
-                    minuteOhlcvRepository.save(entity);
-                    savedInBatch++;
-                    totalCount++;
-                } catch (Exception e) {
-                    // 중복 에러 발생 시 무시하고 넘어감 (로그 생략 가능 or 디버그)
-                    // log.debug("중복 데이터 건너뜀: {}", entity.getCandleDateTimeKst());
+            if (!newEntities.isEmpty()) {
+                minuteOhlcvRepository.saveAll(newEntities);
+                savedInBatch = newEntities.size();
+                totalCount += savedInBatch;
+            }
+
+            batchCount++;
+            int skippedInBatch = entities.size() - savedInBatch;
+
+            // 4. [개선] 다음 조회 시각 갱신 (저장 여부에 따라 다르게 처리)
+            if (savedInBatch > 0) {
+                // 4-1. 새로운 데이터가 저장되었으면, 저장된 것 중 가장 오래된(과거) 시간으로 갱신
+                LocalDateTime oldestSavedTime = newEntities.stream()
+                    .map(HistoricalMinuteOhlcv::getCandleDateTimeKst)
+                    .min(LocalDateTime::compareTo)
+                    .orElse(null);
+
+                if (oldestSavedTime != null) {
+                    // KST를 UTC로 변환
+                    Instant instant = oldestSavedTime.atZone(ZoneId.of("Asia/Seoul")).toInstant();
+                    lastFetchedTime = instant.atZone(ZoneId.of("UTC"))
+                        .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
+                }
+                consecutiveSkipBatches = 0; // 리셋
+            } else {
+                // 4-2. 모든 데이터가 스킵되었으면, 현재 배치의 가장 오래된 시간 - 1분으로 갱신
+                LocalDateTime oldestInBatch = LocalDateTime.parse(
+                    candles.get(candles.size() - 1).getCandleDateTimeKst(),
+                    DateTimeFormatter.ISO_LOCAL_DATE_TIME
+                );
+                // KST를 UTC로 변환
+                Instant instant = oldestInBatch.minusMinutes(1).atZone(ZoneId.of("Asia/Seoul")).toInstant();
+                lastFetchedTime = instant.atZone(ZoneId.of("UTC"))
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
+                consecutiveSkipBatches++;
+
+                // 4-3. 연속으로 3번 이상 모든 데이터가 스킵되면 종료 (더 이상 새 데이터 없음)
+                if (consecutiveSkipBatches >= 3) {
+                    log.info("연속 {}번 모든 데이터 중복. 더 이상 새로운 데이터가 없다고 판단하여 종료합니다.", consecutiveSkipBatches);
+                    break;
                 }
             }
-            batchCount++;
 
-            // 4. 다음 조회 시각 갱신 (무조건 실행됨)
-            // T가 포함된 원본 시간 포맷을 유지하여 저장
-            lastFetchedTime = candles.get(candles.size() - 1).getCandleDateTimeKst();
-
-            // 5. 종료 조건 확인
-            LocalDateTime lastDateTime = LocalDateTime.parse(lastFetchedTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            if (lastDateTime.toLocalDate().isBefore(start) || lastDateTime.toLocalDate().isEqual(start)) {
+            // 5. 종료 조건 확인 (UTC를 KST로 변환하여 비교)
+            LocalDateTime lastDateTimeUtc = LocalDateTime.parse(lastFetchedTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            LocalDateTime lastDateTimeKst = lastDateTimeUtc.atZone(ZoneId.of("UTC"))
+                .withZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                .toLocalDateTime();
+            if (lastDateTimeKst.toLocalDate().isBefore(start)) {
                 log.info("목표 날짜({})에 도달했습니다. 중지.", startDate);
                 break;
             }
@@ -112,10 +177,14 @@ public class MinuteOhlcvDataService {
                 Thread.currentThread().interrupt();
             }
 
-            // 로그 출력
+            // 로그 출력 (개선됨)
             if (batchCount % 10 == 0) {
-                log.info("진행 중: 총 {}건 저장 (이번 배치 저장: {}건, 현재 시점: {})",
-                    totalCount, savedInBatch, lastFetchedTime);
+                log.info("진행 중: 총 {}건 저장 (이번 배치 - 저장: {}건, 스킵: {}건, 현재 시점: {})",
+                    totalCount, savedInBatch, skippedInBatch, lastFetchedTime);
+            } else if (skippedInBatch > 0 && savedInBatch == 0) {
+                // 모든 데이터가 중복인 경우 경고 로그 (연속 횟수 표시)
+                log.warn("배치 #{}: 모든 데이터 중복으로 스킵 ({}건) - 연속 스킵: {}회",
+                    batchCount, skippedInBatch, consecutiveSkipBatches);
             }
         }
 

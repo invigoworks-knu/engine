@@ -97,8 +97,11 @@ public class AsyncBacktestService {
                         job.incrementCompleted();
                         jobRepository.save(job);
 
-                        log.info("✓ 완료: {}/{} - Model={}, Fold={}, Return={}%",
-                            currentIndex, totalTasks, modelName, foldNumber, response.getTotalReturnPct());
+                        log.info("✓ 완료: {}/{} - Model={}, Fold={}, 초기자본={}원 → 최종자본={}원 (수익률 {}%)",
+                            currentIndex, totalTasks, modelName, foldNumber,
+                            response.getInitialCapital(),
+                            response.getFinalCapital(),
+                            response.getTotalReturnPct());
 
                     } catch (Exception e) {
                         log.error("✗ 실패: {}/{} - Model={}, Fold={}, Error={}",

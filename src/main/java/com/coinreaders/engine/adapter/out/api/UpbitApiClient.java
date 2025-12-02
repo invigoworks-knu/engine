@@ -18,7 +18,6 @@ import java.math.BigDecimal;
 public class UpbitApiClient {
 
     private final WebClient webClient;
-    private static final String UPBIT_API_URL = "https://api.upbit.com/v1";
 
     @Value("${upbit.api.access-key}")
     private String accessKey;
@@ -34,19 +33,13 @@ public class UpbitApiClient {
      * @return
      */
     public Flux<UpbitDayCandleDto> fetchDayCandles(String market, int count, String to) {
-        String fullUrl = UPBIT_API_URL + "/candles/days";
-
         return webClient.get()
-            .uri(fullUrl, uriBuilder -> {
-                uriBuilder.queryParam("market", market)
-                    .queryParam("count", count);
-
-                // 'to' 파라미터가 있으면 쿼리에 추가
-                if (to != null && !to.isEmpty()) {
-                    uriBuilder.queryParam("to", to);
-                }
-                return uriBuilder.build();
-            })
+            .uri(uriBuilder -> uriBuilder
+                .path("/v1/candles/days")
+                .queryParam("market", market)
+                .queryParam("count", count)
+                .queryParamIfPresent("to", java.util.Optional.ofNullable(to).filter(s -> !s.isEmpty()))
+                .build())
             .retrieve()
             .bodyToFlux(UpbitDayCandleDto.class);
     }
@@ -59,21 +52,31 @@ public class UpbitApiClient {
      * @return 1분봉 데이터
      */
     public Flux<UpbitMinuteCandleDto> fetchMinuteCandles(String market, int count, String to) {
-        String fullUrl = UPBIT_API_URL + "/candles/minutes/1";
+        log.info("📡 fetchMinuteCandles 호출 - market: {}, count: {}, to: '{}'", market, count, to);
 
         return webClient.get()
-            .uri(fullUrl, uriBuilder -> {
-                uriBuilder.queryParam("market", market)
-                    .queryParam("count", count);
-
-                // 'to' 파라미터가 있으면 쿼리에 추가
-                if (to != null && !to.isEmpty()) {
-                    uriBuilder.queryParam("to", to);
-                }
-                return uriBuilder.build();
+            .uri(uriBuilder -> {
+                var uri = uriBuilder
+                    .path("/v1/candles/minutes/1")
+                    .queryParam("market", market)
+                    .queryParam("count", count)
+                    .queryParamIfPresent("to", java.util.Optional.ofNullable(to).filter(s -> !s.isEmpty()))
+                    .build();
+                log.info("📡 생성된 URI: {}", uri);
+                return uri;
             })
             .retrieve()
-            .bodyToFlux(UpbitMinuteCandleDto.class);
+            .bodyToFlux(UpbitMinuteCandleDto.class)
+            .collectList()
+            .doOnSuccess(candles -> {
+                if (candles != null && !candles.isEmpty()) {
+                    log.info("📊 API 응답 - 총 {}개, 첫번째(최신): {}, 마지막(가장 오래된): {}",
+                        candles.size(),
+                        candles.get(0).getCandleDateTimeKst(),
+                        candles.get(candles.size() - 1).getCandleDateTimeKst());
+                }
+            })
+            .flatMapMany(reactor.core.publisher.Flux::fromIterable);
     }
 
     /**
@@ -83,15 +86,13 @@ public class UpbitApiClient {
      * @return 현재가 정보
      */
     public Flux<UpbitTickerDto> fetchTicker(String markets) {
-        String fullUrl = UPBIT_API_URL + "/ticker";
-
         log.info("업비트 현재가 조회 시작: markets={}", markets);
 
         return webClient.get()
-                .uri(fullUrl, uriBuilder -> {
-                    uriBuilder.queryParam("markets", markets);
-                    return uriBuilder.build();
-                })
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/ticker")
+                        .queryParam("markets", markets)
+                        .build())
                 .retrieve()
                 .bodyToFlux(UpbitTickerDto.class)
                 .doOnNext(ticker -> log.info("현재가 조회 성공: market={}, price={}, change={}%",
@@ -105,15 +106,13 @@ public class UpbitApiClient {
      * @return 계좌 잔고 정보 (KRW, ETH 등)
      */
     public Flux<UpbitAccountDto> fetchAccounts() {
-        String fullUrl = UPBIT_API_URL + "/accounts";
-
         // JWT 토큰 생성 (Query Parameters 없음)
         String token = UpbitAuthUtil.generateToken(accessKey, secretKey);
 
         log.info("업비트 계좌 잔고 조회 시작");
 
         return webClient.get()
-                .uri(fullUrl)
+                .uri("/v1/accounts")
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
                 .bodyToFlux(UpbitAccountDto.class)
@@ -134,8 +133,6 @@ public class UpbitApiClient {
      */
     public UpbitOrderResponseDto placeOrder(String market, String side, String ordType,
                                              BigDecimal price, BigDecimal volume) {
-        String fullUrl = UPBIT_API_URL + "/orders";
-
         // Query Parameters 구성
         java.util.Map<String, String> queryParams = new java.util.HashMap<>();
         queryParams.put("market", market);
@@ -157,21 +154,19 @@ public class UpbitApiClient {
 
         return webClient.post()
                 .uri(uriBuilder -> {
-                    uriBuilder.scheme("https")
-                            .host("api.upbit.com")
-                            .path("/v1/orders")
+                    var builder = uriBuilder.path("/v1/orders")
                             .queryParam("market", market)
                             .queryParam("side", side)
                             .queryParam("ord_type", ordType);
 
                     if (price != null) {
-                        uriBuilder.queryParam("price", price.toPlainString());
+                        builder.queryParam("price", price.toPlainString());
                     }
                     if (volume != null) {
-                        uriBuilder.queryParam("volume", volume.toPlainString());
+                        builder.queryParam("volume", volume.toPlainString());
                     }
 
-                    return uriBuilder.build();
+                    return builder.build();
                 })
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
@@ -189,8 +184,6 @@ public class UpbitApiClient {
      * @return 주문 상세 정보
      */
     public UpbitOrderResponseDto fetchOrder(String uuid) {
-        String fullUrl = UPBIT_API_URL + "/order";
-
         // Query Parameters 구성
         java.util.Map<String, String> queryParams = new java.util.HashMap<>();
         queryParams.put("uuid", uuid);
@@ -201,10 +194,10 @@ public class UpbitApiClient {
         log.info("업비트 주문 조회 시작: uuid={}", uuid);
 
         return webClient.get()
-                .uri(fullUrl, uriBuilder -> {
-                    uriBuilder.queryParam("uuid", uuid);
-                    return uriBuilder.build();
-                })
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/order")
+                        .queryParam("uuid", uuid)
+                        .build())
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
                 .bodyToMono(UpbitOrderResponseDto.class)
@@ -222,8 +215,6 @@ public class UpbitApiClient {
      * @return 주문 목록
      */
     public Flux<UpbitOrderResponseDto> fetchOrders(String state, Integer page) {
-        String fullUrl = UPBIT_API_URL + "/orders";
-
         // Query Parameters 구성
         java.util.Map<String, String> queryParams = new java.util.HashMap<>();
         queryParams.put("state", state);
@@ -237,12 +228,13 @@ public class UpbitApiClient {
         log.info("업비트 주문 목록 조회 시작: state={}, page={}", state, page);
 
         return webClient.get()
-                .uri(fullUrl, uriBuilder -> {
-                    uriBuilder.queryParam("state", state);
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder.path("/v1/orders")
+                            .queryParam("state", state);
                     if (page != null) {
-                        uriBuilder.queryParam("page", page);
+                        builder.queryParam("page", page);
                     }
-                    return uriBuilder.build();
+                    return builder.build();
                 })
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
