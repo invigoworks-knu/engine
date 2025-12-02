@@ -12,7 +12,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -80,19 +83,37 @@ public class MinuteOhlcvDataService {
                 }
             }
 
-            // 3. [중요 변경] 한 건씩 저장 (중복 에러나도 무시하고 다음 것 저장)
-            int savedInBatch = 0;
-            for (HistoricalMinuteOhlcv entity : entities) {
-                try {
-                    minuteOhlcvRepository.save(entity);
-                    savedInBatch++;
-                    totalCount++;
-                } catch (Exception e) {
-                    // 중복 에러 발생 시 무시하고 넘어감 (로그 생략 가능 or 디버그)
-                    // log.debug("중복 데이터 건너뜀: {}", entity.getCandleDateTimeKst());
-                }
+            if (entities.isEmpty()) {
+                log.info("변환된 엔티티가 없습니다. 다음 배치로 이동.");
+                break;
             }
+
+            // 3. [개선된 로직] 사전 중복 체크 후 필터링
+            // 3-1. 모든 timestamp 추출
+            List<LocalDateTime> dateTimes = entities.stream()
+                .map(HistoricalMinuteOhlcv::getCandleDateTimeKst)
+                .collect(Collectors.toList());
+
+            // 3-2. DB에 이미 존재하는 timestamp 조회
+            Set<LocalDateTime> existingDateTimes = new HashSet<>(
+                minuteOhlcvRepository.findExistingDateTimes(MARKET, dateTimes)
+            );
+
+            // 3-3. 존재하지 않는 것만 필터링
+            List<HistoricalMinuteOhlcv> newEntities = entities.stream()
+                .filter(entity -> !existingDateTimes.contains(entity.getCandleDateTimeKst()))
+                .collect(Collectors.toList());
+
+            // 3-4. 새로운 데이터만 배치로 저장
+            int savedInBatch = 0;
+            if (!newEntities.isEmpty()) {
+                minuteOhlcvRepository.saveAll(newEntities);
+                savedInBatch = newEntities.size();
+                totalCount += savedInBatch;
+            }
+
             batchCount++;
+            int skippedInBatch = entities.size() - savedInBatch;
 
             // 4. 다음 조회 시각 갱신 (무조건 실행됨)
             // T가 포함된 원본 시간 포맷을 유지하여 저장
@@ -112,10 +133,13 @@ public class MinuteOhlcvDataService {
                 Thread.currentThread().interrupt();
             }
 
-            // 로그 출력
+            // 로그 출력 (개선됨)
             if (batchCount % 10 == 0) {
-                log.info("진행 중: 총 {}건 저장 (이번 배치 저장: {}건, 현재 시점: {})",
-                    totalCount, savedInBatch, lastFetchedTime);
+                log.info("진행 중: 총 {}건 저장 (이번 배치 - 저장: {}건, 스킵: {}건, 현재 시점: {})",
+                    totalCount, savedInBatch, skippedInBatch, lastFetchedTime);
+            } else if (skippedInBatch > 0 && savedInBatch == 0) {
+                // 모든 데이터가 중복인 경우 디버그 로그
+                log.debug("배치 #{}: 모든 데이터 중복으로 스킵 ({}건)", batchCount, skippedInBatch);
             }
         }
 

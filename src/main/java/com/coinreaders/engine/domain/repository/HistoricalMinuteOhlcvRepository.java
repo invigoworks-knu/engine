@@ -77,4 +77,18 @@ public interface HistoricalMinuteOhlcvRepository extends JpaRepository<Historica
         @Param("startDateTime") LocalDateTime startDateTime,
         @Param("endDateTime") LocalDateTime endDateTime
     );
+
+    /**
+     * 특정 마켓의 여러 시각 중 이미 존재하는 시각들만 조회
+     * (중복 체크용 - 배치 처리 최적화)
+     * @param market "KRW-ETH"
+     * @param dateTimes 확인할 시각 리스트
+     * @return DB에 이미 존재하는 시각 리스트
+     */
+    @Query("SELECT m.candleDateTimeKst FROM HistoricalMinuteOhlcv m " +
+           "WHERE m.market = :market AND m.candleDateTimeKst IN :dateTimes")
+    List<LocalDateTime> findExistingDateTimes(
+        @Param("market") String market,
+        @Param("dateTimes") List<LocalDateTime> dateTimes
+    );
 }
