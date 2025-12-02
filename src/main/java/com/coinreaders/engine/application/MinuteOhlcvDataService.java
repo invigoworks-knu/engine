@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -49,11 +51,13 @@ public class MinuteOhlcvDataService {
 
         // 2. 데이터가 있다면, 그 시간부터 더 과거를 가져오도록 설정 (이어하기)
         if (oldestData != null) {
-            lastFetchedTime = oldestData.getCandleDateTimeKst().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            lastFetchedTime = ZonedDateTime.of(oldestData.getCandleDateTimeKst(), ZoneId.of("Asia/Seoul"))
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
             log.info("기존 데이터 발견! {} 부터 과거 데이터 적재를 이어갑니다.", lastFetchedTime);
         } else {
             // 3. 데이터가 없다면, 원래대로 입력받은 endDate부터 시작
-            lastFetchedTime = end.atTime(23, 59, 59).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            lastFetchedTime = ZonedDateTime.of(end.atTime(23, 59, 59), ZoneId.of("Asia/Seoul"))
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
             log.info("기존 데이터 없음. {} 부터 적재를 시작합니다.", lastFetchedTime);
         }
 
@@ -125,7 +129,8 @@ public class MinuteOhlcvDataService {
                     .orElse(null);
 
                 if (oldestSavedTime != null) {
-                    lastFetchedTime = oldestSavedTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                    lastFetchedTime = ZonedDateTime.of(oldestSavedTime, ZoneId.of("Asia/Seoul"))
+                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
                 }
                 consecutiveSkipBatches = 0; // 리셋
             } else {
@@ -134,7 +139,8 @@ public class MinuteOhlcvDataService {
                     candles.get(candles.size() - 1).getCandleDateTimeKst(),
                     DateTimeFormatter.ISO_LOCAL_DATE_TIME
                 );
-                lastFetchedTime = oldestInBatch.minusMinutes(1).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                lastFetchedTime = ZonedDateTime.of(oldestInBatch.minusMinutes(1), ZoneId.of("Asia/Seoul"))
+                    .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
                 consecutiveSkipBatches++;
 
                 // 4-3. 연속으로 3번 이상 모든 데이터가 스킵되면 종료 (더 이상 새 데이터 없음)
@@ -145,7 +151,8 @@ public class MinuteOhlcvDataService {
             }
 
             // 5. 종료 조건 확인
-            LocalDateTime lastDateTime = LocalDateTime.parse(lastFetchedTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            LocalDateTime lastDateTime = ZonedDateTime.parse(lastFetchedTime, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                .toLocalDateTime();
             if (lastDateTime.toLocalDate().isBefore(start)) {
                 log.info("목표 날짜({})에 도달했습니다. 중지.", startDate);
                 break;
