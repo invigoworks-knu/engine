@@ -1,12 +1,17 @@
 package com.coinreaders.engine.domain.repository;
 
 import com.coinreaders.engine.domain.entity.HistoricalMinuteOhlcv;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 public interface HistoricalMinuteOhlcvRepository extends JpaRepository<HistoricalMinuteOhlcv, Long> {
 
@@ -55,4 +60,21 @@ public interface HistoricalMinuteOhlcvRepository extends JpaRepository<Historica
      * 특정 마켓의 가장 최신 1분봉 조회
      */
     Optional<HistoricalMinuteOhlcv> findFirstByMarketOrderByCandleDateTimeKstDesc(String market);
+
+    /**
+     * 특정 기간의 1분봉 데이터 조회 (Stream 방식 - 메모리 최적화)
+     * @param market "KRW-ETH"
+     * @param startDateTime 시작 시각 (포함)
+     * @param endDateTime 종료 시각 (미포함)
+     * @return 1분봉 Stream (사용 후 반드시 close 필요)
+     */
+    @QueryHints(value = @QueryHint(name = org.hibernate.jpa.HibernateHints.HINT_FETCH_SIZE, value = "50"))
+    @Query("SELECT m FROM HistoricalMinuteOhlcv m WHERE m.market = :market " +
+           "AND m.candleDateTimeKst >= :startDateTime AND m.candleDateTimeKst < :endDateTime " +
+           "ORDER BY m.candleDateTimeKst ASC")
+    Stream<HistoricalMinuteOhlcv> streamByMarketAndDateTimeRange(
+        @Param("market") String market,
+        @Param("startDateTime") LocalDateTime startDateTime,
+        @Param("endDateTime") LocalDateTime endDateTime
+    );
 }

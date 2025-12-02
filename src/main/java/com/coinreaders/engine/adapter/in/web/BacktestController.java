@@ -1,5 +1,6 @@
 package com.coinreaders.engine.adapter.in.web;
 
+import com.coinreaders.engine.application.backtest.AsyncBacktestService;
 import com.coinreaders.engine.application.backtest.BacktestService;
 import com.coinreaders.engine.application.backtest.FoldConfig;
 import com.coinreaders.engine.application.backtest.TakeProfitStopLossBacktestService;
@@ -10,6 +11,7 @@ import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktes
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
 import com.coinreaders.engine.application.backtest.dto.ConfidenceColumn;
+import com.coinreaders.engine.domain.entity.BacktestJob;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +27,7 @@ public class BacktestController {
 
     private final BacktestService backtestService;
     private final TakeProfitStopLossBacktestService tpSlBacktestService;
+    private final AsyncBacktestService asyncBacktestService;
 
     /**
      * 백테스팅 실행 API
@@ -290,5 +293,105 @@ public class BacktestController {
         BigDecimal initialCapital,
         BigDecimal predProbaThreshold,
         Integer holdingPeriodDays
+    ) {}
+
+    /**
+     * Take Profit / Stop Loss 배치 백테스팅 비동기 실행 API
+     * - 백그라운드에서 실행하고 즉시 jobId 반환
+     * - 진행 상황은 별도 API로 조회
+     *
+     * @param batchRequest 배치 요청 파라미터
+     * @return jobId (작업 추적용)
+     */
+    @PostMapping("/tp-sl/run-batch-async")
+    public ResponseEntity<?> runTpSlBatchBacktestAsync(@RequestBody TpSlBatchRequest batchRequest) {
+        log.info("TP/SL 비동기 배치 백테스팅 API 호출: Models={}, Folds={}",
+            batchRequest.modelNames, batchRequest.foldNumbers);
+
+        // 입력 검증
+        if (batchRequest.modelNames == null || batchRequest.modelNames.isEmpty()) {
+            return ResponseEntity.badRequest().body("modelNames is required");
+        }
+        if (batchRequest.foldNumbers == null || batchRequest.foldNumbers.isEmpty()) {
+            return ResponseEntity.badRequest().body("foldNumbers is required");
+        }
+
+        try {
+            String jobId = asyncBacktestService.submitBatchBacktest(
+                batchRequest.modelNames,
+                batchRequest.foldNumbers,
+                batchRequest.initialCapital != null ? batchRequest.initialCapital : new BigDecimal("10000"),
+                batchRequest.predProbaThreshold != null ? batchRequest.predProbaThreshold : new BigDecimal("0.6"),
+                batchRequest.holdingPeriodDays != null ? batchRequest.holdingPeriodDays : 8
+            );
+
+            log.info("비동기 작업 등록 완료: jobId={}", jobId);
+            return ResponseEntity.ok(new AsyncJobResponse(jobId, "배치 백테스팅 작업이 시작되었습니다."));
+        } catch (Exception e) {
+            log.error("비동기 배치 백테스팅 등록 실패", e);
+            return ResponseEntity.internalServerError().body("Failed to submit batch job: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 백테스팅 작업 상태 조회 API
+     *
+     * @param jobId 작업 ID
+     * @return 작업 상태 (PENDING, RUNNING, COMPLETED, FAILED)
+     */
+    @GetMapping("/tp-sl/job/{jobId}")
+    public ResponseEntity<?> getJobStatus(@PathVariable String jobId) {
+        try {
+            BacktestJob job = asyncBacktestService.getJobStatus(jobId);
+
+            JobStatusResponse response = new JobStatusResponse(
+                job.getJobId(),
+                job.getStatus().name(),
+                job.getTotalTasks(),
+                job.getCompletedTasks(),
+                job.getFailedTasks(),
+                job.getProgress(),
+                job.getErrorMessage()
+            );
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("작업 상태 조회 실패: jobId={}", jobId, e);
+            return ResponseEntity.internalServerError().body("Failed to get job status: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 완료된 작업의 결과 조회 API
+     * Note: 현재는 결과를 DB에 저장하지 않으므로, 프론트엔드에서 동기 배치 API를 재호출해야 합니다.
+     *
+     * @param jobId 작업 ID
+     * @return 백테스팅 결과 리스트
+     */
+    @GetMapping("/tp-sl/job/{jobId}/results")
+    public ResponseEntity<?> getJobResults(@PathVariable String jobId) {
+        try {
+            // 현재는 빈 리스트 반환 (향후 개선 필요)
+            return ResponseEntity.ok("작업이 완료되었습니다. 동기 배치 API(/api/backtest/tp-sl/run-batch)를 다시 호출하여 결과를 조회하세요.");
+        } catch (Exception e) {
+            log.error("작업 결과 조회 실패: jobId={}", jobId, e);
+            return ResponseEntity.internalServerError().body("Failed to get job results: " + e.getMessage());
+        }
+    }
+
+    // 비동기 작업 응답 DTO
+    record AsyncJobResponse(String jobId, String message) {}
+
+    // 작업 상태 응답 DTO
+    record JobStatusResponse(
+        String jobId,
+        String status,
+        int totalTasks,
+        int completedTasks,
+        int failedTasks,
+        int progress,
+        String errorMessage
     ) {}
 }

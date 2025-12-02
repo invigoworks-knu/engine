@@ -410,7 +410,6 @@
         backtestResults = [];
 
         const totalTasks = models.length * folds.length;
-        let completed = 0;
 
         document.getElementById('overallProgress').textContent = `0 / ${totalTasks} 완료`;
         updateProgressBar(0, totalTasks);
@@ -420,7 +419,7 @@
         logs.innerHTML = '';
         addLog(`배치 백테스팅 시작: ${models.length}개 모델 × ${folds.length}개 Fold = 총 ${totalTasks}건`);
 
-        // Execute batch backtest
+        // Execute batch backtest (ASYNC)
         const batchRequest = {
             modelNames: models,
             foldNumbers: folds,
@@ -430,6 +429,74 @@
         };
 
         try {
+            // 1. 비동기 작업 시작
+            const response = await fetch('/api/backtest/tp-sl/run-batch-async', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(batchRequest)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to start batch backtest');
+            }
+
+            const jobData = await response.json();
+            const jobId = jobData.jobId;
+
+            addLog(`작업이 시작되었습니다. (Job ID: ${jobId})`);
+            addLog(`진행 상황을 확인 중입니다...`);
+
+            // 2. 폴링으로 진행 상황 조회 (2초마다)
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusResponse = await fetch(`/api/backtest/tp-sl/job/${jobId}`);
+                    if (!statusResponse.ok) {
+                        clearInterval(pollInterval);
+                        throw new Error('Failed to get job status');
+                    }
+
+                    const status = await statusResponse.json();
+
+                    // 진행 상황 업데이트
+                    document.getElementById('overallProgress').textContent =
+                        `${status.completedTasks + status.failedTasks} / ${status.totalTasks} 완료`;
+                    updateProgressBar(status.completedTasks + status.failedTasks, status.totalTasks);
+
+                    addLog(`진행 중: ${status.completedTasks}개 성공, ${status.failedTasks}개 실패 (${status.progress}%)`);
+
+                    // 완료 또는 실패 시 폴링 중단
+                    if (status.status === 'COMPLETED' || status.status === 'FAILED') {
+                        clearInterval(pollInterval);
+
+                        if (status.status === 'COMPLETED') {
+                            addLog(`백테스팅 완료! ${status.completedTasks}/${status.totalTasks}건 성공`);
+                            showToast(`배치 백테스팅 완료! ${status.completedTasks}/${status.totalTasks}건 성공`, true);
+
+                            // 3. 완료 후 결과 조회 (동기 API 재호출)
+                            addLog(`결과를 조회하는 중...`);
+                            await fetchResults(batchRequest);
+                        } else {
+                            addLog(`백테스팅 실패: ${status.errorMessage}`);
+                            showToast('배치 백테스팅이 실패했습니다.', false);
+                        }
+                    }
+                } catch (error) {
+                    clearInterval(pollInterval);
+                    console.error('Polling error:', error);
+                    addLog(`진행 상황 조회 실패: ${error.message}`);
+                }
+            }, 2000); // 2초마다 폴링
+
+        } catch (error) {
+            console.error(error);
+            addLog(`오류 발생: ${error.message}`);
+            showToast('배치 백테스팅 중 오류가 발생했습니다.', false);
+        }
+    }
+
+    // 완료 후 결과 조회 (동기 API 재호출)
+    async function fetchResults(batchRequest) {
+        try {
             const response = await fetch('/api/backtest/tp-sl/run-batch', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -437,25 +504,17 @@
             });
 
             if (!response.ok) {
-                throw new Error('Batch backtest failed');
+                throw new Error('Failed to fetch results');
             }
 
             backtestResults = await response.json();
-            completed = backtestResults.length;
-
-            addLog(`백테스팅 완료: ${completed}/${totalTasks}건 성공`);
-            document.getElementById('overallProgress').textContent = `${completed} / ${totalTasks} 완료`;
-            updateProgressBar(completed, totalTasks);
             markAllCompleted();
-
-            showToast(`배치 백테스팅 완료! ${completed}/${totalTasks}건 성공`, true);
-
-            // Show results
             displayResults();
+            addLog(`결과 조회 완료: ${backtestResults.length}건`);
         } catch (error) {
-            console.error(error);
-            addLog(`오류 발생: ${error.message}`);
-            showToast('배치 백테스팅 중 오류가 발생했습니다.', false);
+            console.error('Result fetch error:', error);
+            addLog(`결과 조회 실패: ${error.message}`);
+            showToast('결과 조회에 실패했습니다. 페이지를 새로고침 후 다시 시도하세요.', false);
         }
     }
 

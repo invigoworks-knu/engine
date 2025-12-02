@@ -147,47 +147,54 @@ public class TakeProfitStopLossBacktestService {
         BigDecimal entryAmount = positionSize.subtract(entryFee);
         BigDecimal quantity = entryAmount.divide(entryPrice, SCALE, RoundingMode.DOWN);
 
-        // 4. 8일 동안 1분봉 추적
+        // 4. 8일 동안 1분봉 추적 (Stream 방식으로 메모리 최적화)
         LocalDateTime exitCheckStart = actualEntryTime.plusMinutes(1); // 다음 분봉부터 체크
         LocalDateTime exitCheckEnd = actualEntryTime.plusDays(holdingPeriodDays);
 
-        List<HistoricalMinuteOhlcv> candles = minuteOhlcvRepository
-            .findByMarketAndCandleDateTimeKstBetweenOrderByCandleDateTimeKstAsc(
-                MARKET, exitCheckStart, exitCheckEnd
-            );
-
-        if (candles.isEmpty()) {
-            log.warn("추적 기간 1분봉 데이터 없음: entry={}", actualEntryTime);
-            return Optional.empty();
-        }
-
-        // 5. TP/SL 체크
+        // 5. TP/SL 체크 (Stream 사용)
         String exitReason = null;
         BigDecimal exitPrice = null;
         LocalDateTime exitTime = null;
+        HistoricalMinuteOhlcv lastCandle = null;
 
-        for (HistoricalMinuteOhlcv candle : candles) {
-            // Take Profit 체크 (고가가 TP 이상)
-            if (candle.getHighPrice().compareTo(takeProfitPrice) >= 0) {
-                exitReason = "TAKE_PROFIT";
-                exitPrice = takeProfitPrice;
-                exitTime = candle.getCandleDateTimeKst();
-                break;
+        try (Stream<HistoricalMinuteOhlcv> candleStream = minuteOhlcvRepository
+                .streamByMarketAndDateTimeRange(MARKET, exitCheckStart, exitCheckEnd)) {
+
+            // Iterator를 사용하여 순차 처리
+            var iterator = candleStream.iterator();
+            boolean hasData = false;
+
+            while (iterator.hasNext()) {
+                HistoricalMinuteOhlcv candle = iterator.next();
+                hasData = true;
+                lastCandle = candle;
+
+                // Take Profit 체크 (고가가 TP 이상)
+                if (candle.getHighPrice().compareTo(takeProfitPrice) >= 0) {
+                    exitReason = "TAKE_PROFIT";
+                    exitPrice = takeProfitPrice;
+                    exitTime = candle.getCandleDateTimeKst();
+                    break;
+                }
+
+                // Stop Loss 체크 (저가가 SL 이하)
+                if (candle.getLowPrice().compareTo(stopLossPrice) <= 0) {
+                    exitReason = "STOP_LOSS";
+                    exitPrice = stopLossPrice;
+                    exitTime = candle.getCandleDateTimeKst();
+                    break;
+                }
             }
 
-            // Stop Loss 체크 (저가가 SL 이하)
-            if (candle.getLowPrice().compareTo(stopLossPrice) <= 0) {
-                exitReason = "STOP_LOSS";
-                exitPrice = stopLossPrice;
-                exitTime = candle.getCandleDateTimeKst();
-                break;
+            if (!hasData) {
+                log.warn("추적 기간 1분봉 데이터 없음: entry={}", actualEntryTime);
+                return Optional.empty();
             }
         }
 
         // 6. Timeout 처리 (8일 내 TP/SL 미도달)
-        if (exitReason == null) {
+        if (exitReason == null && lastCandle != null) {
             exitReason = "TIMEOUT";
-            HistoricalMinuteOhlcv lastCandle = candles.get(candles.size() - 1);
             exitPrice = lastCandle.getTradePrice(); // 종가
             exitTime = lastCandle.getCandleDateTimeKst();
         }
