@@ -16,8 +16,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "historical_minute_ohlcv",
     indexes = {
-        @Index(name = "idx_market_datetime", columnNames = {"market", "candleDateTimeKst"}),
-        @Index(name = "idx_market_date_range", columnNames = {"market", "candleDateTimeKst"})
+        @Index(name = "idx_market_datetime", columnList = "market, candleDateTimeKst"),
+        @Index(name = "idx_market_date_range", columnList = "market, candleDateTimeKst")
     },
     uniqueConstraints = {
         @UniqueConstraint(name = "uk_market_datetime", columnNames = {"market", "candleDateTimeKst"})
