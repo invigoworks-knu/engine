@@ -268,8 +268,11 @@ public class BacktestController {
                     try {
                         TakeProfitStopLossBacktestResponse response = tpSlBacktestService.runBacktest(request);
                         results.add(response);
-                        log.info("✓ 완료: Model={}, Fold={}, Return={}%",
-                            modelName, foldNumber, response.getTotalReturnPct());
+                        log.info("✓ 완료: Model={}, Fold={}, 초기자본={}원 → 최종자본={}원 (수익률 {}%)",
+                            modelName, foldNumber,
+                            response.getInitialCapital(),
+                            response.getFinalCapital(),
+                            response.getTotalReturnPct());
                     } catch (Exception e) {
                         log.error("✗ 실패: Model={}, Fold={}, Error={}",
                             modelName, foldNumber, e.getMessage());

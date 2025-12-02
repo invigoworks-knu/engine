@@ -92,7 +92,16 @@ public class TakeProfitStopLossBacktestService {
             }
         }
 
-        log.info("총 {}건의 거래 완료, 최종 자본: {}", tradeHistory.size(), capital);
+        // 수익률 계산
+        BigDecimal totalReturn = capital.subtract(request.getInitialCapital());
+        BigDecimal totalReturnPct = totalReturn.divide(request.getInitialCapital(), 4, RoundingMode.HALF_UP)
+            .multiply(new BigDecimal("100"));
+
+        log.info("=== 백테스팅 완료: Model={}, Fold={} ===", request.getModelName(), request.getFoldNumber());
+        log.info("총 거래: {}건", tradeHistory.size());
+        log.info("초기 자본: {}원", request.getInitialCapital());
+        log.info("최종 자본: {}원", capital);
+        log.info("수익: {}원 ({}%)", totalReturn, totalReturnPct);
 
         // 4. 통계 계산 및 응답 생성
         return buildResponse(request, predictions, tradeHistory, capital);
