@@ -52,13 +52,19 @@ public class UpbitApiClient {
      * @return 1분봉 데이터
      */
     public Flux<UpbitMinuteCandleDto> fetchMinuteCandles(String market, int count, String to) {
+        log.info("📡 fetchMinuteCandles 호출 - market: {}, count: {}, to: '{}'", market, count, to);
+
         return webClient.get()
-            .uri(uriBuilder -> uriBuilder
-                .path("/v1/candles/minutes/1")
-                .queryParam("market", market)
-                .queryParam("count", count)
-                .queryParamIfPresent("to", java.util.Optional.ofNullable(to).filter(s -> !s.isEmpty()))
-                .build())
+            .uri(uriBuilder -> {
+                var uri = uriBuilder
+                    .path("/v1/candles/minutes/1")
+                    .queryParam("market", market)
+                    .queryParam("count", count)
+                    .queryParamIfPresent("to", java.util.Optional.ofNullable(to).filter(s -> !s.isEmpty()))
+                    .build();
+                log.info("📡 생성된 URI: {}", uri);
+                return uri;
+            })
             .retrieve()
             .bodyToFlux(UpbitMinuteCandleDto.class);
     }
