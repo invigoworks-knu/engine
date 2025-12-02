@@ -37,14 +37,31 @@ public class MinuteOhlcvDataService {
         LocalDate start = LocalDate.parse(startDate);
         LocalDate end = LocalDate.parse(endDate);
 
-        String lastFetchedTime = null;
+        // 1. DB에서 가장 오래된 데이터(가장 과거 시간)를 조회해 본다.
+        HistoricalMinuteOhlcv oldestData = minuteOhlcvRepository
+            .findFirstByMarketOrderByCandleDateTimeKstAsc(MARKET)
+            .orElse(null);
+
+        String lastFetchedTime;
+
+        // 2. 데이터가 있다면, 그 시간부터 더 과거를 가져오도록 설정 (이어하기)
+        if (oldestData != null) {
+            lastFetchedTime = oldestData.getCandleDateTimeKst().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            log.info("기존 데이터 발견! {} 부터 과거 데이터 적재를 이어갑니다.", lastFetchedTime);
+        } else {
+            // 3. 데이터가 없다면, 원래대로 입력받은 endDate부터 시작
+            lastFetchedTime = end.atTime(23, 59, 59).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            log.info("기존 데이터 없음. {} 부터 적재를 시작합니다.", lastFetchedTime);
+        }
+
+
         long totalCount = 0;
         int batchCount = 0;
 
         while (true) {
-            // API 호출
+            // 1. API 호출 (T 제거)
             List<UpbitApiClient.UpbitMinuteCandleDto> candles = upbitApiClient
-                .fetchMinuteCandles(MARKET, BATCH_SIZE, lastFetchedTime)
+                .fetchMinuteCandles(MARKET, BATCH_SIZE, lastFetchedTime != null ? lastFetchedTime.replace("T", " ") : null)
                 .collectList()
                 .block();
 
@@ -53,7 +70,7 @@ public class MinuteOhlcvDataService {
                 break;
             }
 
-            // DTO → Entity 변환
+            // 2. DTO -> Entity 변환
             List<HistoricalMinuteOhlcv> entities = new ArrayList<>();
             for (UpbitApiClient.UpbitMinuteCandleDto dto : candles) {
                 try {
@@ -63,44 +80,46 @@ public class MinuteOhlcvDataService {
                 }
             }
 
-            // 배치 저장 (중복 방지: unique constraint로 자동 처리)
-            try {
-                minuteOhlcvRepository.saveAll(entities);
-                totalCount += entities.size();
-                batchCount++;
-            } catch (Exception e) {
-                log.warn("배치 저장 중 일부 중복 데이터 존재: {}", e.getMessage());
-                // 중복 데이터는 무시하고 계속 진행
+            // 3. [중요 변경] 한 건씩 저장 (중복 에러나도 무시하고 다음 것 저장)
+            int savedInBatch = 0;
+            for (HistoricalMinuteOhlcv entity : entities) {
+                try {
+                    minuteOhlcvRepository.save(entity);
+                    savedInBatch++;
+                    totalCount++;
+                } catch (Exception e) {
+                    // 중복 에러 발생 시 무시하고 넘어감 (로그 생략 가능 or 디버그)
+                    // log.debug("중복 데이터 건너뜀: {}", entity.getCandleDateTimeKst());
+                }
             }
+            batchCount++;
 
-            // 다음 조회 시각 설정 (가장 오래된 데이터의 시각)
+            // 4. 다음 조회 시각 갱신 (무조건 실행됨)
+            // T가 포함된 원본 시간 포맷을 유지하여 저장
             lastFetchedTime = candles.get(candles.size() - 1).getCandleDateTimeKst();
 
-            // 목표 날짜 도달 확인
-            LocalDateTime lastDateTime = LocalDateTime.parse(lastFetchedTime,
-                DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            if (lastDateTime.toLocalDate().isBefore(start) ||
-                lastDateTime.toLocalDate().isEqual(start)) {
+            // 5. 종료 조건 확인
+            LocalDateTime lastDateTime = LocalDateTime.parse(lastFetchedTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            if (lastDateTime.toLocalDate().isBefore(start) || lastDateTime.toLocalDate().isEqual(start)) {
                 log.info("목표 날짜({})에 도달했습니다. 중지.", startDate);
                 break;
             }
 
-            // API Rate Limit 준수 (초당 10회 제한 → 안전하게 초당 6회)
+            // 6. 속도 조절
             try {
-                Thread.sleep(150); // 0.15초 대기
+                Thread.sleep(100); // 0.1초 대기
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("API 요청 지연 중 인터럽트 발생");
             }
 
-            // 진행 상황 로깅
-            if (batchCount % 50 == 0) {
-                log.info("1분봉 적재 중: {}건 ({}번째 배치, 마지막 시각: {})",
-                    totalCount, batchCount, lastFetchedTime);
+            // 로그 출력
+            if (batchCount % 10 == 0) {
+                log.info("진행 중: 총 {}건 저장 (이번 배치 저장: {}건, 현재 시점: {})",
+                    totalCount, savedInBatch, lastFetchedTime);
             }
         }
 
-        log.info("1분봉 데이터 적재 완료: 총 {}건 ({}번의 API 호출)", totalCount, batchCount);
+        log.info("1분봉 데이터 적재 완료: 총 {}건", totalCount);
     }
 
     /**
