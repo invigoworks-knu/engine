@@ -70,12 +70,24 @@ public class TakeProfitStopLossBacktestService {
         log.info("전체 {}건 중 임계값({}) 이상: {}건",
             predictions.size(), request.getPredProbaThreshold(), filteredPredictions.size());
 
-        // 3. 각 예측에 대해 거래 시뮬레이션
+        // 3. 각 예측에 대해 거래 시뮬레이션 (포지션 오버랩 방지)
         List<TradeDetail> tradeHistory = new ArrayList<>();
         BigDecimal capital = request.getInitialCapital();
         int tradeNumber = 1;
+        LocalDateTime lastExitTime = null; // 마지막 청산 시간 추적
+        int skippedDueToPosition = 0; // 포지션 보유로 인해 건너뛴 거래 수
 
         for (HistoricalAiPrediction prediction : filteredPredictions) {
+            LocalDateTime predictedEntryTime = prediction.getPredictionDate().atTime(9, 0);
+
+            // 아직 포지션이 열려있으면 스킵 (현재 시간이 마지막 청산 시간보다 이전)
+            if (lastExitTime != null && predictedEntryTime.isBefore(lastExitTime)) {
+                skippedDueToPosition++;
+                log.debug("포지션 보유 중이므로 거래 건너뜀: predictedDate={}, lastExitTime={}",
+                    prediction.getPredictionDate(), lastExitTime);
+                continue;
+            }
+
             try {
                 Optional<TradeDetail> tradeOpt = simulateTrade(
                     prediction, capital, tradeNumber, request.getHoldingPeriodDays()
@@ -85,11 +97,16 @@ public class TakeProfitStopLossBacktestService {
                     TradeDetail trade = tradeOpt.get();
                     tradeHistory.add(trade);
                     capital = trade.getCapitalAfter(); // 자본 업데이트
+                    lastExitTime = trade.getExitDateTime(); // 청산 시간 업데이트
                     tradeNumber++;
                 }
             } catch (Exception e) {
                 log.warn("거래 시뮬레이션 실패: date={}, error={}", prediction.getPredictionDate(), e.getMessage());
             }
+        }
+
+        if (skippedDueToPosition > 0) {
+            log.info("포지션 보유로 인해 건너뛴 신호: {}건", skippedDueToPosition);
         }
 
         // 수익률 계산
