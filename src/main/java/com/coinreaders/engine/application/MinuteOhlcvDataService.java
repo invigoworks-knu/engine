@@ -60,6 +60,7 @@ public class MinuteOhlcvDataService {
 
         long totalCount = 0;
         int batchCount = 0;
+        int consecutiveSkipBatches = 0; // 연속으로 모든 데이터가 스킵된 배치 수
 
         while (true) {
             // 1. API 호출 (T 제거)
@@ -115,13 +116,37 @@ public class MinuteOhlcvDataService {
             batchCount++;
             int skippedInBatch = entities.size() - savedInBatch;
 
-            // 4. 다음 조회 시각 갱신 (무조건 실행됨)
-            // T가 포함된 원본 시간 포맷을 유지하여 저장
-            lastFetchedTime = candles.get(candles.size() - 1).getCandleDateTimeKst();
+            // 4. [개선] 다음 조회 시각 갱신 (저장 여부에 따라 다르게 처리)
+            if (savedInBatch > 0) {
+                // 4-1. 새로운 데이터가 저장되었으면, 저장된 것 중 가장 오래된(과거) 시간으로 갱신
+                LocalDateTime oldestSavedTime = newEntities.stream()
+                    .map(HistoricalMinuteOhlcv::getCandleDateTimeKst)
+                    .min(LocalDateTime::compareTo)
+                    .orElse(null);
+
+                if (oldestSavedTime != null) {
+                    lastFetchedTime = oldestSavedTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                }
+                consecutiveSkipBatches = 0; // 리셋
+            } else {
+                // 4-2. 모든 데이터가 스킵되었으면, 현재 배치의 가장 오래된 시간 - 1분으로 갱신
+                LocalDateTime oldestInBatch = LocalDateTime.parse(
+                    candles.get(candles.size() - 1).getCandleDateTimeKst(),
+                    DateTimeFormatter.ISO_LOCAL_DATE_TIME
+                );
+                lastFetchedTime = oldestInBatch.minusMinutes(1).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                consecutiveSkipBatches++;
+
+                // 4-3. 연속으로 3번 이상 모든 데이터가 스킵되면 종료 (더 이상 새 데이터 없음)
+                if (consecutiveSkipBatches >= 3) {
+                    log.info("연속 {}번 모든 데이터 중복. 더 이상 새로운 데이터가 없다고 판단하여 종료합니다.", consecutiveSkipBatches);
+                    break;
+                }
+            }
 
             // 5. 종료 조건 확인
             LocalDateTime lastDateTime = LocalDateTime.parse(lastFetchedTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            if (lastDateTime.toLocalDate().isBefore(start) || lastDateTime.toLocalDate().isEqual(start)) {
+            if (lastDateTime.toLocalDate().isBefore(start)) {
                 log.info("목표 날짜({})에 도달했습니다. 중지.", startDate);
                 break;
             }
@@ -138,8 +163,9 @@ public class MinuteOhlcvDataService {
                 log.info("진행 중: 총 {}건 저장 (이번 배치 - 저장: {}건, 스킵: {}건, 현재 시점: {})",
                     totalCount, savedInBatch, skippedInBatch, lastFetchedTime);
             } else if (skippedInBatch > 0 && savedInBatch == 0) {
-                // 모든 데이터가 중복인 경우 디버그 로그
-                log.debug("배치 #{}: 모든 데이터 중복으로 스킵 ({}건)", batchCount, skippedInBatch);
+                // 모든 데이터가 중복인 경우 경고 로그 (연속 횟수 표시)
+                log.warn("배치 #{}: 모든 데이터 중복으로 스킵 ({}건) - 연속 스킵: {}회",
+                    batchCount, skippedInBatch, consecutiveSkipBatches);
             }
         }
 
