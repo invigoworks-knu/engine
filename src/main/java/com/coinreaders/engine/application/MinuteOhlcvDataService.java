@@ -63,9 +63,9 @@ public class MinuteOhlcvDataService {
         int consecutiveSkipBatches = 0; // 연속으로 모든 데이터가 스킵된 배치 수
 
         while (true) {
-            // 1. API 호출 (T 제거)
+            // 1. API 호출 (ISO 8601 형식 유지)
             List<UpbitApiClient.UpbitMinuteCandleDto> candles = upbitApiClient
-                .fetchMinuteCandles(MARKET, BATCH_SIZE, lastFetchedTime != null ? lastFetchedTime.replace("T", " ") : null)
+                .fetchMinuteCandles(MARKET, BATCH_SIZE, lastFetchedTime)
                 .collectList()
                 .block();
 
