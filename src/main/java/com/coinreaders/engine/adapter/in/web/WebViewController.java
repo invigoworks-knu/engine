@@ -50,6 +50,15 @@ public class WebViewController {
     }
 
     /**
+     * TP/SL 백테스팅 설정 페이지
+     */
+    @GetMapping("/backtest/tp-sl")
+    public String tpSlBacktestConfig(Model model) {
+        model.addAttribute("folds", FoldConfig.getAllFolds());
+        return "tp-sl-backtest";
+    }
+
+    /**
      * 단일 Fold 백테스팅 실행 및 결과 페이지
      */
     @GetMapping("/backtest/result")

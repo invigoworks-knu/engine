@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>TP/SL 백테스팅</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #FFFFFF;
+            --text-main: #313647;
+            --nav-bg: #313647;
+            --accent-dark: #435663;
+            --accent-green: #A3B087;
+            --accent-blue: #6C91BF;
+            --accent-red: #E07856;
+        }
+        body { background-color: var(--bg-main); color: var(--text-main); font-family: 'Segoe UI', sans-serif; }
+
+        /* Navbar */
+        .navbar { background-color: var(--nav-bg) !important; padding: 1rem 0; }
+        .navbar-brand { color: #FFFFFF !important; font-weight: 800; }
+        .navbar .nav-link { color: rgba(255,255,255,0.6) !important; padding: 0.5rem 1rem; margin: 0 0.2rem; transition: all 0.3s; }
+        .navbar .nav-link:hover { color: #FFFFFF !important; }
+        .navbar .nav-link.active { background-color: var(--accent-green); color: #FFFFFF !important; font-weight: 700; border-radius: 8px; }
+
+        .card { border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: #FFFFFF; margin-bottom: 20px; }
+        .card-header { background-color: var(--accent-dark); color: #FFFFFF; border-radius: 12px 12px 0 0 !important; font-weight: 600; padding: 1rem 1.5rem; }
+
+        .btn-primary { background-color: var(--text-main); border: none; }
+        .btn-success { background-color: var(--accent-green); border: none; }
+        .btn-info { background-color: var(--accent-blue); border: none; }
+        .btn-danger { background-color: var(--accent-red); border: none; }
+
+        /* Preset buttons */
+        .preset-btn { min-width: 150px; margin: 0.5rem; padding: 0.75rem 1.5rem; font-weight: 600; }
+
+        /* Progress section */
+        #progressSection { display: none; }
+        .progress-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 20px; }
+        .model-progress-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; background: #f8f9fa; }
+        .model-progress-card.completed { background: #d4edda; border-color: #28a745; }
+        .model-progress-card.running { background: #fff3cd; border-color: #ffc107; }
+        .model-progress-card.pending { background: #f8f9fa; border-color: #e0e0e0; }
+
+        /* Results section */
+        #resultsSection { display: none; }
+
+        /* Tabs */
+        .nav-tabs .nav-link {
+            color: rgba(49, 54, 71, 0.5) !important;
+            font-weight: 600;
+            border: none;
+        }
+        .nav-tabs .nav-link:hover {
+            color: var(--text-main) !important;
+        }
+        .nav-tabs .nav-link.active {
+            color: var(--text-main) !important;
+            border-bottom: 3px solid var(--accent-green);
+            font-weight: 800;
+            background: transparent;
+        }
+
+        /* Result tables */
+        .result-table { font-size: 0.95rem; }
+        .result-table th { background-color: var(--accent-dark); color: #FFFFFF; font-weight: 600; }
+        .result-table td { vertical-align: middle; }
+
+        /* Badges */
+        .badge-win { background-color: #28a745; }
+        .badge-loss { background-color: #dc3545; }
+        .badge-neutral { background-color: #6c757d; }
+
+        /* Loading spinner */
+        .spinner-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: none; justify-content: center; align-items: center; }
+        .spinner-overlay.active { display: flex; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="/trading/dashboard"><i class="fas fa-chart-line me-2"></i>AI Engine</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="/trading/dashboard">대시보드</a></li>
+                <li class="nav-item"><a class="nav-link" href="/trading/history">거래내역</a></li>
+                <li class="nav-item"><a class="nav-link" href="/trading/mypage">마이페이지</a></li>
+                <li class="nav-item"><a class="nav-link" href="/backtest">Kelly 백테스팅</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/backtest/tp-sl">TP/SL 백테스팅</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- Toast notification -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100; margin-top: 60px;">
+    <div id="dataToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i id="toastIcon" class="fas fa-info-circle me-2"></i>
+            <strong class="me-auto" id="toastTitle">알림</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
+
+<!-- Loading spinner -->
+<div class="spinner-overlay" id="spinnerOverlay">
+    <div class="text-center text-white">
+        <div class="spinner-border" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3 fs-5" id="spinnerMessage">처리 중...</p>
+    </div>
+</div>
+
+<div class="container py-4">
+    <!-- Data Preparation Section -->
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-database me-2"></i>데이터 준비 (TP/SL 전략)</span>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <p class="mb-2">일봉 시세: <span id="ohlcvStatus" class="badge bg-secondary">확인 중</span> <span id="ohlcvCount" class="small text-muted"></span></p>
+                            <p class="mb-2">AI 예측값: <span id="aiStatus" class="badge bg-secondary">확인 중</span> <span id="aiCount" class="small text-muted"></span></p>
+                            <p class="mb-0">1분봉 데이터: <span id="minuteStatus" class="badge bg-secondary">확인 중</span> <span id="minuteCount" class="small text-muted"></span></p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-primary btn-sm me-2" onclick="loadMinuteCandles()" id="btnMinute">
+                                <i class="fas fa-download me-1"></i> 1분봉 적재
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Section -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-cog me-2"></i>백테스팅 설정
+                </div>
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-3">프리셋 선택</h6>
+                    <div class="d-flex flex-wrap justify-content-center mb-4">
+                        <button class="btn btn-info preset-btn" onclick="setPreset('all')">
+                            <i class="fas fa-globe me-2"></i>전체 (12모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-info preset-btn" onclick="setPreset('deeplearning')">
+                            <i class="fas fa-brain me-2"></i>딥러닝 (3모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-info preset-btn" onclick="setPreset('ensemble')">
+                            <i class="fas fa-layer-group me-2"></i>앙상블 (9모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-info preset-btn" onclick="setPreset('gru')">
+                            <i class="fas fa-robot me-2"></i>GRU only (Fold1-7)
+                        </button>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h6 class="fw-bold mb-3">커스텀 설정</h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">AI 모델 선택</label>
+                            <div class="row g-2">
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="GRU" id="model_GRU"><label for="model_GRU">GRU</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="LSTM" id="model_LSTM"><label for="model_LSTM">LSTM</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="BiLSTM" id="model_BiLSTM"><label for="model_BiLSTM">BiLSTM</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="XGBoost" id="model_XGBoost"><label for="model_XGBoost">XGBoost</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="LightGBM" id="model_LightGBM"><label for="model_LightGBM">LightGBM</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="CatBoost" id="model_CatBoost"><label for="model_CatBoost">CatBoost</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="RandomForest" id="model_RandomForest"><label for="model_RandomForest">RandomForest</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="AdaBoost" id="model_AdaBoost"><label for="model_AdaBoost">AdaBoost</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="GradientBoosting" id="model_GradientBoosting"><label for="model_GradientBoosting">GradientBoosting</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="HistGradientBoosting" id="model_HistGradientBoosting"><label for="model_HistGradientBoosting">HistGradientBoosting</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="LogisticRegression" id="model_LogisticRegression"><label for="model_LogisticRegression">LogisticRegression</label></div>
+                                <div class="col-md-3"><input type="checkbox" class="form-check-input me-2" value="StackingEnsemble" id="model_StackingEnsemble"><label for="model_StackingEnsemble">StackingEnsemble</label></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Fold 선택</label>
+                            <div class="row g-2">
+                                <div class="col-md-2"><input type="checkbox" class="form-check-input me-2" value="1" id="fold_1"><label for="fold_1">Fold 1</label></div>
+                                <div class="col-md-2"><input type="checkbox" class="form-check-input me-2" value="2" id="fold_2"><label for="fold_2">Fold 2</label></div>
+                                <div class="col-md-2"><input type="checkbox" class="form-check-input me-2" value="3" id="fold_3"><label for="fold_3">Fold 3</label></div>
+                                <div class="col-md-2"><input type="checkbox" class="form-check-input me-2" value="4" id="fold_4"><label for="fold_4">Fold 4</label></div>
+                                <div class="col-md-2"><input type="checkbox" class="form-check-input me-2" value="5" id="fold_5"><label for="fold_5">Fold 5</label></div>
+                                <div class="col-md-2"><input type="checkbox" class="form-check-input me-2" value="6" id="fold_6"><label for="fold_6">Fold 6</label></div>
+                                <div class="col-md-2"><input type="checkbox" class="form-check-input me-2" value="7" id="fold_7"><label for="fold_7">Fold 7</label></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">초기 자본 (KRW)</label>
+                            <input type="number" class="form-control" id="initialCapital" value="10000" step="1000">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">pred_proba_up 임계값</label>
+                            <input type="number" class="form-control" id="predProbaThreshold" value="0.6" step="0.01" min="0" max="1">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">보유 기간 (일)</label>
+                            <input type="number" class="form-control" id="holdingPeriodDays" value="8" step="1" min="1">
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runBatchBacktest()">
+                        <i class="fas fa-play me-2"></i>배치 백테스팅 실행
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Section -->
+            <div class="card" id="progressSection">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-tasks me-2"></i>진행 상황</span>
+                    <span id="overallProgress" class="badge bg-info">0 / 0 완료</span>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3" style="height: 30px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                             role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    <div id="progressGrid" class="progress-grid"></div>
+                    <div id="progressLogs" class="mt-3 p-3 bg-light rounded" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;"></div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="card" id="resultsSection">
+                <div class="card-header">
+                    <i class="fas fa-chart-bar me-2"></i>백테스팅 결과
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs mb-4" id="resultTabs" role="tablist">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabSummary">전체 요약</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabModels">모델 비교</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabFolds">Fold 분석</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDetails">상세 내역</button></li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <!-- Overall Summary Tab -->
+                        <div class="tab-pane fade show active" id="tabSummary">
+                            <div id="summaryContent"></div>
+                        </div>
+
+                        <!-- Model Comparison Tab -->
+                        <div class="tab-pane fade" id="tabModels">
+                            <div id="modelContent"></div>
+                        </div>
+
+                        <!-- Fold Analysis Tab -->
+                        <div class="tab-pane fade" id="tabFolds">
+                            <div id="foldContent"></div>
+                        </div>
+
+                        <!-- Details Tab -->
+                        <div class="tab-pane fade" id="tabDetails">
+                            <div id="detailsContent"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const ALL_MODELS = ['GRU', 'LSTM', 'BiLSTM', 'XGBoost', 'LightGBM', 'CatBoost',
+                       'RandomForest', 'AdaBoost', 'GradientBoosting', 'HistGradientBoosting',
+                       'LogisticRegression', 'StackingEnsemble'];
+    const DEEPLEARNING_MODELS = ['GRU', 'LSTM', 'BiLSTM'];
+    const ENSEMBLE_MODELS = ['XGBoost', 'LightGBM', 'CatBoost', 'RandomForest', 'AdaBoost',
+                            'GradientBoosting', 'HistGradientBoosting', 'LogisticRegression', 'StackingEnsemble'];
+
+    let backtestResults = [];
+
+    document.addEventListener('DOMContentLoaded', checkDataStatus);
+
+    function checkDataStatus() {
+        fetch('/api/v1/data/status').then(r=>r.json()).then(d => {
+            // OHLCV
+            const ohlcvBadge = document.getElementById('ohlcvStatus');
+            if(d.ohlcvLoaded) {
+                ohlcvBadge.textContent='완료';
+                ohlcvBadge.className='badge bg-success';
+                document.getElementById('ohlcvCount').textContent=`(${d.ohlcvCount}건)`;
+            } else {
+                ohlcvBadge.textContent='미적재';
+                ohlcvBadge.className='badge bg-danger';
+            }
+
+            // AI Predictions
+            const aiPredBadge = document.getElementById('aiStatus');
+            if(d.aiPredictionsLoaded) {
+                aiPredBadge.textContent='완료';
+                aiPredBadge.className='badge bg-success';
+                document.getElementById('aiCount').textContent=`(${d.aiPredictionCount}건)`;
+            } else {
+                aiPredBadge.textContent='미적재';
+                aiPredBadge.className='badge bg-danger';
+            }
+        }).catch(e => console.error(e));
+
+        // Minute candles (separate endpoint)
+        fetch('/api/v1/data/minute-candles/stats').then(r=>r.text()).then(stats => {
+            const minBadge = document.getElementById('minuteStatus');
+            if (stats.includes('없음')) {
+                minBadge.textContent='미적재';
+                minBadge.className='badge bg-danger';
+            } else {
+                minBadge.textContent='완료';
+                minBadge.className='badge bg-success';
+                document.getElementById('minuteCount').textContent=`(${stats})`;
+                document.getElementById('btnMinute').disabled=true;
+                document.getElementById('btnMinute').innerHTML='<i class="fas fa-check me-1"></i> 적재 완료';
+            }
+        }).catch(e => console.error(e));
+    }
+
+    function showToast(msg, isSuccess = true) {
+        const t = document.getElementById('dataToast');
+        document.getElementById('toastMessage').textContent = msg;
+        const icon = document.getElementById('toastIcon');
+        if (isSuccess) {
+            icon.className = "fas fa-check-circle me-2 text-success";
+            document.getElementById('toastTitle').innerText = "완료";
+        } else {
+            icon.className = "fas fa-exclamation-circle me-2 text-danger";
+            document.getElementById('toastTitle').innerText = "오류";
+        }
+        new bootstrap.Toast(t, { delay: 5000 }).show();
+    }
+
+    function loadMinuteCandles() {
+        const btn = document.getElementById('btnMinute');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 적재 중... (15-20분 소요)';
+
+        showToast('1분봉 데이터 적재를 시작합니다. 약 15-20분이 소요됩니다.', true);
+
+        fetch('/api/v1/data/init-minute-candles', {method:'POST'})
+        .then(r=>r.text())
+        .then(m=>{
+            showToast(m, true);
+            checkDataStatus();
+        })
+        .catch(e => {
+            console.error(e);
+            showToast('1분봉 데이터 적재 중 오류가 발생했습니다.', false);
+            checkDataStatus();
+        });
+    }
+
+    function setPreset(preset) {
+        // Clear all
+        ALL_MODELS.forEach(m => document.getElementById(`model_${m}`).checked = false);
+        for(let i=1; i<=7; i++) document.getElementById(`fold_${i}`).checked = false;
+
+        // Set based on preset
+        let models = [];
+        if (preset === 'all') models = ALL_MODELS;
+        else if (preset === 'deeplearning') models = DEEPLEARNING_MODELS;
+        else if (preset === 'ensemble') models = ENSEMBLE_MODELS;
+        else if (preset === 'gru') models = ['GRU'];
+
+        models.forEach(m => document.getElementById(`model_${m}`).checked = true);
+        for(let i=1; i<=7; i++) document.getElementById(`fold_${i}`).checked = true;
+
+        showToast(`프리셋 "${preset}" 적용됨: ${models.length}개 모델 × Fold 1-7`, true);
+    }
+
+    function getSelectedModels() {
+        return ALL_MODELS.filter(m => document.getElementById(`model_${m}`).checked);
+    }
+
+    function getSelectedFolds() {
+        return Array.from({length: 7}, (_, i) => i + 1).filter(f => document.getElementById(`fold_${f}`).checked);
+    }
+
+    async function runBatchBacktest() {
+        const models = getSelectedModels();
+        const folds = getSelectedFolds();
+
+        if (models.length === 0 || folds.length === 0) {
+            showToast('모델과 Fold를 선택해주세요.', false);
+            return;
+        }
+
+        const initialCapital = parseFloat(document.getElementById('initialCapital').value);
+        const predProbaThreshold = parseFloat(document.getElementById('predProbaThreshold').value);
+        const holdingPeriodDays = parseInt(document.getElementById('holdingPeriodDays').value);
+
+        // Show progress section
+        document.getElementById('progressSection').style.display = 'block';
+        document.getElementById('resultsSection').style.display = 'none';
+        backtestResults = [];
+
+        const totalTasks = models.length * folds.length;
+        let completed = 0;
+
+        document.getElementById('overallProgress').textContent = `0 / ${totalTasks} 완료`;
+        updateProgressBar(0, totalTasks);
+        initializeProgressGrid(models, folds);
+
+        const logs = document.getElementById('progressLogs');
+        logs.innerHTML = '';
+        addLog(`배치 백테스팅 시작: ${models.length}개 모델 × ${folds.length}개 Fold = 총 ${totalTasks}건`);
+
+        // Execute batch backtest
+        const batchRequest = {
+            modelNames: models,
+            foldNumbers: folds,
+            initialCapital: initialCapital,
+            predProbaThreshold: predProbaThreshold,
+            holdingPeriodDays: holdingPeriodDays
+        };
+
+        try {
+            const response = await fetch('/api/backtest/tp-sl/run-batch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(batchRequest)
+            });
+
+            if (!response.ok) {
+                throw new Error('Batch backtest failed');
+            }
+
+            backtestResults = await response.json();
+            completed = backtestResults.length;
+
+            addLog(`백테스팅 완료: ${completed}/${totalTasks}건 성공`);
+            document.getElementById('overallProgress').textContent = `${completed} / ${totalTasks} 완료`;
+            updateProgressBar(completed, totalTasks);
+            markAllCompleted();
+
+            showToast(`배치 백테스팅 완료! ${completed}/${totalTasks}건 성공`, true);
+
+            // Show results
+            displayResults();
+        } catch (error) {
+            console.error(error);
+            addLog(`오류 발생: ${error.message}`);
+            showToast('배치 백테스팅 중 오류가 발생했습니다.', false);
+        }
+    }
+
+    function initializeProgressGrid(models, folds) {
+        const grid = document.getElementById('progressGrid');
+        grid.innerHTML = '';
+
+        models.forEach(model => {
+            folds.forEach(fold => {
+                const card = document.createElement('div');
+                card.className = 'model-progress-card pending';
+                card.id = `progress_${model}_${fold}`;
+                card.innerHTML = `
+                    <div class="fw-bold">${model}</div>
+                    <div class="small text-muted">Fold ${fold}</div>
+                    <div class="small"><i class="fas fa-clock"></i> 대기 중</div>
+                `;
+                grid.appendChild(card);
+            });
+        });
+    }
+
+    function markAllCompleted() {
+        backtestResults.forEach(result => {
+            const card = document.getElementById(`progress_${result.modelName}_${result.foldNumber}`);
+            if (card) {
+                card.className = 'model-progress-card completed';
+                card.innerHTML = `
+                    <div class="fw-bold">${result.modelName}</div>
+                    <div class="small text-muted">Fold ${result.foldNumber}</div>
+                    <div class="small text-success"><i class="fas fa-check"></i> 완료 (${result.totalReturnPct.toFixed(2)}%)</div>
+                `;
+            }
+        });
+    }
+
+    function updateProgressBar(completed, total) {
+        const percent = Math.round((completed / total) * 100);
+        const bar = document.getElementById('progressBar');
+        bar.style.width = percent + '%';
+        bar.textContent = percent + '%';
+        bar.setAttribute('aria-valuenow', percent);
+    }
+
+    function addLog(message) {
+        const logs = document.getElementById('progressLogs');
+        const timestamp = new Date().toLocaleTimeString();
+        logs.innerHTML += `[${timestamp}] ${message}<br>`;
+        logs.scrollTop = logs.scrollHeight;
+    }
+
+    function displayResults() {
+        document.getElementById('resultsSection').style.display = 'block';
+
+        // Summary Tab
+        displaySummary();
+
+        // Model Comparison Tab
+        displayModelComparison();
+
+        // Fold Analysis Tab
+        displayFoldAnalysis();
+
+        // Details Tab
+        displayDetails();
+    }
+
+    function displaySummary() {
+        const content = document.getElementById('summaryContent');
+        if (backtestResults.length === 0) {
+            content.innerHTML = '<p class="text-center text-muted">결과 없음</p>';
+            return;
+        }
+
+        const avgReturn = backtestResults.reduce((sum, r) => sum + parseFloat(r.totalReturnPct), 0) / backtestResults.length;
+        const maxReturn = Math.max(...backtestResults.map(r => parseFloat(r.totalReturnPct)));
+        const minReturn = Math.min(...backtestResults.map(r => parseFloat(r.totalReturnPct)));
+        const totalTrades = backtestResults.reduce((sum, r) => sum + r.totalTrades, 0);
+        const avgWinRate = backtestResults.reduce((sum, r) => sum + parseFloat(r.winRate), 0) / backtestResults.length;
+
+        content.innerHTML = `
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h6 class="text-muted">평균 수익률</h6>
+                            <h3 class="${avgReturn >= 0 ? 'text-success' : 'text-danger'}">${avgReturn.toFixed(2)}%</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h6 class="text-muted">최고 수익률</h6>
+                            <h3 class="text-success">${maxReturn.toFixed(2)}%</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h6 class="text-muted">최저 수익률</h6>
+                            <h3 class="text-danger">${minReturn.toFixed(2)}%</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h6 class="text-muted">총 거래 수</h6>
+                            <h3 class="text-primary">${totalTrades}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h6 class="text-muted">평균 승률</h6>
+                            <h3 class="text-info">${avgWinRate.toFixed(2)}%</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h6 class="text-muted">테스트 조합 수</h6>
+                            <h3 class="text-secondary">${backtestResults.length}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function displayModelComparison() {
+        const content = document.getElementById('modelContent');
+        const modelStats = {};
+
+        backtestResults.forEach(r => {
+            if (!modelStats[r.modelName]) {
+                modelStats[r.modelName] = {returns: [], winRates: [], trades: 0};
+            }
+            modelStats[r.modelName].returns.push(parseFloat(r.totalReturnPct));
+            modelStats[r.modelName].winRates.push(parseFloat(r.winRate));
+            modelStats[r.modelName].trades += r.totalTrades;
+        });
+
+        let tableHTML = `
+            <table class="table table-striped result-table">
+                <thead><tr>
+                    <th>모델</th>
+                    <th>평균 수익률</th>
+                    <th>최대 수익률</th>
+                    <th>최소 수익률</th>
+                    <th>평균 승률</th>
+                    <th>총 거래 수</th>
+                </tr></thead>
+                <tbody>
+        `;
+
+        Object.entries(modelStats).forEach(([model, stats]) => {
+            const avgReturn = stats.returns.reduce((a,b)=>a+b,0) / stats.returns.length;
+            const maxReturn = Math.max(...stats.returns);
+            const minReturn = Math.min(...stats.returns);
+            const avgWinRate = stats.winRates.reduce((a,b)=>a+b,0) / stats.winRates.length;
+
+            tableHTML += `
+                <tr>
+                    <td class="fw-bold">${model}</td>
+                    <td class="${avgReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${avgReturn.toFixed(2)}%</td>
+                    <td class="text-success">${maxReturn.toFixed(2)}%</td>
+                    <td class="text-danger">${minReturn.toFixed(2)}%</td>
+                    <td>${avgWinRate.toFixed(2)}%</td>
+                    <td>${stats.trades}</td>
+                </tr>
+            `;
+        });
+
+        tableHTML += '</tbody></table>';
+        content.innerHTML = tableHTML;
+    }
+
+    function displayFoldAnalysis() {
+        const content = document.getElementById('foldContent');
+        const foldStats = {};
+
+        backtestResults.forEach(r => {
+            if (!foldStats[r.foldNumber]) {
+                foldStats[r.foldNumber] = {returns: [], winRates: [], trades: 0, regime: r.regime};
+            }
+            foldStats[r.foldNumber].returns.push(parseFloat(r.totalReturnPct));
+            foldStats[r.foldNumber].winRates.push(parseFloat(r.winRate));
+            foldStats[r.foldNumber].trades += r.totalTrades;
+        });
+
+        let tableHTML = `
+            <table class="table table-striped result-table">
+                <thead><tr>
+                    <th>Fold</th>
+                    <th>시장 체제</th>
+                    <th>평균 수익률</th>
+                    <th>최대 수익률</th>
+                    <th>최소 수익률</th>
+                    <th>평균 승률</th>
+                    <th>총 거래 수</th>
+                </tr></thead>
+                <tbody>
+        `;
+
+        Object.entries(foldStats).sort((a,b) => a[0] - b[0]).forEach(([fold, stats]) => {
+            const avgReturn = stats.returns.reduce((a,b)=>a+b,0) / stats.returns.length;
+            const maxReturn = Math.max(...stats.returns);
+            const minReturn = Math.min(...stats.returns);
+            const avgWinRate = stats.winRates.reduce((a,b)=>a+b,0) / stats.winRates.length;
+
+            tableHTML += `
+                <tr>
+                    <td class="fw-bold">Fold ${fold}</td>
+                    <td><span class="badge bg-secondary">${stats.regime}</span></td>
+                    <td class="${avgReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${avgReturn.toFixed(2)}%</td>
+                    <td class="text-success">${maxReturn.toFixed(2)}%</td>
+                    <td class="text-danger">${minReturn.toFixed(2)}%</td>
+                    <td>${avgWinRate.toFixed(2)}%</td>
+                    <td>${stats.trades}</td>
+                </tr>
+            `;
+        });
+
+        tableHTML += '</tbody></table>';
+        content.innerHTML = tableHTML;
+    }
+
+    function displayDetails() {
+        const content = document.getElementById('detailsContent');
+
+        let tableHTML = `
+            <table class="table table-striped table-hover result-table">
+                <thead><tr>
+                    <th>모델</th>
+                    <th>Fold</th>
+                    <th>체제</th>
+                    <th>수익률</th>
+                    <th>거래 수</th>
+                    <th>익절</th>
+                    <th>손절</th>
+                    <th>시간만료</th>
+                    <th>승률</th>
+                    <th>MDD</th>
+                    <th>Sharpe</th>
+                </tr></thead>
+                <tbody>
+        `;
+
+        backtestResults.forEach(r => {
+            tableHTML += `
+                <tr>
+                    <td class="fw-bold">${r.modelName}</td>
+                    <td>Fold ${r.foldNumber}</td>
+                    <td><span class="badge bg-secondary">${r.regime}</span></td>
+                    <td class="${r.totalReturnPct >= 0 ? 'text-success' : 'text-danger'} fw-bold">${r.totalReturnPct.toFixed(2)}%</td>
+                    <td>${r.totalTrades}</td>
+                    <td class="text-success">${r.takeProfitExits}</td>
+                    <td class="text-danger">${r.stopLossExits}</td>
+                    <td class="text-warning">${r.timeoutExits}</td>
+                    <td>${r.winRate.toFixed(2)}%</td>
+                    <td>${r.maxDrawdown.toFixed(2)}%</td>
+                    <td>${r.sharpeRatio.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        tableHTML += '</tbody></table>';
+        content.innerHTML = tableHTML;
+    }
+</script>
+</body>
+</html>
