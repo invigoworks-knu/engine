@@ -49,11 +49,11 @@ public class MinuteOhlcvDataService {
 
         // 2. 데이터가 있다면, 그 시간부터 더 과거를 가져오도록 설정 (이어하기)
         if (oldestData != null) {
-            lastFetchedTime = oldestData.getCandleDateTimeKst().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            lastFetchedTime = oldestData.getCandleDateTimeKst().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
             log.info("기존 데이터 발견! {} 부터 과거 데이터 적재를 이어갑니다.", lastFetchedTime);
         } else {
             // 3. 데이터가 없다면, 원래대로 입력받은 endDate부터 시작
-            lastFetchedTime = end.atTime(23, 59, 59).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            lastFetchedTime = end.atTime(23, 59, 59).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
             log.info("기존 데이터 없음. {} 부터 적재를 시작합니다.", lastFetchedTime);
         }
 
