@@ -217,6 +217,20 @@
                         </div>
                     </div>
 
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">포지션 사이징 전략 <i class="fas fa-info-circle text-info ms-1" style="cursor: pointer;" onclick="showStrategyInfo()"></i></label>
+                            <select class="form-select" id="positionSizingStrategy">
+                                <option value="CONSERVATIVE_KELLY" selected>Conservative Kelly (확률 조정 방식 - 추천)</option>
+                                <option value="ESTIMATION_RISK_KELLY">Estimation Risk Kelly (Bayesian Variance 기반)</option>
+                                <option value="HALF_KELLY">Half Kelly (업계 표준)</option>
+                                <option value="FIXED_100_PERCENT">Fixed 100% (매번 전액 투자)</option>
+                                <option value="CURRENT_KELLY_TIMES_CONFIDENCE">Current (Kelly×Confidence) - 기존 방식</option>
+                            </select>
+                            <small class="text-muted">포지션 크기를 결정하는 방법을 선택하세요. <span class="text-info" style="cursor: pointer;" onclick="showStrategyInfo()">각 전략에 대한 자세한 설명 보기</span></small>
+                        </div>
+                    </div>
+
                     <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runBatchBacktest()">
                         <i class="fas fa-play me-2"></i>배치 백테스팅 실행
                     </button>
@@ -428,6 +442,7 @@
         const initialCapital = parseFloat(document.getElementById('initialCapital').value);
         const predProbaThreshold = parseFloat(document.getElementById('predProbaThreshold').value);
         const holdingPeriodDays = parseInt(document.getElementById('holdingPeriodDays').value);
+        const positionSizingStrategy = document.getElementById('positionSizingStrategy').value;
 
         // Show progress section
         document.getElementById('progressSection').style.display = 'block';
@@ -442,7 +457,7 @@
 
         const logs = document.getElementById('progressLogs');
         logs.innerHTML = '';
-        addLog(`배치 백테스팅 시작: ${models.length}개 모델 × ${folds.length}개 Fold = 총 ${totalTasks}건`);
+        addLog(`배치 백테스팅 시작: ${models.length}개 모델 × ${folds.length}개 Fold = 총 ${totalTasks}건 (전략: ${positionSizingStrategy})`);
 
         // Execute batch backtest (ASYNC)
         const batchRequest = {
@@ -450,7 +465,8 @@
             foldNumbers: folds,
             initialCapital: initialCapital,
             predProbaThreshold: predProbaThreshold,
-            holdingPeriodDays: holdingPeriodDays
+            holdingPeriodDays: holdingPeriodDays,
+            positionSizingStrategy: positionSizingStrategy
         };
 
         try {
@@ -1027,6 +1043,346 @@
             }
         });
     }
+
+    function showStrategyInfo() {
+        const modal = new bootstrap.Modal(document.getElementById('strategyInfoModal'));
+        modal.show();
+    }
 </script>
+
+<!-- Strategy Info Modal -->
+<div class="modal fade" id="strategyInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color: var(--nav-bg); color: white;">
+                <h5 class="modal-title"><i class="fas fa-calculator me-2"></i>포지션 사이징 전략 상세 설명</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="accordion" id="strategyAccordion">
+                    <!-- Conservative Kelly -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#conservativeKelly">
+                                <strong>Conservative Kelly (확률 조정 방식) - 추천 ⭐</strong>
+                            </button>
+                        </h2>
+                        <div id="conservativeKelly" class="accordion-collapse collapse show" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>confidence가 낮으면 AI 예측 확률을 중립(0.5)로 회귀시킨 후 Kelly Criterion을 적용합니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>adjusted_proba = pred_proba_up × confidence + 0.5 × (1 - confidence)</code><br>
+                                    <code>position = Kelly(adjusted_proba)</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb me-2"></i>이론적 근거</h6>
+                                <ul>
+                                    <li><strong>Bayesian Shrinkage</strong>: 불확실한 추정치를 사전 분포(중립)로 회귀</li>
+                                    <li><strong>Credibility Theory</strong>: 보험/금융 수학에서 검증된 방법</li>
+                                    <li><strong>Shrinkage Estimator</strong>: 극단적 추정치를 중심으로 축소</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba_up</th>
+                                                <th>confidence</th>
+                                                <th>adjusted_proba</th>
+                                                <th>포지션 크기 (R=2.0)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>0.3</td>
+                                                <td>0.8 × 0.3 + 0.5 × 0.7 = <strong>0.59</strong></td>
+                                                <td><strong>38.5%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>0.2</td>
+                                                <td>0.7 × 0.2 + 0.5 × 0.8 = <strong>0.54</strong></td>
+                                                <td><strong>31.0%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>가장 단순하고 이해하기 쉬움</li>
+                                    <li>파라미터 튜닝 불필요</li>
+                                    <li>이론적 근거가 강함 (100년 검증된 이론)</li>
+                                    <li>과도한 포지션 축소 방지</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Estimation Risk Kelly -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#estimationRiskKelly">
+                                <strong>Estimation Risk Kelly (Bayesian Variance)</strong>
+                            </button>
+                        </h2>
+                        <div id="estimationRiskKelly" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>confidence를 "effective sample size"로 해석하고, Bayesian variance를 계산하여 포지션을 조정합니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>n_effective = 1 + (confidence/0.5) × 99</code><br>
+                                    <code>σ² = pred_proba × (1-pred_proba) / n_effective</code><br>
+                                    <code>adjustment = 1 - λ × σ²  (λ=2.0)</code><br>
+                                    <code>position = Kelly(pred_proba) × adjustment</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb me-2"></i>이론적 근거</h6>
+                                <ul>
+                                    <li><strong>Beta Distribution Variance</strong>: 확률의 불확실성을 수학적으로 모델링</li>
+                                    <li><strong>Parameter Uncertainty</strong>: 금융 수학에서 검증된 방법</li>
+                                    <li><strong>Bayesian Framework</strong>: 통계적으로 가장 타당한 접근</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba</th>
+                                                <th>confidence</th>
+                                                <th>σ²</th>
+                                                <th>adjustment</th>
+                                                <th>포지션 (R=2.0)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>0.3</td>
+                                                <td>0.0026</td>
+                                                <td>0.995</td>
+                                                <td>70% × 0.995 = <strong>69.6%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>0.2</td>
+                                                <td>0.0052</td>
+                                                <td>0.990</td>
+                                                <td>55% × 0.990 = <strong>54.4%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>이론적으로 가장 타당함</li>
+                                    <li>pred_proba 자체의 불확실성도 반영</li>
+                                    <li>Pure Kelly와 거의 비슷 (84~98% 수준)</li>
+                                    <li>금융 수학에서 검증됨</li>
+                                </ul>
+
+                                <h6 class="text-warning mt-3"><i class="fas fa-exclamation-triangle me-2"></i>단점</h6>
+                                <ul>
+                                    <li>Conservative Kelly보다 복잡함</li>
+                                    <li>risk_aversion 파라미터(λ) 튜닝 가능</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Half Kelly -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#halfKelly">
+                                <strong>Half Kelly (업계 표준)</strong>
+                            </button>
+                        </h2>
+                        <div id="halfKelly" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>Pure Kelly의 50%만 사용합니다. confidence를 무시하고 일관되게 축소합니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>position = Kelly(pred_proba) × 0.5</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb me-2"></i>이론적 근거</h6>
+                                <ul>
+                                    <li><strong>Ed Thorp 추천</strong>: Kelly Criterion 창시자가 실무에서 권장</li>
+                                    <li><strong>업계 표준</strong>: 프로 트레이더들이 가장 많이 사용</li>
+                                    <li><strong>변동성 감소</strong>: Full Kelly 대비 50% 변동성 감소</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba</th>
+                                                <th>Pure Kelly (R=2.0)</th>
+                                                <th>Half Kelly</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>70%</td>
+                                                <td>70% × 0.5 = <strong>35%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>55%</td>
+                                                <td>55% × 0.5 = <strong>27.5%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>가장 단순함</li>
+                                    <li>안정적인 자본 곡선</li>
+                                    <li>심리적으로 견디기 쉬움</li>
+                                    <li>장기 수익률 90% 유지</li>
+                                </ul>
+
+                                <h6 class="text-warning mt-3"><i class="fas fa-exclamation-triangle me-2"></i>단점</h6>
+                                <ul>
+                                    <li>confidence 정보를 활용하지 않음</li>
+                                    <li>좋은 기회를 덜 활용할 수 있음</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fixed 100% -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#fixed100">
+                                <strong>Fixed 100% (매번 전액 투자)</strong>
+                            </button>
+                        </h2>
+                        <div id="fixed100" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>매번 보유한 전체 자본을 투자합니다. Kelly Criterion을 사용하지 않습니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>position = 1.0 (100%)</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <p>현재 자본이 10,000원이면 → 10,000원 전액 투자</p>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>가장 공격적 (최대 수익 가능)</li>
+                                    <li>단순함</li>
+                                </ul>
+
+                                <h6 class="text-danger mt-3"><i class="fas fa-times-circle me-2"></i>단점</h6>
+                                <ul class="text-danger">
+                                    <li><strong>파산 위험 최대</strong></li>
+                                    <li>연속 손실 시 빠르게 자본 고갈</li>
+                                    <li>변동성 극대</li>
+                                    <li><strong>실전에서 권장하지 않음</strong></li>
+                                </ul>
+
+                                <div class="alert alert-danger mt-3">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>경고:</strong> 이 전략은 백테스팅 비교용입니다. 실전 거래에는 절대 사용하지 마세요!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current (Kelly × Confidence) -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#currentKelly">
+                                <strong>Current (Kelly × Confidence) - 기존 방식</strong>
+                            </button>
+                        </h2>
+                        <div id="currentKelly" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>Kelly 결과에 confidence를 직접 곱합니다. (기존 구현 방식)</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>position = Kelly(pred_proba) × confidence</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba</th>
+                                                <th>confidence</th>
+                                                <th>Kelly (R=2.0)</th>
+                                                <th>최종 포지션</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>0.3</td>
+                                                <td>70%</td>
+                                                <td>70% × 0.3 = <strong>21%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>0.2</td>
+                                                <td>55%</td>
+                                                <td>55% × 0.2 = <strong>11%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-warning mt-3"><i class="fas fa-exclamation-triangle me-2"></i>문제점</h6>
+                                <ul>
+                                    <li><strong>이론적 근거 약함</strong>: 중복 보정 (pred_proba가 두 번 사용됨)</li>
+                                    <li><strong>너무 보수적</strong>: 60~90% 포지션 축소</li>
+                                    <li><strong>기회 손실</strong>: 좋은 신호도 과도하게 축소</li>
+                                </ul>
+
+                                <div class="alert alert-info mt-3">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    이 방식은 비교 참고용으로 제공됩니다. 새로운 전략(Conservative Kelly 또는 Estimation Risk Kelly)을 권장합니다.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-success mt-4">
+                    <h6 class="alert-heading"><i class="fas fa-star me-2"></i>추천 전략</h6>
+                    <p class="mb-0">
+                        <strong>초보자:</strong> Conservative Kelly 또는 Half Kelly<br>
+                        <strong>고급 사용자:</strong> Estimation Risk Kelly<br>
+                        <strong>비교 분석:</strong> 여러 전략으로 백테스팅 후 성능 비교
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
