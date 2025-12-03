@@ -342,15 +342,61 @@
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-12">
-                            <label class="form-label fw-bold">포지션 사이징 전략 <i class="fas fa-info-circle text-info ms-1" style="cursor: pointer;" onclick="showStrategyInfo()"></i></label>
-                            <select class="form-select" id="positionSizingStrategy">
-                                <option value="CONSERVATIVE_KELLY" selected>Conservative Kelly (확률 조정 방식 - 추천)</option>
-                                <option value="ESTIMATION_RISK_KELLY">Estimation Risk Kelly (Bayesian Variance 기반)</option>
-                                <option value="HALF_KELLY">Half Kelly (업계 표준)</option>
-                                <option value="FIXED_100_PERCENT">Fixed 100% (매번 전액 투자)</option>
-                                <option value="CURRENT_KELLY_TIMES_CONFIDENCE">Current (Kelly×Confidence) - 기존 방식</option>
-                            </select>
-                            <small class="text-muted">포지션 크기를 결정하는 방법을 선택하세요. <span class="text-info" style="cursor: pointer;" onclick="showStrategyInfo()">각 전략에 대한 자세한 설명 보기</span></small>
+                            <label class="form-label fw-bold">
+                                포지션 사이징 전략 (복수 선택 가능)
+                                <i class="fas fa-info-circle text-info ms-1" style="cursor: pointer;" onclick="showStrategyInfo()"></i>
+                            </label>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="CONSERVATIVE_KELLY" id="strategy_CONSERVATIVE_KELLY" checked>
+                                        <label class="form-check-label" for="strategy_CONSERVATIVE_KELLY">
+                                            <strong>Conservative Kelly</strong> <span class="badge bg-success">추천</span>
+                                            <div class="small text-muted">확률 조정 방식</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="ESTIMATION_RISK_KELLY" id="strategy_ESTIMATION_RISK_KELLY">
+                                        <label class="form-check-label" for="strategy_ESTIMATION_RISK_KELLY">
+                                            <strong>Estimation Risk Kelly</strong>
+                                            <div class="small text-muted">Bayesian Variance 기반</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="HALF_KELLY" id="strategy_HALF_KELLY">
+                                        <label class="form-check-label" for="strategy_HALF_KELLY">
+                                            <strong>Half Kelly</strong> <span class="badge bg-info">업계 표준</span>
+                                            <div class="small text-muted">Pure Kelly의 50%</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="FIXED_100_PERCENT" id="strategy_FIXED_100_PERCENT">
+                                        <label class="form-check-label" for="strategy_FIXED_100_PERCENT">
+                                            <strong>Fixed 100%</strong> <span class="badge bg-danger">위험</span>
+                                            <div class="small text-muted">매번 전액 투자</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="CURRENT_KELLY_TIMES_CONFIDENCE" id="strategy_CURRENT_KELLY_TIMES_CONFIDENCE">
+                                        <label class="form-check-label" for="strategy_CURRENT_KELLY_TIMES_CONFIDENCE">
+                                            <strong>Current (Kelly×Confidence)</strong> <span class="badge bg-secondary">비교용</span>
+                                            <div class="small text-muted">기존 방식</div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                <i class="fas fa-lightbulb me-1"></i>여러 전략을 선택하면 각각 실행되어 비교할 수 있습니다.
+                                <span class="text-info" style="cursor: pointer;" onclick="showStrategyInfo()">각 전략에 대한 자세한 설명 보기</span>
+                            </small>
                         </div>
                     </div>
 
@@ -816,47 +862,153 @@
         return Array.from({length: 7}, (_, i) => i + 1).filter(f => document.getElementById(`fold_${f}`).checked);
     }
 
+    function getSelectedStrategies() {
+        const checkboxes = document.querySelectorAll('.strategy-checkbox:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function getStrategyDisplayName(strategy) {
+        const names = {
+            'CONSERVATIVE_KELLY': 'Conservative Kelly',
+            'ESTIMATION_RISK_KELLY': 'Estimation Risk Kelly',
+            'HALF_KELLY': 'Half Kelly',
+            'FIXED_100_PERCENT': 'Fixed 100%',
+            'CURRENT_KELLY_TIMES_CONFIDENCE': 'Kelly×Confidence'
+        };
+        return names[strategy] || strategy;
+    }
+
+    function generateExecutionName(models, strategy, params) {
+        const now = new Date();
+        const dateStr = now.toLocaleString('ko-KR', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).replace(/\. /g, '/').replace(/\./g, '');
+
+        const modelsStr = models.length <= 2 ? models.join('+') : `${models.length}개 모델`;
+        const strategyName = getStrategyDisplayName(strategy);
+        const capitalStr = (params.initialCapital / 10000).toFixed(0) + '만원';
+
+        return `${modelsStr} | ${strategyName} | ${capitalStr} | ${dateStr}`;
+    }
+
     async function runBatchBacktest() {
         const models = getSelectedModels();
         const folds = getSelectedFolds();
+        const strategies = getSelectedStrategies();
 
         if (models.length === 0 || folds.length === 0) {
             showToast('모델과 Fold를 선택해주세요.', false);
             return;
         }
 
+        if (strategies.length === 0) {
+            showToast('최소 하나의 전략을 선택해주세요.', false);
+            return;
+        }
+
         const initialCapital = parseFloat(document.getElementById('initialCapital').value);
         const predProbaThreshold = parseFloat(document.getElementById('predProbaThreshold').value);
         const holdingPeriodDays = parseInt(document.getElementById('holdingPeriodDays').value);
-        const positionSizingStrategy = document.getElementById('positionSizingStrategy').value;
 
         // Show progress section
         document.getElementById('progressSection').style.display = 'block';
         document.getElementById('resultsSection').style.display = 'none';
-        backtestResults = [];
-
-        const totalTasks = models.length * folds.length;
-
-        document.getElementById('overallProgress').textContent = `0 / ${totalTasks} 완료`;
-        updateProgressBar(0, totalTasks);
-        initializeProgressGrid(models, folds);
 
         const logs = document.getElementById('progressLogs');
         logs.innerHTML = '';
-        addLog(`배치 백테스팅 시작: ${models.length}개 모델 × ${folds.length}개 Fold = 총 ${totalTasks}건 (전략: ${positionSizingStrategy})`);
 
-        // Execute batch backtest (ASYNC)
-        const batchRequest = {
-            modelNames: models,
-            foldNumbers: folds,
-            initialCapital: initialCapital,
-            predProbaThreshold: predProbaThreshold,
-            holdingPeriodDays: holdingPeriodDays,
-            positionSizingStrategy: positionSizingStrategy
-        };
+        const totalStrategies = strategies.length;
+        const totalTasksPerStrategy = models.length * folds.length;
 
+        addLog(`=== 배치 백테스팅 시작 ===`);
+        addLog(`전략: ${totalStrategies}개 (${strategies.map(s => getStrategyDisplayName(s)).join(', ')})`);
+        addLog(`모델: ${models.length}개 × Fold: ${folds.length}개 = 각 전략당 ${totalTasksPerStrategy}건`);
+        addLog(`총 실행 횟수: ${totalStrategies * totalTasksPerStrategy}건\n`);
+
+        // Execute each strategy separately
+        let completedStrategies = 0;
+        const allExecutions = [];
+
+        for (const strategy of strategies) {
+            try {
+                addLog(`\n▶ [${completedStrategies + 1}/${totalStrategies}] ${getStrategyDisplayName(strategy)} 시작...`);
+
+                document.getElementById('overallProgress').textContent =
+                    `전략 ${completedStrategies + 1}/${totalStrategies} 진행 중`;
+                updateProgressBar(completedStrategies, totalStrategies);
+                initializeProgressGrid(models, folds, strategy);
+
+                const batchRequest = {
+                    modelNames: models,
+                    foldNumbers: folds,
+                    initialCapital: initialCapital,
+                    predProbaThreshold: predProbaThreshold,
+                    holdingPeriodDays: holdingPeriodDays,
+                    positionSizingStrategy: strategy
+                };
+
+                // Execute and wait for completion
+                const results = await executeStrategy(batchRequest, strategy);
+
+                if (results && results.length > 0) {
+                    // Auto-save with generated name
+                    const params = { initialCapital, predProbaThreshold, holdingPeriodDays };
+                    const autoName = generateExecutionName(models, strategy, params);
+
+                    const summary = calculateSummaryStats(results);
+                    const execution = {
+                        id: Date.now().toString() + '_' + strategy,
+                        name: autoName,
+                        memo: '',
+                        timestamp: new Date().toISOString(),
+                        params: { ...params, positionSizingStrategy: strategy, models, folds },
+                        results: results,
+                        summary: summary
+                    };
+
+                    saveToLocalStorage(execution);
+                    allExecutions.push(execution);
+
+                    addLog(`✓ ${getStrategyDisplayName(strategy)} 완료 및 저장 (${results.length}건)`);
+                    addLog(`  수익률: ${summary.totalReturn.toFixed(2)}% | 최종자본: ${summary.finalCapital.toLocaleString()}원`);
+                } else {
+                    addLog(`✗ ${getStrategyDisplayName(strategy)} 결과 없음`);
+                }
+
+                completedStrategies++;
+
+            } catch (error) {
+                console.error(`Strategy ${strategy} failed:`, error);
+                addLog(`✗ ${getStrategyDisplayName(strategy)} 실패: ${error.message}`);
+                completedStrategies++;
+            }
+        }
+
+        // All strategies completed
+        document.getElementById('overallProgress').textContent =
+            `전략 ${completedStrategies}/${totalStrategies} 완료`;
+        updateProgressBar(totalStrategies, totalStrategies);
+
+        addLog(`\n=== 모든 전략 완료! ===`);
+        addLog(`총 ${allExecutions.length}개 전략이 저장되었습니다.`);
+        addLog(`사이드바(우측 상단 히스토리 버튼)에서 결과를 확인하세요.`);
+
+        showToast(`${allExecutions.length}개 전략 완료! 히스토리에서 비교해보세요.`, true);
+
+        // Load last execution for display
+        if (allExecutions.length > 0) {
+            backtestResults = allExecutions[allExecutions.length - 1].results;
+            displayResults();
+        }
+    }
+
+    async function executeStrategy(batchRequest, strategy) {
         try {
-            // 1. 비동기 작업 시작
+            // 1. Start async job
             const response = await fetch('/api/backtest/tp-sl/run-batch-async', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -870,49 +1022,54 @@
             const jobData = await response.json();
             const jobId = jobData.jobId;
 
-            addLog(`작업이 시작되었습니다. (Job ID: ${jobId})`);
-            addLog(`진행 상황을 확인 중입니다...`);
+            addLog(`  작업 ID: ${jobId}`);
 
-            // 2. 폴링으로 진행 상황 조회 (2초마다)
-            const pollInterval = setInterval(async () => {
-                try {
-                    const statusResponse = await fetch(`/api/backtest/tp-sl/job/${jobId}`);
-                    if (!statusResponse.ok) {
-                        clearInterval(pollInterval);
-                        throw new Error('Failed to get job status');
-                    }
-
-                    const status = await statusResponse.json();
-
-                    // 진행 상황 업데이트
-                    document.getElementById('overallProgress').textContent =
-                        `${status.completedTasks + status.failedTasks} / ${status.totalTasks} 완료`;
-                    updateProgressBar(status.completedTasks + status.failedTasks, status.totalTasks);
-
-                    addLog(`진행 중: ${status.completedTasks}개 성공, ${status.failedTasks}개 실패 (${status.progress}%)`);
-
-                    // 완료 또는 실패 시 폴링 중단
-                    if (status.status === 'COMPLETED' || status.status === 'FAILED') {
-                        clearInterval(pollInterval);
-
-                        if (status.status === 'COMPLETED') {
-                            addLog(`백테스팅 완료! ${status.completedTasks}/${status.totalTasks}건 성공`);
-                            showToast(`배치 백테스팅 완료! ${status.completedTasks}/${status.totalTasks}건 성공`, true);
-
-                            // 3. 완료 후 결과 조회 (동기 API 재호출)
-                            addLog(`결과를 조회하는 중...`);
-                            await fetchResults(batchRequest);
-                        } else {
-                            addLog(`백테스팅 실패: ${status.errorMessage}`);
-                            showToast('배치 백테스팅이 실패했습니다.', false);
+            // 2. Poll for completion
+            return await new Promise((resolve, reject) => {
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusResponse = await fetch(`/api/backtest/tp-sl/job/${jobId}`);
+                        if (!statusResponse.ok) {
+                            clearInterval(pollInterval);
+                            reject(new Error('Failed to get job status'));
+                            return;
                         }
+
+                        const status = await statusResponse.json();
+
+                        // Update progress (only log progress percentage)
+                        if (status.progress % 20 === 0 || status.progress === 100) {
+                            addLog(`  진행률: ${status.progress}% (${status.completedTasks}/${status.totalTasks})`);
+                        }
+
+                        // Check if completed
+                        if (status.status === 'COMPLETED' || status.status === 'FAILED') {
+                            clearInterval(pollInterval);
+
+                            if (status.status === 'COMPLETED') {
+                                // Fetch results
+                                const resultsResponse = await fetch('/api/backtest/tp-sl/run-batch', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify(batchRequest)
+                                });
+
+                                if (resultsResponse.ok) {
+                                    const results = await resultsResponse.json();
+                                    resolve(results);
+                                } else {
+                                    reject(new Error('Failed to fetch results'));
+                                }
+                            } else {
+                                reject(new Error(status.errorMessage || 'Backtest failed'));
+                            }
+                        }
+                    } catch (error) {
+                        clearInterval(pollInterval);
+                        reject(error);
                     }
-                } catch (error) {
-                    clearInterval(pollInterval);
-                    console.error('Polling error:', error);
-                    addLog(`진행 상황 조회 실패: ${error.message}`);
-                }
-            }, 2000); // 2초마다 폴링
+                }, 2000); // Poll every 2 seconds
+            });
 
         } catch (error) {
             console.error(error);
@@ -952,7 +1109,7 @@
         }
     }
 
-    function initializeProgressGrid(models, folds) {
+    function initializeProgressGrid(models, folds, strategy = null) {
         const grid = document.getElementById('progressGrid');
         grid.innerHTML = '';
 
@@ -963,6 +1120,7 @@
                 card.id = `progress_${model}_${fold}`;
                 card.innerHTML = `
                     <div class="fw-bold">${model}</div>
+                    ${strategy ? `<div class="small text-info">${getStrategyDisplayName(strategy)}</div>` : ''}
                     <div class="small text-muted">Fold ${fold}</div>
                     <div class="small"><i class="fas fa-clock"></i> 대기 중</div>
                 `;
