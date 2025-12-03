@@ -295,7 +295,8 @@ public class BacktestController {
         java.util.List<Integer> foldNumbers,
         BigDecimal initialCapital,
         BigDecimal predProbaThreshold,
-        Integer holdingPeriodDays
+        Integer holdingPeriodDays,
+        com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy positionSizingStrategy
     ) {}
 
     /**
@@ -325,7 +326,9 @@ public class BacktestController {
                 batchRequest.foldNumbers,
                 batchRequest.initialCapital != null ? batchRequest.initialCapital : new BigDecimal("10000"),
                 batchRequest.predProbaThreshold != null ? batchRequest.predProbaThreshold : new BigDecimal("0.6"),
-                batchRequest.holdingPeriodDays != null ? batchRequest.holdingPeriodDays : 8
+                batchRequest.holdingPeriodDays != null ? batchRequest.holdingPeriodDays : 8,
+                batchRequest.positionSizingStrategy != null ? batchRequest.positionSizingStrategy :
+                    com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy.CONSERVATIVE_KELLY
             );
 
             log.info("비동기 작업 등록 완료: jobId={}", jobId);
