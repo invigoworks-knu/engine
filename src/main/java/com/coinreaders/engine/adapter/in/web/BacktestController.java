@@ -251,24 +251,47 @@ public class BacktestController {
             int totalCombinations = batchRequest.modelNames.size() * batchRequest.foldNumbers.size();
             int currentIndex = 0;
 
+            // Fold 번호를 오름차순으로 정렬 (1→2→3→...→7)
+            java.util.List<Integer> sortedFolds = new java.util.ArrayList<>(batchRequest.foldNumbers);
+            java.util.Collections.sort(sortedFolds);
+
+            // 기본값 설정
+            BigDecimal initialCapitalBase = batchRequest.initialCapital != null ? batchRequest.initialCapital : new BigDecimal("10000");
+            BigDecimal predProbaThreshold = batchRequest.predProbaThreshold != null ? batchRequest.predProbaThreshold : new BigDecimal("0.6");
+            Integer holdingPeriodDays = batchRequest.holdingPeriodDays != null ? batchRequest.holdingPeriodDays : 8;
+            com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy positionSizingStrategy =
+                batchRequest.positionSizingStrategy != null ? batchRequest.positionSizingStrategy :
+                    com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy.CONSERVATIVE_KELLY;
+
             for (String modelName : batchRequest.modelNames) {
-                for (Integer foldNumber : batchRequest.foldNumbers) {
+                // 각 모델별로 초기 자본으로 시작
+                BigDecimal currentCapital = initialCapitalBase;
+                BigDecimal modelStartCapital = initialCapitalBase;
+
+                log.info("▶ 모델 [{}] 시작 - 초기 자본: {}원", modelName, currentCapital);
+
+                for (Integer foldNumber : sortedFolds) {
                     currentIndex++;
-                    log.info("=== 배치 진행 중: {}/{} (Model={}, Fold={}) ===",
-                        currentIndex, totalCombinations, modelName, foldNumber);
+                    log.info("=== 배치 진행 중: {}/{} (Model={}, Fold={}, 시작자본={}원) ===",
+                        currentIndex, totalCombinations, modelName, foldNumber, currentCapital);
 
                     TakeProfitStopLossBacktestRequest request = TakeProfitStopLossBacktestRequest.builder()
                         .foldNumber(foldNumber)
                         .modelName(modelName)
-                        .initialCapital(batchRequest.initialCapital != null ? batchRequest.initialCapital : new BigDecimal("10000"))
-                        .predProbaThreshold(batchRequest.predProbaThreshold != null ? batchRequest.predProbaThreshold : new BigDecimal("0.6"))
-                        .holdingPeriodDays(batchRequest.holdingPeriodDays != null ? batchRequest.holdingPeriodDays : 8)
+                        .initialCapital(currentCapital) // 이전 Fold의 최종 자본 사용
+                        .predProbaThreshold(predProbaThreshold)
+                        .holdingPeriodDays(holdingPeriodDays)
+                        .positionSizingStrategy(positionSizingStrategy)
                         .build();
 
                     try {
                         TakeProfitStopLossBacktestResponse response = tpSlBacktestService.runBacktest(request);
                         results.add(response);
-                        log.info("✓ 완료: Model={}, Fold={}, 초기자본={}원 → 최종자본={}원 (수익률 {}%)",
+
+                        // 다음 Fold를 위해 최종 자본 업데이트
+                        currentCapital = response.getFinalCapital();
+
+                        log.info("✓ 완료: Model={}, Fold={}, {}원 → {}원 (수익률 {}%)",
                             modelName, foldNumber,
                             response.getInitialCapital(),
                             response.getFinalCapital(),
@@ -276,9 +299,17 @@ public class BacktestController {
                     } catch (Exception e) {
                         log.error("✗ 실패: Model={}, Fold={}, Error={}",
                             modelName, foldNumber, e.getMessage());
-                        // 실패한 경우에도 계속 진행
+                        // 실패한 경우에도 다음 Fold는 현재 자본으로 계속 진행
                     }
                 }
+
+                // 모델별 최종 결과 로그
+                BigDecimal modelTotalReturn = currentCapital.subtract(modelStartCapital);
+                BigDecimal modelReturnPct = modelTotalReturn.divide(modelStartCapital, 4, java.math.RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"));
+
+                log.info("◀ 모델 [{}] 완료 - {}원 → {}원 (누적 수익률 {}%)",
+                    modelName, modelStartCapital, currentCapital, modelReturnPct);
             }
 
             log.info("=== 배치 백테스팅 완료: 총 {}건 중 {}건 성공 ===", totalCombinations, results.size());
@@ -295,7 +326,8 @@ public class BacktestController {
         java.util.List<Integer> foldNumbers,
         BigDecimal initialCapital,
         BigDecimal predProbaThreshold,
-        Integer holdingPeriodDays
+        Integer holdingPeriodDays,
+        com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy positionSizingStrategy
     ) {}
 
     /**
@@ -325,7 +357,9 @@ public class BacktestController {
                 batchRequest.foldNumbers,
                 batchRequest.initialCapital != null ? batchRequest.initialCapital : new BigDecimal("10000"),
                 batchRequest.predProbaThreshold != null ? batchRequest.predProbaThreshold : new BigDecimal("0.6"),
-                batchRequest.holdingPeriodDays != null ? batchRequest.holdingPeriodDays : 8
+                batchRequest.holdingPeriodDays != null ? batchRequest.holdingPeriodDays : 8,
+                batchRequest.positionSizingStrategy != null ? batchRequest.positionSizingStrategy :
+                    com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy.CONSERVATIVE_KELLY
             );
 
             log.info("비동기 작업 등록 완료: jobId={}", jobId);

@@ -77,6 +77,65 @@
         /* Loading spinner */
         .spinner-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: none; justify-content: center; align-items: center; }
         .spinner-overlay.active { display: flex; }
+
+        /* History Sidebar */
+        #historySidebar {
+            position: fixed;
+            top: 60px;
+            right: -400px;
+            width: 400px;
+            height: calc(100vh - 60px);
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1050;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+        }
+        #historySidebar.open {
+            right: 0;
+        }
+        #historyToggleBtn {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1049;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .history-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .history-item:hover {
+            background: #f8f9fa;
+            border-color: var(--accent-green);
+        }
+        .history-item.selected {
+            background: #d4edda;
+            border-color: var(--accent-green);
+            border-width: 2px;
+        }
+        .history-item .delete-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .history-item:hover .delete-btn {
+            opacity: 1;
+        }
+        .history-stats {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -115,6 +174,70 @@
             <span class="visually-hidden">Loading...</span>
         </div>
         <p class="mt-3 fs-5" id="spinnerMessage">처리 중...</p>
+    </div>
+</div>
+
+<!-- History Toggle Button -->
+<button class="btn btn-primary" id="historyToggleBtn" onclick="toggleHistorySidebar()" title="저장된 결과 보기">
+    <i class="fas fa-history"></i>
+</button>
+
+<!-- History Sidebar -->
+<div id="historySidebar">
+    <div class="p-3" style="background-color: var(--accent-dark); color: white;">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-history me-2"></i>저장된 결과</h5>
+            <button class="btn btn-sm btn-light" onclick="toggleHistorySidebar()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    <div class="p-3">
+        <div class="d-flex gap-2 mb-3">
+            <button class="btn btn-sm btn-success flex-fill" onclick="showCompareMode()">
+                <i class="fas fa-exchange-alt me-1"></i>비교하기
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="clearAllHistory()" title="전체 삭제">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+        <div id="compareMode" style="display: none;">
+            <div class="alert alert-info py-2 px-3 small mb-3">
+                <i class="fas fa-info-circle me-1"></i>비교할 결과를 클릭해서 선택하세요 (최대 4개)
+                <button class="btn btn-sm btn-primary float-end" onclick="compareSelected()">비교</button>
+                <button class="btn btn-sm btn-secondary float-end me-2" onclick="hideCompareMode()">취소</button>
+            </div>
+        </div>
+        <div id="historyList">
+            <p class="text-muted text-center py-4">저장된 결과가 없습니다</p>
+        </div>
+    </div>
+</div>
+
+<!-- Save Result Modal -->
+<div class="modal fade" id="saveResultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-save me-2"></i>결과 저장</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label fw-bold">실행 이름</label>
+                <input type="text" class="form-control" id="executionName" placeholder="예: Conservative Kelly 첫 실험">
+                <small class="text-muted">나중에 쉽게 찾을 수 있도록 의미있는 이름을 입력하세요</small>
+                <div class="mt-3">
+                    <label class="form-label fw-bold">메모 (선택사항)</label>
+                    <textarea class="form-control" id="executionMemo" rows="3" placeholder="이 실험에 대한 메모를 입력하세요"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="saveExecutionToHistory()">
+                    <i class="fas fa-save me-1"></i>저장
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -217,6 +340,66 @@
                         </div>
                     </div>
 
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">
+                                포지션 사이징 전략 (복수 선택 가능)
+                                <i class="fas fa-info-circle text-info ms-1" style="cursor: pointer;" onclick="showStrategyInfo()"></i>
+                            </label>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="CONSERVATIVE_KELLY" id="strategy_CONSERVATIVE_KELLY" checked>
+                                        <label class="form-check-label" for="strategy_CONSERVATIVE_KELLY">
+                                            <strong>Conservative Kelly</strong> <span class="badge bg-success">추천</span>
+                                            <div class="small text-muted">확률 조정 방식</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="ESTIMATION_RISK_KELLY" id="strategy_ESTIMATION_RISK_KELLY">
+                                        <label class="form-check-label" for="strategy_ESTIMATION_RISK_KELLY">
+                                            <strong>Estimation Risk Kelly</strong>
+                                            <div class="small text-muted">Bayesian Variance 기반</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="HALF_KELLY" id="strategy_HALF_KELLY">
+                                        <label class="form-check-label" for="strategy_HALF_KELLY">
+                                            <strong>Half Kelly</strong> <span class="badge bg-info">업계 표준</span>
+                                            <div class="small text-muted">Pure Kelly의 50%</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="FIXED_100_PERCENT" id="strategy_FIXED_100_PERCENT">
+                                        <label class="form-check-label" for="strategy_FIXED_100_PERCENT">
+                                            <strong>Fixed 100%</strong> <span class="badge bg-danger">위험</span>
+                                            <div class="small text-muted">매번 전액 투자</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input strategy-checkbox" value="CURRENT_KELLY_TIMES_CONFIDENCE" id="strategy_CURRENT_KELLY_TIMES_CONFIDENCE">
+                                        <label class="form-check-label" for="strategy_CURRENT_KELLY_TIMES_CONFIDENCE">
+                                            <strong>Current (Kelly×Confidence)</strong> <span class="badge bg-secondary">비교용</span>
+                                            <div class="small text-muted">기존 방식</div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                <i class="fas fa-lightbulb me-1"></i>여러 전략을 선택하면 각각 실행되어 비교할 수 있습니다.
+                                <span class="text-info" style="cursor: pointer;" onclick="showStrategyInfo()">각 전략에 대한 자세한 설명 보기</span>
+                            </small>
+                        </div>
+                    </div>
+
                     <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runBatchBacktest()">
                         <i class="fas fa-play me-2"></i>배치 백테스팅 실행
                     </button>
@@ -241,8 +424,11 @@
 
             <!-- Results Section -->
             <div class="card" id="resultsSection">
-                <div class="card-header">
-                    <i class="fas fa-chart-bar me-2"></i>백테스팅 결과
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-chart-bar me-2"></i>백테스팅 결과</span>
+                    <button class="btn btn-success btn-sm" onclick="promptSaveExecution()">
+                        <i class="fas fa-save me-1"></i>결과 저장
+                    </button>
                 </div>
                 <div class="card-body">
                     <ul class="nav nav-tabs mb-4" id="resultTabs" role="tablist">
@@ -312,6 +498,266 @@
 
     let backtestResults = [];
     let capitalChart = null;
+    let selectedHistoryItems = []; // For comparison mode
+
+    // ========== LocalStorage Functions ==========
+    const STORAGE_KEY = 'tpsl_backtest_history';
+
+    function saveToLocalStorage(execution) {
+        let history = getFromLocalStorage();
+        history.push(execution);
+        // Keep only last 50 executions
+        if (history.length > 50) {
+            history = history.slice(-50);
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    }
+
+    function getFromLocalStorage() {
+        const data = localStorage.getItem(STORAGE_KEY);
+        return data ? JSON.parse(data) : [];
+    }
+
+    function deleteFromLocalStorage(executionId) {
+        let history = getFromLocalStorage();
+        history = history.filter(item => item.id !== executionId);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    }
+
+    function clearAllHistory() {
+        if (confirm('모든 저장된 결과를 삭제하시겠습니까?')) {
+            localStorage.removeItem(STORAGE_KEY);
+            loadHistoryList();
+            showToast('모든 결과가 삭제되었습니다', true);
+        }
+    }
+
+    // ========== Sidebar Functions ==========
+    function toggleHistorySidebar() {
+        const sidebar = document.getElementById('historySidebar');
+        sidebar.classList.toggle('open');
+        if (sidebar.classList.contains('open')) {
+            loadHistoryList();
+        }
+    }
+
+    function loadHistoryList() {
+        const history = getFromLocalStorage();
+        const listContainer = document.getElementById('historyList');
+
+        if (history.length === 0) {
+            listContainer.innerHTML = '<p class="text-muted text-center py-4">저장된 결과가 없습니다</p>';
+            return;
+        }
+
+        // Sort by timestamp descending (newest first)
+        history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        let html = '';
+        history.forEach(item => {
+            const date = new Date(item.timestamp);
+            const dateStr = date.toLocaleString('ko-KR', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            // Calculate summary stats
+            const totalReturn = item.summary.totalReturn || 0;
+            const returnClass = totalReturn >= 0 ? 'text-success' : 'text-danger';
+
+            html += `
+                <div class="history-item" data-id="${item.id}" onclick="loadHistoryItem('${item.id}')">
+                    <button class="btn btn-sm btn-danger delete-btn" onclick="event.stopPropagation(); deleteHistoryItem('${item.id}')">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                    <div class="fw-bold text-truncate">${item.name}</div>
+                    <div class="history-stats mt-1">
+                        <div><i class="fas fa-clock me-1"></i>${dateStr}</div>
+                        <div class="mt-1">
+                            <span class="badge bg-secondary">${item.params.positionSizingStrategy}</span>
+                            <span class="badge bg-info">${item.results.length}건</span>
+                        </div>
+                        <div class="${returnClass} fw-bold mt-1">
+                            수익률: ${totalReturn.toFixed(2)}%
+                        </div>
+                    </div>
+                    ${item.memo ? `<div class="text-muted small mt-1">${item.memo}</div>` : ''}
+                </div>
+            `;
+        });
+
+        listContainer.innerHTML = html;
+    }
+
+    function deleteHistoryItem(executionId) {
+        deleteFromLocalStorage(executionId);
+        loadHistoryList();
+        showToast('결과가 삭제되었습니다', true);
+    }
+
+    function loadHistoryItem(executionId) {
+        const history = getFromLocalStorage();
+        const item = history.find(h => h.id === executionId);
+        if (!item) {
+            showToast('결과를 찾을 수 없습니다', false);
+            return;
+        }
+
+        // Load results and display
+        backtestResults = item.results;
+        displayResults();
+
+        // Close sidebar
+        toggleHistorySidebar();
+
+        // Scroll to results
+        document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+
+        showToast(`"${item.name}" 결과를 불러왔습니다`, true);
+    }
+
+    // ========== Compare Mode Functions ==========
+    function showCompareMode() {
+        document.getElementById('compareMode').style.display = 'block';
+        selectedHistoryItems = [];
+        // Enable selection mode
+        document.querySelectorAll('.history-item').forEach(item => {
+            item.onclick = function(e) {
+                if (e.target.closest('.delete-btn')) return;
+                toggleHistorySelection(this.dataset.id);
+            };
+        });
+    }
+
+    function hideCompareMode() {
+        document.getElementById('compareMode').style.display = 'none';
+        selectedHistoryItems = [];
+        document.querySelectorAll('.history-item').forEach(item => {
+            item.classList.remove('selected');
+            item.onclick = function() { loadHistoryItem(this.dataset.id); };
+        });
+    }
+
+    function toggleHistorySelection(executionId) {
+        const item = document.querySelector(`.history-item[data-id="${executionId}"]`);
+
+        if (selectedHistoryItems.includes(executionId)) {
+            selectedHistoryItems = selectedHistoryItems.filter(id => id !== executionId);
+            item.classList.remove('selected');
+        } else {
+            if (selectedHistoryItems.length >= 4) {
+                showToast('최대 4개까지 선택할 수 있습니다', false);
+                return;
+            }
+            selectedHistoryItems.push(executionId);
+            item.classList.add('selected');
+        }
+    }
+
+    function compareSelected() {
+        if (selectedHistoryItems.length < 2) {
+            showToast('비교하려면 최소 2개를 선택하세요', false);
+            return;
+        }
+
+        const history = getFromLocalStorage();
+        const selectedItems = selectedHistoryItems.map(id => history.find(h => h.id === id));
+
+        // Load all results for comparison
+        backtestResults = selectedItems.flatMap(item =>
+            item.results.map(r => ({
+                ...r,
+                _executionName: item.name,
+                _positionStrategy: item.params.positionSizingStrategy
+            }))
+        );
+
+        displayResults();
+        hideCompareMode();
+        toggleHistorySidebar();
+
+        document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        showToast(`${selectedItems.length}개 결과를 비교합니다`, true);
+    }
+
+    // ========== Save Execution Modal Functions ==========
+    function promptSaveExecution() {
+        if (backtestResults.length === 0) {
+            showToast('저장할 결과가 없습니다', false);
+            return;
+        }
+
+        // Clear previous inputs
+        document.getElementById('executionName').value = '';
+        document.getElementById('executionMemo').value = '';
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('saveResultModal'));
+        modal.show();
+    }
+
+    function saveExecutionToHistory() {
+        const name = document.getElementById('executionName').value.trim();
+        if (!name) {
+            showToast('실행 이름을 입력하세요', false);
+            return;
+        }
+
+        const memo = document.getElementById('executionMemo').value.trim();
+
+        // Get current parameters from form
+        const params = {
+            initialCapital: parseFloat(document.getElementById('initialCapital').value),
+            predProbaThreshold: parseFloat(document.getElementById('predProbaThreshold').value),
+            holdingPeriodDays: parseInt(document.getElementById('holdingPeriodDays').value),
+            positionSizingStrategy: document.getElementById('positionSizingStrategy').value,
+            models: getSelectedModels(),
+            folds: getSelectedFolds()
+        };
+
+        // Calculate summary statistics
+        const summary = calculateSummaryStats(backtestResults);
+
+        const execution = {
+            id: Date.now().toString(),
+            name: name,
+            memo: memo,
+            timestamp: new Date().toISOString(),
+            params: params,
+            results: backtestResults,
+            summary: summary
+        };
+
+        saveToLocalStorage(execution);
+
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('saveResultModal')).hide();
+
+        showToast(`"${name}"으로 저장되었습니다`, true);
+        loadHistoryList();
+    }
+
+    function calculateSummaryStats(results) {
+        if (results.length === 0) return {};
+
+        const totalInitialCapital = results[0].initialCapital;
+        const totalFinalCapital = results[results.length - 1].finalCapital;
+        const totalReturn = ((totalFinalCapital - totalInitialCapital) / totalInitialCapital) * 100;
+
+        const totalTrades = results.reduce((sum, r) => sum + r.totalTrades, 0);
+        const winningTrades = results.reduce((sum, r) => sum + r.winningTrades, 0);
+        const avgWinRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+
+        return {
+            totalReturn: totalReturn,
+            finalCapital: totalFinalCapital,
+            totalTrades: totalTrades,
+            avgWinRate: avgWinRate,
+            resultCount: results.length
+        };
+    }
 
     document.addEventListener('DOMContentLoaded', checkDataStatus);
 
@@ -416,12 +862,51 @@
         return Array.from({length: 7}, (_, i) => i + 1).filter(f => document.getElementById(`fold_${f}`).checked);
     }
 
+    function getSelectedStrategies() {
+        const checkboxes = document.querySelectorAll('.strategy-checkbox:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function getStrategyDisplayName(strategy) {
+        const names = {
+            'CONSERVATIVE_KELLY': 'Conservative Kelly',
+            'ESTIMATION_RISK_KELLY': 'Estimation Risk Kelly',
+            'HALF_KELLY': 'Half Kelly',
+            'FIXED_100_PERCENT': 'Fixed 100%',
+            'CURRENT_KELLY_TIMES_CONFIDENCE': 'Kelly×Confidence'
+        };
+        return names[strategy] || strategy;
+    }
+
+    function generateExecutionName(models, strategy, params) {
+        const now = new Date();
+        const dateStr = now.toLocaleString('ko-KR', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).replace(/\. /g, '/').replace(/\./g, '');
+
+        const modelsStr = models.length <= 2 ? models.join('+') : `${models.length}개 모델`;
+        const strategyName = getStrategyDisplayName(strategy);
+        const capitalStr = (params.initialCapital / 10000).toFixed(0) + '만원';
+
+        return `${modelsStr} | ${strategyName} | ${capitalStr} | ${dateStr}`;
+    }
+
     async function runBatchBacktest() {
         const models = getSelectedModels();
         const folds = getSelectedFolds();
+        const strategies = getSelectedStrategies();
 
         if (models.length === 0 || folds.length === 0) {
             showToast('모델과 Fold를 선택해주세요.', false);
+            return;
+        }
+
+        if (strategies.length === 0) {
+            showToast('최소 하나의 전략을 선택해주세요.', false);
             return;
         }
 
@@ -432,29 +917,98 @@
         // Show progress section
         document.getElementById('progressSection').style.display = 'block';
         document.getElementById('resultsSection').style.display = 'none';
-        backtestResults = [];
-
-        const totalTasks = models.length * folds.length;
-
-        document.getElementById('overallProgress').textContent = `0 / ${totalTasks} 완료`;
-        updateProgressBar(0, totalTasks);
-        initializeProgressGrid(models, folds);
 
         const logs = document.getElementById('progressLogs');
         logs.innerHTML = '';
-        addLog(`배치 백테스팅 시작: ${models.length}개 모델 × ${folds.length}개 Fold = 총 ${totalTasks}건`);
 
-        // Execute batch backtest (ASYNC)
-        const batchRequest = {
-            modelNames: models,
-            foldNumbers: folds,
-            initialCapital: initialCapital,
-            predProbaThreshold: predProbaThreshold,
-            holdingPeriodDays: holdingPeriodDays
-        };
+        const totalStrategies = strategies.length;
+        const totalTasksPerStrategy = models.length * folds.length;
 
+        addLog(`=== 배치 백테스팅 시작 ===`);
+        addLog(`전략: ${totalStrategies}개 (${strategies.map(s => getStrategyDisplayName(s)).join(', ')})`);
+        addLog(`모델: ${models.length}개 × Fold: ${folds.length}개 = 각 전략당 ${totalTasksPerStrategy}건`);
+        addLog(`총 실행 횟수: ${totalStrategies * totalTasksPerStrategy}건\n`);
+
+        // Execute each strategy separately
+        let completedStrategies = 0;
+        const allExecutions = [];
+
+        for (const strategy of strategies) {
+            try {
+                addLog(`\n▶ [${completedStrategies + 1}/${totalStrategies}] ${getStrategyDisplayName(strategy)} 시작...`);
+
+                document.getElementById('overallProgress').textContent =
+                    `전략 ${completedStrategies + 1}/${totalStrategies} 진행 중`;
+                updateProgressBar(completedStrategies, totalStrategies);
+                initializeProgressGrid(models, folds, strategy);
+
+                const batchRequest = {
+                    modelNames: models,
+                    foldNumbers: folds,
+                    initialCapital: initialCapital,
+                    predProbaThreshold: predProbaThreshold,
+                    holdingPeriodDays: holdingPeriodDays,
+                    positionSizingStrategy: strategy
+                };
+
+                // Execute and wait for completion
+                const results = await executeStrategy(batchRequest, strategy);
+
+                if (results && results.length > 0) {
+                    // Auto-save with generated name
+                    const params = { initialCapital, predProbaThreshold, holdingPeriodDays };
+                    const autoName = generateExecutionName(models, strategy, params);
+
+                    const summary = calculateSummaryStats(results);
+                    const execution = {
+                        id: Date.now().toString() + '_' + strategy,
+                        name: autoName,
+                        memo: '',
+                        timestamp: new Date().toISOString(),
+                        params: { ...params, positionSizingStrategy: strategy, models, folds },
+                        results: results,
+                        summary: summary
+                    };
+
+                    saveToLocalStorage(execution);
+                    allExecutions.push(execution);
+
+                    addLog(`✓ ${getStrategyDisplayName(strategy)} 완료 및 저장 (${results.length}건)`);
+                    addLog(`  수익률: ${summary.totalReturn.toFixed(2)}% | 최종자본: ${summary.finalCapital.toLocaleString()}원`);
+                } else {
+                    addLog(`✗ ${getStrategyDisplayName(strategy)} 결과 없음`);
+                }
+
+                completedStrategies++;
+
+            } catch (error) {
+                console.error(`Strategy ${strategy} failed:`, error);
+                addLog(`✗ ${getStrategyDisplayName(strategy)} 실패: ${error.message}`);
+                completedStrategies++;
+            }
+        }
+
+        // All strategies completed
+        document.getElementById('overallProgress').textContent =
+            `전략 ${completedStrategies}/${totalStrategies} 완료`;
+        updateProgressBar(totalStrategies, totalStrategies);
+
+        addLog(`\n=== 모든 전략 완료! ===`);
+        addLog(`총 ${allExecutions.length}개 전략이 저장되었습니다.`);
+        addLog(`사이드바(우측 상단 히스토리 버튼)에서 결과를 확인하세요.`);
+
+        showToast(`${allExecutions.length}개 전략 완료! 히스토리에서 비교해보세요.`, true);
+
+        // Load last execution for display
+        if (allExecutions.length > 0) {
+            backtestResults = allExecutions[allExecutions.length - 1].results;
+            displayResults();
+        }
+    }
+
+    async function executeStrategy(batchRequest, strategy) {
         try {
-            // 1. 비동기 작업 시작
+            // 1. Start async job
             const response = await fetch('/api/backtest/tp-sl/run-batch-async', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -468,49 +1022,54 @@
             const jobData = await response.json();
             const jobId = jobData.jobId;
 
-            addLog(`작업이 시작되었습니다. (Job ID: ${jobId})`);
-            addLog(`진행 상황을 확인 중입니다...`);
+            addLog(`  작업 ID: ${jobId}`);
 
-            // 2. 폴링으로 진행 상황 조회 (2초마다)
-            const pollInterval = setInterval(async () => {
-                try {
-                    const statusResponse = await fetch(`/api/backtest/tp-sl/job/${jobId}`);
-                    if (!statusResponse.ok) {
-                        clearInterval(pollInterval);
-                        throw new Error('Failed to get job status');
-                    }
-
-                    const status = await statusResponse.json();
-
-                    // 진행 상황 업데이트
-                    document.getElementById('overallProgress').textContent =
-                        `${status.completedTasks + status.failedTasks} / ${status.totalTasks} 완료`;
-                    updateProgressBar(status.completedTasks + status.failedTasks, status.totalTasks);
-
-                    addLog(`진행 중: ${status.completedTasks}개 성공, ${status.failedTasks}개 실패 (${status.progress}%)`);
-
-                    // 완료 또는 실패 시 폴링 중단
-                    if (status.status === 'COMPLETED' || status.status === 'FAILED') {
-                        clearInterval(pollInterval);
-
-                        if (status.status === 'COMPLETED') {
-                            addLog(`백테스팅 완료! ${status.completedTasks}/${status.totalTasks}건 성공`);
-                            showToast(`배치 백테스팅 완료! ${status.completedTasks}/${status.totalTasks}건 성공`, true);
-
-                            // 3. 완료 후 결과 조회 (동기 API 재호출)
-                            addLog(`결과를 조회하는 중...`);
-                            await fetchResults(batchRequest);
-                        } else {
-                            addLog(`백테스팅 실패: ${status.errorMessage}`);
-                            showToast('배치 백테스팅이 실패했습니다.', false);
+            // 2. Poll for completion
+            return await new Promise((resolve, reject) => {
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusResponse = await fetch(`/api/backtest/tp-sl/job/${jobId}`);
+                        if (!statusResponse.ok) {
+                            clearInterval(pollInterval);
+                            reject(new Error('Failed to get job status'));
+                            return;
                         }
+
+                        const status = await statusResponse.json();
+
+                        // Update progress (only log progress percentage)
+                        if (status.progress % 20 === 0 || status.progress === 100) {
+                            addLog(`  진행률: ${status.progress}% (${status.completedTasks}/${status.totalTasks})`);
+                        }
+
+                        // Check if completed
+                        if (status.status === 'COMPLETED' || status.status === 'FAILED') {
+                            clearInterval(pollInterval);
+
+                            if (status.status === 'COMPLETED') {
+                                // Fetch results
+                                const resultsResponse = await fetch('/api/backtest/tp-sl/run-batch', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify(batchRequest)
+                                });
+
+                                if (resultsResponse.ok) {
+                                    const results = await resultsResponse.json();
+                                    resolve(results);
+                                } else {
+                                    reject(new Error('Failed to fetch results'));
+                                }
+                            } else {
+                                reject(new Error(status.errorMessage || 'Backtest failed'));
+                            }
+                        }
+                    } catch (error) {
+                        clearInterval(pollInterval);
+                        reject(error);
                     }
-                } catch (error) {
-                    clearInterval(pollInterval);
-                    console.error('Polling error:', error);
-                    addLog(`진행 상황 조회 실패: ${error.message}`);
-                }
-            }, 2000); // 2초마다 폴링
+                }, 2000); // Poll every 2 seconds
+            });
 
         } catch (error) {
             console.error(error);
@@ -536,6 +1095,13 @@
             markAllCompleted();
             displayResults();
             addLog(`결과 조회 완료: ${backtestResults.length}건`);
+
+            // Prompt to save results
+            setTimeout(() => {
+                if (confirm('백테스팅이 완료되었습니다. 결과를 저장하시겠습니까?')) {
+                    promptSaveExecution();
+                }
+            }, 500);
         } catch (error) {
             console.error('Result fetch error:', error);
             addLog(`결과 조회 실패: ${error.message}`);
@@ -543,7 +1109,7 @@
         }
     }
 
-    function initializeProgressGrid(models, folds) {
+    function initializeProgressGrid(models, folds, strategy = null) {
         const grid = document.getElementById('progressGrid');
         grid.innerHTML = '';
 
@@ -554,6 +1120,7 @@
                 card.id = `progress_${model}_${fold}`;
                 card.innerHTML = `
                     <div class="fw-bold">${model}</div>
+                    ${strategy ? `<div class="small text-info">${getStrategyDisplayName(strategy)}</div>` : ''}
                     <div class="small text-muted">Fold ${fold}</div>
                     <div class="small"><i class="fas fa-clock"></i> 대기 중</div>
                 `;
@@ -1027,6 +1594,346 @@
             }
         });
     }
+
+    function showStrategyInfo() {
+        const modal = new bootstrap.Modal(document.getElementById('strategyInfoModal'));
+        modal.show();
+    }
 </script>
+
+<!-- Strategy Info Modal -->
+<div class="modal fade" id="strategyInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color: var(--nav-bg); color: white;">
+                <h5 class="modal-title"><i class="fas fa-calculator me-2"></i>포지션 사이징 전략 상세 설명</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="accordion" id="strategyAccordion">
+                    <!-- Conservative Kelly -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#conservativeKelly">
+                                <strong>Conservative Kelly (확률 조정 방식) - 추천 ⭐</strong>
+                            </button>
+                        </h2>
+                        <div id="conservativeKelly" class="accordion-collapse collapse show" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>confidence가 낮으면 AI 예측 확률을 중립(0.5)로 회귀시킨 후 Kelly Criterion을 적용합니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>adjusted_proba = pred_proba_up × confidence + 0.5 × (1 - confidence)</code><br>
+                                    <code>position = Kelly(adjusted_proba)</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb me-2"></i>이론적 근거</h6>
+                                <ul>
+                                    <li><strong>Bayesian Shrinkage</strong>: 불확실한 추정치를 사전 분포(중립)로 회귀</li>
+                                    <li><strong>Credibility Theory</strong>: 보험/금융 수학에서 검증된 방법</li>
+                                    <li><strong>Shrinkage Estimator</strong>: 극단적 추정치를 중심으로 축소</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba_up</th>
+                                                <th>confidence</th>
+                                                <th>adjusted_proba</th>
+                                                <th>포지션 크기 (R=2.0)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>0.3</td>
+                                                <td>0.8 × 0.3 + 0.5 × 0.7 = <strong>0.59</strong></td>
+                                                <td><strong>38.5%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>0.2</td>
+                                                <td>0.7 × 0.2 + 0.5 × 0.8 = <strong>0.54</strong></td>
+                                                <td><strong>31.0%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>가장 단순하고 이해하기 쉬움</li>
+                                    <li>파라미터 튜닝 불필요</li>
+                                    <li>이론적 근거가 강함 (100년 검증된 이론)</li>
+                                    <li>과도한 포지션 축소 방지</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Estimation Risk Kelly -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#estimationRiskKelly">
+                                <strong>Estimation Risk Kelly (Bayesian Variance)</strong>
+                            </button>
+                        </h2>
+                        <div id="estimationRiskKelly" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>confidence를 "effective sample size"로 해석하고, Bayesian variance를 계산하여 포지션을 조정합니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>n_effective = 1 + (confidence/0.5) × 99</code><br>
+                                    <code>σ² = pred_proba × (1-pred_proba) / n_effective</code><br>
+                                    <code>adjustment = 1 - λ × σ²  (λ=2.0)</code><br>
+                                    <code>position = Kelly(pred_proba) × adjustment</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb me-2"></i>이론적 근거</h6>
+                                <ul>
+                                    <li><strong>Beta Distribution Variance</strong>: 확률의 불확실성을 수학적으로 모델링</li>
+                                    <li><strong>Parameter Uncertainty</strong>: 금융 수학에서 검증된 방법</li>
+                                    <li><strong>Bayesian Framework</strong>: 통계적으로 가장 타당한 접근</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba</th>
+                                                <th>confidence</th>
+                                                <th>σ²</th>
+                                                <th>adjustment</th>
+                                                <th>포지션 (R=2.0)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>0.3</td>
+                                                <td>0.0026</td>
+                                                <td>0.995</td>
+                                                <td>70% × 0.995 = <strong>69.6%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>0.2</td>
+                                                <td>0.0052</td>
+                                                <td>0.990</td>
+                                                <td>55% × 0.990 = <strong>54.4%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>이론적으로 가장 타당함</li>
+                                    <li>pred_proba 자체의 불확실성도 반영</li>
+                                    <li>Pure Kelly와 거의 비슷 (84~98% 수준)</li>
+                                    <li>금융 수학에서 검증됨</li>
+                                </ul>
+
+                                <h6 class="text-warning mt-3"><i class="fas fa-exclamation-triangle me-2"></i>단점</h6>
+                                <ul>
+                                    <li>Conservative Kelly보다 복잡함</li>
+                                    <li>risk_aversion 파라미터(λ) 튜닝 가능</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Half Kelly -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#halfKelly">
+                                <strong>Half Kelly (업계 표준)</strong>
+                            </button>
+                        </h2>
+                        <div id="halfKelly" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>Pure Kelly의 50%만 사용합니다. confidence를 무시하고 일관되게 축소합니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>position = Kelly(pred_proba) × 0.5</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-lightbulb me-2"></i>이론적 근거</h6>
+                                <ul>
+                                    <li><strong>Ed Thorp 추천</strong>: Kelly Criterion 창시자가 실무에서 권장</li>
+                                    <li><strong>업계 표준</strong>: 프로 트레이더들이 가장 많이 사용</li>
+                                    <li><strong>변동성 감소</strong>: Full Kelly 대비 50% 변동성 감소</li>
+                                </ul>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba</th>
+                                                <th>Pure Kelly (R=2.0)</th>
+                                                <th>Half Kelly</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>70%</td>
+                                                <td>70% × 0.5 = <strong>35%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>55%</td>
+                                                <td>55% × 0.5 = <strong>27.5%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>가장 단순함</li>
+                                    <li>안정적인 자본 곡선</li>
+                                    <li>심리적으로 견디기 쉬움</li>
+                                    <li>장기 수익률 90% 유지</li>
+                                </ul>
+
+                                <h6 class="text-warning mt-3"><i class="fas fa-exclamation-triangle me-2"></i>단점</h6>
+                                <ul>
+                                    <li>confidence 정보를 활용하지 않음</li>
+                                    <li>좋은 기회를 덜 활용할 수 있음</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fixed 100% -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#fixed100">
+                                <strong>Fixed 100% (매번 전액 투자)</strong>
+                            </button>
+                        </h2>
+                        <div id="fixed100" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>매번 보유한 전체 자본을 투자합니다. Kelly Criterion을 사용하지 않습니다.</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>position = 1.0 (100%)</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <p>현재 자본이 10,000원이면 → 10,000원 전액 투자</p>
+
+                                <h6 class="text-success mt-3"><i class="fas fa-check-circle me-2"></i>장점</h6>
+                                <ul>
+                                    <li>가장 공격적 (최대 수익 가능)</li>
+                                    <li>단순함</li>
+                                </ul>
+
+                                <h6 class="text-danger mt-3"><i class="fas fa-times-circle me-2"></i>단점</h6>
+                                <ul class="text-danger">
+                                    <li><strong>파산 위험 최대</strong></li>
+                                    <li>연속 손실 시 빠르게 자본 고갈</li>
+                                    <li>변동성 극대</li>
+                                    <li><strong>실전에서 권장하지 않음</strong></li>
+                                </ul>
+
+                                <div class="alert alert-danger mt-3">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>경고:</strong> 이 전략은 백테스팅 비교용입니다. 실전 거래에는 절대 사용하지 마세요!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current (Kelly × Confidence) -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#currentKelly">
+                                <strong>Current (Kelly × Confidence) - 기존 방식</strong>
+                            </button>
+                        </h2>
+                        <div id="currentKelly" class="accordion-collapse collapse" data-bs-parent="#strategyAccordion">
+                            <div class="accordion-body">
+                                <h6 class="text-primary"><i class="fas fa-chart-line me-2"></i>핵심 원리</h6>
+                                <p>Kelly 결과에 confidence를 직접 곱합니다. (기존 구현 방식)</p>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-calculator me-2"></i>수학 공식</h6>
+                                <div class="bg-light p-3 rounded">
+                                    <code>position = Kelly(pred_proba) × confidence</code>
+                                </div>
+
+                                <h6 class="text-primary mt-3"><i class="fas fa-chart-bar me-2"></i>예시</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>pred_proba</th>
+                                                <th>confidence</th>
+                                                <th>Kelly (R=2.0)</th>
+                                                <th>최종 포지션</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>0.8</td>
+                                                <td>0.3</td>
+                                                <td>70%</td>
+                                                <td>70% × 0.3 = <strong>21%</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>0.7</td>
+                                                <td>0.2</td>
+                                                <td>55%</td>
+                                                <td>55% × 0.2 = <strong>11%</strong></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <h6 class="text-warning mt-3"><i class="fas fa-exclamation-triangle me-2"></i>문제점</h6>
+                                <ul>
+                                    <li><strong>이론적 근거 약함</strong>: 중복 보정 (pred_proba가 두 번 사용됨)</li>
+                                    <li><strong>너무 보수적</strong>: 60~90% 포지션 축소</li>
+                                    <li><strong>기회 손실</strong>: 좋은 신호도 과도하게 축소</li>
+                                </ul>
+
+                                <div class="alert alert-info mt-3">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    이 방식은 비교 참고용으로 제공됩니다. 새로운 전략(Conservative Kelly 또는 Estimation Risk Kelly)을 권장합니다.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-success mt-4">
+                    <h6 class="alert-heading"><i class="fas fa-star me-2"></i>추천 전략</h6>
+                    <p class="mb-0">
+                        <strong>초보자:</strong> Conservative Kelly 또는 Half Kelly<br>
+                        <strong>고급 사용자:</strong> Estimation Risk Kelly<br>
+                        <strong>비교 분석:</strong> 여러 전략으로 백테스팅 후 성능 비교
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
