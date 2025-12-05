@@ -61,25 +61,46 @@ public class TakeProfitStopLossBacktestResponse {
         private LocalDateTime entryDateTime;
         private BigDecimal entryPrice;
 
-        private LocalDate exitDate;
-        private LocalDateTime exitDateTime;
-        private BigDecimal exitPrice;
+        private LocalDate exitDate;             // 최종 청산일 (하위 호환)
+        private LocalDateTime exitDateTime;     // 최종 청산 시각 (하위 호환)
+        private BigDecimal exitPrice;           // 가중 평균 청산가 (하위 호환)
 
         private BigDecimal takeProfitPrice;
         private BigDecimal stopLossPrice;
 
-        private BigDecimal positionSize;        // 투자 금액
+        private BigDecimal positionSize;        // 초기 투자 금액
         private BigDecimal investmentRatio;     // 투자 비중 (0~1)
 
-        private BigDecimal profit;              // 손익 (원)
-        private BigDecimal returnPct;           // 수익률 (%)
+        private BigDecimal profit;              // 총 손익 (원)
+        private BigDecimal returnPct;           // 총 수익률 (%)
 
-        private String exitReason;              // TAKE_PROFIT, STOP_LOSS, TIMEOUT
-        private BigDecimal holdingDays;         // 보유 기간 (일)
+        private String exitReason;              // 최종 청산 이유 (하위 호환)
+        private BigDecimal holdingDays;         // 평균 보유 기간 (일)
 
         private BigDecimal predProbaUp;         // AI 예측 확률
         private BigDecimal confidence;          // 신뢰도
 
         private BigDecimal capitalAfter;        // 거래 후 자본
+
+        // 분할 청산 이벤트 리스트 (비어있으면 단일 청산)
+        private List<ExitEvent> exitEvents;
+    }
+
+    /**
+     * 청산 이벤트 (분할 청산 지원)
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ExitEvent {
+        private LocalDateTime exitDateTime;
+        private BigDecimal exitPrice;
+        private BigDecimal exitRatio;           // 청산 비율 (0~1, 예: 0.3 = 30%)
+        private BigDecimal exitAmount;          // 청산 금액 (원)
+        private BigDecimal profit;              // 이 청산의 손익 (원)
+        private BigDecimal returnPct;           // 이 청산의 수익률 (%)
+        private String exitReason;              // PROFIT_LADDER, TIME_DECAY, TAKE_PROFIT, STOP_LOSS, TIMEOUT
+        private String triggerCondition;        // 예: "Return >= 5%", "Day 6", "TP Hit"
     }
 }
