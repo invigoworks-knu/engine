@@ -1,27 +1,15 @@
 package com.coinreaders.engine.adapter.in.web;
 
-import com.coinreaders.engine.application.backtest.BacktestService;
-import com.coinreaders.engine.application.backtest.FoldConfig;
-import com.coinreaders.engine.application.backtest.dto.BacktestRequest;
-import com.coinreaders.engine.application.backtest.dto.BacktestResponse;
-import com.coinreaders.engine.application.backtest.dto.SequentialBacktestResponse;
-import com.coinreaders.engine.application.backtest.dto.ThresholdMode;
-import com.coinreaders.engine.application.backtest.dto.ConfidenceColumn;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-
-import java.math.BigDecimal;
 
 @Controller
 @RequiredArgsConstructor
 @Slf4j
 public class WebViewController {
-
-    private final BacktestService backtestService;
 
     /**
      * 메인 페이지 (대시보드로 리다이렉트)
@@ -54,7 +42,6 @@ public class WebViewController {
      */
     @GetMapping("/backtest/tp-sl")
     public String tpSlBacktestConfig(Model model) {
-        model.addAttribute("folds", FoldConfig.getAllFolds());
         return "tp-sl-backtest";
     }
 }

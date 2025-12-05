@@ -3,12 +3,11 @@ package com.coinreaders.engine.application.backtest;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse.TradeDetail;
+import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse.ExitEvent;
 import com.coinreaders.engine.domain.entity.HistoricalAiPrediction;
 import com.coinreaders.engine.domain.entity.HistoricalMinuteOhlcv;
-import com.coinreaders.engine.domain.entity.HistoricalOhlcv;
 import com.coinreaders.engine.domain.repository.HistoricalAiPredictionRepository;
 import com.coinreaders.engine.domain.repository.HistoricalMinuteOhlcvRepository;
-import com.coinreaders.engine.domain.repository.HistoricalOhlcvRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +27,7 @@ import java.util.stream.Stream;
  * Take Profit / Stop Loss 백테스팅 서비스
  * - 1분봉 데이터를 활용한 정밀 매매 시뮬레이션
  * - Kelly Criterion × Confidence 포지션 사이징
+ * - 분할 청산 전략 (Profit Ladder + Time-Decay)
  * - 8일 보유 기간 동안 TP/SL 추적
  */
 @Slf4j
@@ -37,12 +37,26 @@ public class TakeProfitStopLossBacktestService {
 
     private final HistoricalAiPredictionRepository aiPredictionRepository;
     private final HistoricalMinuteOhlcvRepository minuteOhlcvRepository;
-    private final HistoricalOhlcvRepository ohlcvRepository;
 
     private static final String MARKET = "KRW-ETH";
     private static final BigDecimal FEE_RATE = new BigDecimal("0.0005"); // 0.05% (편도)
-    private static final BigDecimal TOTAL_FEE_RATE = new BigDecimal("0.001"); // 0.1% (왕복)
     private static final int SCALE = 8; // 계산 정밀도
+
+    // Profit Ladder 레벨 (수익률 기준)
+    private static final BigDecimal PROFIT_LEVEL_1 = new BigDecimal("0.05"); // 5%
+    private static final BigDecimal PROFIT_LEVEL_2 = new BigDecimal("0.10"); // 10%
+    private static final BigDecimal PROFIT_LEVEL_3 = new BigDecimal("0.20"); // 20%
+
+    // Profit Ladder 청산 비율
+    private static final BigDecimal EXIT_RATIO_1 = new BigDecimal("0.30"); // 30%
+    private static final BigDecimal EXIT_RATIO_2 = new BigDecimal("0.30"); // 30%
+    private static final BigDecimal EXIT_RATIO_3 = new BigDecimal("0.40"); // 40%
+
+    // Time-Decay 청산 (보유 일수 기준)
+    private static final int TIME_DECAY_DAY_1 = 6; // 6일차
+    private static final int TIME_DECAY_DAY_2 = 7; // 7일차
+    private static final BigDecimal TIME_DECAY_RATIO_1 = new BigDecimal("0.20"); // 20%
+    private static final BigDecimal TIME_DECAY_RATIO_2 = new BigDecimal("0.40"); // 40%
 
     /**
      * 백테스팅 실행
@@ -125,7 +139,7 @@ public class TakeProfitStopLossBacktestService {
     }
 
     /**
-     * 개별 거래 시뮬레이션
+     * 개별 거래 시뮬레이션 (분할 청산 지원)
      */
     private Optional<TradeDetail> simulateTrade(
         HistoricalAiPrediction prediction,
@@ -135,7 +149,7 @@ public class TakeProfitStopLossBacktestService {
     ) {
         LocalDate entryDate = prediction.getPredictionDate();
 
-        // 1. 진입 시각: 당일 오전 9시 첫 1분봉 (또는 그 이후 첫 1분봉)
+        // 1. 진입 시각: 당일 오전 9시 첫 1분봉
         LocalDateTime entryTime = entryDate.atTime(9, 0);
         Optional<HistoricalMinuteOhlcv> entryCandle = minuteOhlcvRepository
             .findFirstByMarketAndCandleDateTimeKstGreaterThanEqualOrderByCandleDateTimeKstAsc(MARKET, entryTime);
@@ -161,55 +175,169 @@ public class TakeProfitStopLossBacktestService {
             return Optional.empty();
         }
 
-        BigDecimal positionSize = currentCapital.multiply(investmentRatio)
+        BigDecimal initialPositionSize = currentCapital.multiply(investmentRatio)
             .setScale(2, RoundingMode.DOWN);
 
-        if (positionSize.compareTo(BigDecimal.ONE) < 0) {
+        if (initialPositionSize.compareTo(BigDecimal.ONE) < 0) {
             log.debug("포지션 크기가 너무 작음 (< 1원), 거래 제외");
             return Optional.empty();
         }
 
         // 3. 진입 수수료 차감
-        BigDecimal entryFee = positionSize.multiply(FEE_RATE).setScale(2, RoundingMode.UP);
-        BigDecimal entryAmount = positionSize.subtract(entryFee);
-        BigDecimal quantity = entryAmount.divide(entryPrice, SCALE, RoundingMode.DOWN);
+        BigDecimal entryFee = initialPositionSize.multiply(FEE_RATE).setScale(2, RoundingMode.UP);
+        BigDecimal entryAmount = initialPositionSize.subtract(entryFee);
+        BigDecimal totalQuantity = entryAmount.divide(entryPrice, SCALE, RoundingMode.DOWN);
 
-        // 4. 8일 동안 1분봉 추적 (Stream 방식으로 메모리 최적화)
-        LocalDateTime exitCheckStart = actualEntryTime.plusMinutes(1); // 다음 분봉부터 체크
+        // 4. 분할 청산 추적 변수
+        List<ExitEvent> exitEvents = new ArrayList<>();
+        BigDecimal remainingQuantity = totalQuantity; // 남은 수량
+        BigDecimal totalProfit = BigDecimal.ZERO; // 누적 손익
+        BigDecimal totalExitAmount = BigDecimal.ZERO; // 누적 청산 금액 (가중 평균 계산용)
+
+        // Profit Ladder 발동 여부 추적
+        boolean profitLevel1Triggered = false;
+        boolean profitLevel2Triggered = false;
+        boolean profitLevel3Triggered = false;
+
+        // Time-Decay 발동 여부 추적
+        boolean timeDecay1Triggered = false;
+        boolean timeDecay2Triggered = false;
+
+        // 5. 8일 동안 1분봉 추적
+        LocalDateTime exitCheckStart = actualEntryTime.plusMinutes(1);
         LocalDateTime exitCheckEnd = actualEntryTime.plusDays(holdingPeriodDays);
 
-        // 5. TP/SL 체크 (Stream 사용)
-        String exitReason = null;
-        BigDecimal exitPrice = null;
-        LocalDateTime exitTime = null;
         HistoricalMinuteOhlcv lastCandle = null;
 
         try (Stream<HistoricalMinuteOhlcv> candleStream = minuteOhlcvRepository
                 .streamByMarketAndDateTimeRange(MARKET, exitCheckStart, exitCheckEnd)) {
 
-            // Iterator를 사용하여 순차 처리
             var iterator = candleStream.iterator();
             boolean hasData = false;
 
-            while (iterator.hasNext()) {
+            while (iterator.hasNext() && remainingQuantity.compareTo(BigDecimal.ZERO) > 0) {
                 HistoricalMinuteOhlcv candle = iterator.next();
                 hasData = true;
                 lastCandle = candle;
 
-                // Take Profit 체크 (고가가 TP 이상)
-                if (candle.getHighPrice().compareTo(takeProfitPrice) >= 0) {
-                    exitReason = "TAKE_PROFIT";
-                    exitPrice = takeProfitPrice;
-                    exitTime = candle.getCandleDateTimeKst();
+                BigDecimal currentPrice = candle.getTradePrice();
+                long minutesHeld = ChronoUnit.MINUTES.between(actualEntryTime, candle.getCandleDateTimeKst());
+                int daysHeld = (int) (minutesHeld / 1440);
+
+                // 현재 수익률 계산 (남은 포지션 기준)
+                BigDecimal unrealizedValue = remainingQuantity.multiply(currentPrice);
+                BigDecimal remainingInvestment = remainingQuantity.multiply(entryPrice);
+                BigDecimal unrealizedReturn = unrealizedValue.subtract(remainingInvestment)
+                    .divide(remainingInvestment, SCALE, RoundingMode.HALF_UP);
+
+                // ===== 청산 우선순위 =====
+
+                // 1. Stop Loss 체크 (최우선 - 저가 기준)
+                if (candle.getLowPrice().compareTo(stopLossPrice) <= 0) {
+                    BigDecimal exitQty = remainingQuantity;
+                    ExitEvent exitEvent = createExitEvent(
+                        candle.getCandleDateTimeKst(), stopLossPrice, exitQty, totalQuantity,
+                        entryPrice, "STOP_LOSS", "SL Hit"
+                    );
+                    exitEvents.add(exitEvent);
+                    totalProfit = totalProfit.add(exitEvent.getProfit());
+                    totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(exitQty));
+                    remainingQuantity = BigDecimal.ZERO;
                     break;
                 }
 
-                // Stop Loss 체크 (저가가 SL 이하)
-                if (candle.getLowPrice().compareTo(stopLossPrice) <= 0) {
-                    exitReason = "STOP_LOSS";
-                    exitPrice = stopLossPrice;
-                    exitTime = candle.getCandleDateTimeKst();
+                // 2. Take Profit 체크 (고우선 - 고가 기준)
+                if (candle.getHighPrice().compareTo(takeProfitPrice) >= 0) {
+                    BigDecimal exitQty = remainingQuantity;
+                    ExitEvent exitEvent = createExitEvent(
+                        candle.getCandleDateTimeKst(), takeProfitPrice, exitQty, totalQuantity,
+                        entryPrice, "TAKE_PROFIT", "TP Hit"
+                    );
+                    exitEvents.add(exitEvent);
+                    totalProfit = totalProfit.add(exitEvent.getProfit());
+                    totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(exitQty));
+                    remainingQuantity = BigDecimal.ZERO;
                     break;
+                }
+
+                // 3. Profit Ladder (수익률 기준 - 종가)
+                if (!profitLevel3Triggered && unrealizedReturn.compareTo(PROFIT_LEVEL_3) >= 0) {
+                    BigDecimal exitRatio = EXIT_RATIO_3; // 40%
+                    BigDecimal exitQty = totalQuantity.multiply(exitRatio).setScale(SCALE, RoundingMode.DOWN);
+                    if (exitQty.compareTo(remainingQuantity) > 0) exitQty = remainingQuantity;
+
+                    ExitEvent exitEvent = createExitEvent(
+                        candle.getCandleDateTimeKst(), currentPrice, exitQty, totalQuantity,
+                        entryPrice, "PROFIT_LADDER", "Return >= 20%"
+                    );
+                    exitEvents.add(exitEvent);
+                    totalProfit = totalProfit.add(exitEvent.getProfit());
+                    totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(exitQty));
+                    remainingQuantity = remainingQuantity.subtract(exitQty);
+                    profitLevel3Triggered = true;
+                    profitLevel2Triggered = true; // 하위 레벨도 자동 발동
+                    profitLevel1Triggered = true;
+                } else if (!profitLevel2Triggered && unrealizedReturn.compareTo(PROFIT_LEVEL_2) >= 0) {
+                    BigDecimal exitRatio = EXIT_RATIO_2; // 30%
+                    BigDecimal exitQty = totalQuantity.multiply(exitRatio).setScale(SCALE, RoundingMode.DOWN);
+                    if (exitQty.compareTo(remainingQuantity) > 0) exitQty = remainingQuantity;
+
+                    ExitEvent exitEvent = createExitEvent(
+                        candle.getCandleDateTimeKst(), currentPrice, exitQty, totalQuantity,
+                        entryPrice, "PROFIT_LADDER", "Return >= 10%"
+                    );
+                    exitEvents.add(exitEvent);
+                    totalProfit = totalProfit.add(exitEvent.getProfit());
+                    totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(exitQty));
+                    remainingQuantity = remainingQuantity.subtract(exitQty);
+                    profitLevel2Triggered = true;
+                    profitLevel1Triggered = true; // 하위 레벨도 자동 발동
+                } else if (!profitLevel1Triggered && unrealizedReturn.compareTo(PROFIT_LEVEL_1) >= 0) {
+                    BigDecimal exitRatio = EXIT_RATIO_1; // 30%
+                    BigDecimal exitQty = totalQuantity.multiply(exitRatio).setScale(SCALE, RoundingMode.DOWN);
+                    if (exitQty.compareTo(remainingQuantity) > 0) exitQty = remainingQuantity;
+
+                    ExitEvent exitEvent = createExitEvent(
+                        candle.getCandleDateTimeKst(), currentPrice, exitQty, totalQuantity,
+                        entryPrice, "PROFIT_LADDER", "Return >= 5%"
+                    );
+                    exitEvents.add(exitEvent);
+                    totalProfit = totalProfit.add(exitEvent.getProfit());
+                    totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(exitQty));
+                    remainingQuantity = remainingQuantity.subtract(exitQty);
+                    profitLevel1Triggered = true;
+                }
+
+                // 4. Time-Decay (보유 일수 기준 - 종가)
+                if (!timeDecay2Triggered && daysHeld >= TIME_DECAY_DAY_2) {
+                    BigDecimal exitRatio = TIME_DECAY_RATIO_2; // 40%
+                    BigDecimal exitQty = totalQuantity.multiply(exitRatio).setScale(SCALE, RoundingMode.DOWN);
+                    if (exitQty.compareTo(remainingQuantity) > 0) exitQty = remainingQuantity;
+
+                    ExitEvent exitEvent = createExitEvent(
+                        candle.getCandleDateTimeKst(), currentPrice, exitQty, totalQuantity,
+                        entryPrice, "TIME_DECAY", "Day 7"
+                    );
+                    exitEvents.add(exitEvent);
+                    totalProfit = totalProfit.add(exitEvent.getProfit());
+                    totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(exitQty));
+                    remainingQuantity = remainingQuantity.subtract(exitQty);
+                    timeDecay2Triggered = true;
+                    timeDecay1Triggered = true; // 하위 레벨도 자동 발동
+                } else if (!timeDecay1Triggered && daysHeld >= TIME_DECAY_DAY_1) {
+                    BigDecimal exitRatio = TIME_DECAY_RATIO_1; // 20%
+                    BigDecimal exitQty = totalQuantity.multiply(exitRatio).setScale(SCALE, RoundingMode.DOWN);
+                    if (exitQty.compareTo(remainingQuantity) > 0) exitQty = remainingQuantity;
+
+                    ExitEvent exitEvent = createExitEvent(
+                        candle.getCandleDateTimeKst(), currentPrice, exitQty, totalQuantity,
+                        entryPrice, "TIME_DECAY", "Day 6"
+                    );
+                    exitEvents.add(exitEvent);
+                    totalProfit = totalProfit.add(exitEvent.getProfit());
+                    totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(exitQty));
+                    remainingQuantity = remainingQuantity.subtract(exitQty);
+                    timeDecay1Triggered = true;
                 }
             }
 
@@ -219,50 +347,99 @@ public class TakeProfitStopLossBacktestService {
             }
         }
 
-        // 6. Timeout 처리 (8일 내 TP/SL 미도달)
-        if (exitReason == null && lastCandle != null) {
-            exitReason = "TIMEOUT";
-            exitPrice = lastCandle.getTradePrice(); // 종가
-            exitTime = lastCandle.getCandleDateTimeKst();
+        // 6. Timeout 처리 (남은 포지션 전량 청산)
+        if (remainingQuantity.compareTo(BigDecimal.ZERO) > 0 && lastCandle != null) {
+            BigDecimal timeoutPrice = lastCandle.getTradePrice();
+            ExitEvent exitEvent = createExitEvent(
+                lastCandle.getCandleDateTimeKst(), timeoutPrice, remainingQuantity, totalQuantity,
+                entryPrice, "TIMEOUT", String.format("Day %d Expired", holdingPeriodDays)
+            );
+            exitEvents.add(exitEvent);
+            totalProfit = totalProfit.add(exitEvent.getProfit());
+            totalExitAmount = totalExitAmount.add(exitEvent.getExitPrice().multiply(remainingQuantity));
         }
 
-        // 7. 매도 및 수익 계산
-        BigDecimal exitProceeds = quantity.multiply(exitPrice).setScale(2, RoundingMode.DOWN);
-        BigDecimal exitFee = exitProceeds.multiply(FEE_RATE).setScale(2, RoundingMode.UP);
-        BigDecimal finalAmount = exitProceeds.subtract(exitFee);
-        BigDecimal profit = finalAmount.subtract(positionSize);
-        BigDecimal returnPct = profit.divide(positionSize, 4, RoundingMode.HALF_UP)
+        // 7. 최종 통계 계산
+        BigDecimal netProfit = totalProfit.subtract(entryFee); // 진입 수수료 차감
+        BigDecimal totalReturnPct = netProfit.divide(initialPositionSize, 4, RoundingMode.HALF_UP)
             .multiply(new BigDecimal("100"));
-        BigDecimal capitalAfter = currentCapital.add(profit);
+        BigDecimal capitalAfter = currentCapital.add(netProfit);
 
-        // 8. 보유 기간 계산
-        long holdingMinutes = ChronoUnit.MINUTES.between(actualEntryTime, exitTime);
-        BigDecimal holdingDays = BigDecimal.valueOf(holdingMinutes)
-            .divide(new BigDecimal("1440"), 2, RoundingMode.HALF_UP); // 1440분 = 1일
+        // 가중 평균 청산가 계산
+        BigDecimal weightedAvgExitPrice = totalExitAmount.divide(totalQuantity, 2, RoundingMode.HALF_UP);
 
-        // 9. TradeDetail 생성
+        // 평균 보유 기간 계산
+        BigDecimal avgHoldingDays = BigDecimal.ZERO;
+        if (!exitEvents.isEmpty()) {
+            long totalMinutes = exitEvents.stream()
+                .mapToLong(e -> ChronoUnit.MINUTES.between(actualEntryTime, e.getExitDateTime()))
+                .sum();
+            avgHoldingDays = BigDecimal.valueOf(totalMinutes)
+                .divide(new BigDecimal(exitEvents.size()), 2, RoundingMode.HALF_UP)
+                .divide(new BigDecimal("1440"), 2, RoundingMode.HALF_UP);
+        }
+
+        // 최종 청산 이유 (마지막 청산 이벤트)
+        String finalExitReason = exitEvents.isEmpty() ? "UNKNOWN" :
+            exitEvents.get(exitEvents.size() - 1).getExitReason();
+
+        // 8. TradeDetail 생성
         TradeDetail trade = TradeDetail.builder()
             .tradeNumber(tradeNumber)
             .entryDate(entryDate)
             .entryDateTime(actualEntryTime)
             .entryPrice(entryPrice)
-            .exitDate(exitTime.toLocalDate())
-            .exitDateTime(exitTime)
-            .exitPrice(exitPrice)
+            .exitDate(exitEvents.isEmpty() ? null : exitEvents.get(exitEvents.size() - 1).getExitDateTime().toLocalDate())
+            .exitDateTime(exitEvents.isEmpty() ? null : exitEvents.get(exitEvents.size() - 1).getExitDateTime())
+            .exitPrice(weightedAvgExitPrice)
             .takeProfitPrice(takeProfitPrice)
             .stopLossPrice(stopLossPrice)
-            .positionSize(positionSize)
+            .positionSize(initialPositionSize)
             .investmentRatio(investmentRatio)
-            .profit(profit)
-            .returnPct(returnPct)
-            .exitReason(exitReason)
-            .holdingDays(holdingDays)
+            .profit(netProfit)
+            .returnPct(totalReturnPct)
+            .exitReason(finalExitReason)
+            .holdingDays(avgHoldingDays)
             .predProbaUp(prediction.getPredProbaUp())
             .confidence(prediction.getConfidence())
             .capitalAfter(capitalAfter)
+            .exitEvents(exitEvents)
             .build();
 
         return Optional.of(trade);
+    }
+
+    /**
+     * 청산 이벤트 생성 헬퍼 메서드
+     */
+    private ExitEvent createExitEvent(
+        LocalDateTime exitDateTime,
+        BigDecimal exitPrice,
+        BigDecimal exitQty,
+        BigDecimal totalQty,
+        BigDecimal entryPrice,
+        String exitReason,
+        String triggerCondition
+    ) {
+        BigDecimal exitRatio = exitQty.divide(totalQty, 4, RoundingMode.HALF_UP);
+        BigDecimal exitProceeds = exitQty.multiply(exitPrice).setScale(2, RoundingMode.DOWN);
+        BigDecimal exitFee = exitProceeds.multiply(FEE_RATE).setScale(2, RoundingMode.UP);
+        BigDecimal netProceeds = exitProceeds.subtract(exitFee);
+        BigDecimal cost = exitQty.multiply(entryPrice).setScale(2, RoundingMode.DOWN);
+        BigDecimal profit = netProceeds.subtract(cost);
+        BigDecimal returnPct = profit.divide(cost, 4, RoundingMode.HALF_UP)
+            .multiply(new BigDecimal("100"));
+
+        return ExitEvent.builder()
+            .exitDateTime(exitDateTime)
+            .exitPrice(exitPrice)
+            .exitRatio(exitRatio)
+            .exitAmount(netProceeds)
+            .profit(profit)
+            .returnPct(returnPct)
+            .exitReason(exitReason)
+            .triggerCondition(triggerCondition)
+            .build();
     }
 
     /**
@@ -334,12 +511,27 @@ public class TakeProfitStopLossBacktestService {
 
         // 거래 통계
         int totalTrades = tradeHistory.size();
-        int takeProfitExits = (int) tradeHistory.stream()
-            .filter(t -> "TAKE_PROFIT".equals(t.getExitReason())).count();
-        int stopLossExits = (int) tradeHistory.stream()
-            .filter(t -> "STOP_LOSS".equals(t.getExitReason())).count();
-        int timeoutExits = (int) tradeHistory.stream()
-            .filter(t -> "TIMEOUT".equals(t.getExitReason())).count();
+
+        // 청산 이유별 집계
+        int takeProfitExits = 0;
+        int stopLossExits = 0;
+        int timeoutExits = 0;
+        int profitLadderExits = 0;
+        int timeDecayExits = 0;
+
+        for (TradeDetail trade : tradeHistory) {
+            if (trade.getExitEvents() != null) {
+                for (ExitEvent event : trade.getExitEvents()) {
+                    switch (event.getExitReason()) {
+                        case "TAKE_PROFIT" -> takeProfitExits++;
+                        case "STOP_LOSS" -> stopLossExits++;
+                        case "TIMEOUT" -> timeoutExits++;
+                        case "PROFIT_LADDER" -> profitLadderExits++;
+                        case "TIME_DECAY" -> timeDecayExits++;
+                    }
+                }
+            }
+        }
 
         long winningTrades = tradeHistory.stream()
             .filter(t -> t.getProfit().compareTo(BigDecimal.ZERO) > 0).count();
@@ -360,6 +552,9 @@ public class TakeProfitStopLossBacktestService {
         BigDecimal winLossRatio = avgLoss.compareTo(BigDecimal.ZERO) != 0
             ? avgWin.divide(avgLoss.abs(), 4, RoundingMode.HALF_UP)
             : BigDecimal.ZERO;
+
+        log.info("청산 통계: TP={}, SL={}, Timeout={}, ProfitLadder={}, TimeDecay={}",
+            takeProfitExits, stopLossExits, timeoutExits, profitLadderExits, timeDecayExits);
 
         return TakeProfitStopLossBacktestResponse.builder()
             .modelName(request.getModelName())
@@ -476,8 +671,6 @@ public class TakeProfitStopLossBacktestService {
      * Fold 번호에 따른 시장 체제 추정
      */
     private String determineRegime(Integer foldNumber) {
-        // 실제로는 DB에서 조회하거나 날짜 기반으로 판단해야 하지만,
-        // 여기서는 간단히 Fold 번호 기반으로 추정
         return switch (foldNumber) {
             case 1, 2 -> "BEAR";
             case 3, 4 -> "SIDEWAYS";
