@@ -300,6 +300,59 @@
     </div>
 </div>
 
+<!-- Exit Details Modal -->
+<div class="modal fade" id="exitDetailsModal" tabindex="-1" aria-labelledby="exitDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color: var(--accent-dark); color: #FFFFFF;">
+                <h5 class="modal-title" id="exitDetailsModalLabel"><i class="fas fa-chart-line me-2"></i>분할 청산 상세 내역</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Trade Summary -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h6 class="text-muted">모델</h6>
+                                <h5 id="modalModelName">-</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h6 class="text-muted">Fold</h6>
+                                <h5 id="modalFold">-</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h6 class="text-muted">총 거래 수</h6>
+                                <h5 id="modalTotalTrades">-</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h6 class="text-muted">수익률</h6>
+                                <h5 id="modalReturn">-</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trade History with Exit Events -->
+                <h6 class="fw-bold mb-3">거래 내역 및 분할 청산</h6>
+                <div id="modalTradeHistory" style="max-height: 500px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     const ALL_MODELS = ['GRU', 'LSTM', 'BiLSTM', 'XGBoost', 'LightGBM', 'CatBoost',
@@ -622,6 +675,31 @@
         const totalTrades = backtestResults.reduce((sum, r) => sum + r.totalTrades, 0);
         const avgWinRate = backtestResults.reduce((sum, r) => sum + parseFloat(r.winRate), 0) / backtestResults.length;
 
+        // Calculate exit reason statistics
+        let takeProfitTotal = 0;
+        let stopLossTotal = 0;
+        let timeoutTotal = 0;
+        let profitLadderTotal = 0;
+        let timeDecayTotal = 0;
+
+        backtestResults.forEach(r => {
+            takeProfitTotal += r.takeProfitExits || 0;
+            stopLossTotal += r.stopLossExits || 0;
+            timeoutTotal += r.timeoutExits || 0;
+
+            // Count Profit Ladder and Time-Decay from exitEvents
+            if (r.tradeHistory) {
+                r.tradeHistory.forEach(trade => {
+                    if (trade.exitEvents && Array.isArray(trade.exitEvents)) {
+                        trade.exitEvents.forEach(event => {
+                            if (event.exitReason === 'PROFIT_LADDER') profitLadderTotal++;
+                            else if (event.exitReason === 'TIME_DECAY') timeDecayTotal++;
+                        });
+                    }
+                });
+            }
+        });
+
         content.innerHTML = `
             <div class="row g-3 mb-4">
                 <div class="col-md-3">
@@ -657,7 +735,7 @@
                     </div>
                 </div>
             </div>
-            <div class="row g-3">
+            <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <div class="card text-center">
                         <div class="card-body">
@@ -675,7 +753,100 @@
                     </div>
                 </div>
             </div>
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header" style="background-color: var(--accent-dark); color: #FFFFFF;">
+                            <i class="fas fa-pie-chart me-2"></i>청산 사유 분석
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <canvas id="exitReasonChart" style="max-height: 300px;"></canvas>
+                                </div>
+                                <div class="col-md-6">
+                                    <table class="table table-sm">
+                                        <tbody>
+                                            <tr>
+                                                <td><span class="badge" style="background-color: #28a745;">익절 (TP)</span></td>
+                                                <td class="text-end fw-bold">${takeProfitTotal}건</td>
+                                                <td class="text-end text-muted">${((takeProfitTotal / totalTrades) * 100).toFixed(1)}%</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge" style="background-color: #dc3545;">손절 (SL)</span></td>
+                                                <td class="text-end fw-bold">${stopLossTotal}건</td>
+                                                <td class="text-end text-muted">${((stopLossTotal / totalTrades) * 100).toFixed(1)}%</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge" style="background-color: #A3B087;">Profit Ladder</span></td>
+                                                <td class="text-end fw-bold">${profitLadderTotal}건</td>
+                                                <td class="text-end text-muted">${totalTrades > 0 ? ((profitLadderTotal / totalTrades) * 100).toFixed(1) : '0.0'}%</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge" style="background-color: #6C91BF;">Time-Decay</span></td>
+                                                <td class="text-end fw-bold">${timeDecayTotal}건</td>
+                                                <td class="text-end text-muted">${totalTrades > 0 ? ((timeDecayTotal / totalTrades) * 100).toFixed(1) : '0.0'}%</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge" style="background-color: #ffc107;">시간만료</span></td>
+                                                <td class="text-end fw-bold">${timeoutTotal}건</td>
+                                                <td class="text-end text-muted">${((timeoutTotal / totalTrades) * 100).toFixed(1)}%</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
+
+        // Create pie chart
+        const ctx = document.getElementById('exitReasonChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['익절 (TP)', '손절 (SL)', 'Profit Ladder', 'Time-Decay', '시간만료'],
+                datasets: [{
+                    data: [takeProfitTotal, stopLossTotal, profitLadderTotal, timeDecayTotal, timeoutTotal],
+                    backgroundColor: [
+                        '#28a745', // TP - green
+                        '#dc3545', // SL - red
+                        '#A3B087', // Profit Ladder - accent green
+                        '#6C91BF', // Time-Decay - accent blue
+                        '#ffc107'  // Timeout - yellow
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#FFFFFF'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: { size: 12, family: 'Segoe UI' },
+                            color: '#313647',
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value}건 (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     function displayModelComparison() {
@@ -806,15 +977,33 @@
                     <th>거래 수</th>
                     <th>익절</th>
                     <th>손절</th>
+                    <th>Profit Ladder</th>
+                    <th>Time-Decay</th>
                     <th>시간만료</th>
                     <th>승률</th>
                     <th>MDD</th>
                     <th>Sharpe</th>
+                    <th>상세 보기</th>
                 </tr></thead>
                 <tbody>
         `;
 
-        backtestResults.forEach(r => {
+        backtestResults.forEach((r, idx) => {
+            // Count Profit Ladder and Time-Decay events from tradeHistory
+            let profitLadderCount = 0;
+            let timeDecayCount = 0;
+
+            if (r.tradeHistory) {
+                r.tradeHistory.forEach(trade => {
+                    if (trade.exitEvents && Array.isArray(trade.exitEvents)) {
+                        trade.exitEvents.forEach(event => {
+                            if (event.exitReason === 'PROFIT_LADDER') profitLadderCount++;
+                            else if (event.exitReason === 'TIME_DECAY') timeDecayCount++;
+                        });
+                    }
+                });
+            }
+
             tableHTML += `
                 <tr>
                     <td class="fw-bold">${r.modelName}</td>
@@ -824,10 +1013,17 @@
                     <td>${r.totalTrades}</td>
                     <td class="text-success">${r.takeProfitExits}</td>
                     <td class="text-danger">${r.stopLossExits}</td>
+                    <td><span class="badge" style="background-color: #A3B087;">${profitLadderCount}</span></td>
+                    <td><span class="badge" style="background-color: #6C91BF;">${timeDecayCount}</span></td>
                     <td class="text-warning">${r.timeoutExits}</td>
                     <td>${r.winRate.toFixed(2)}%</td>
                     <td>${r.maxDrawdown.toFixed(2)}%</td>
                     <td>${r.sharpeRatio.toFixed(2)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showExitDetails(${idx})">
+                            <i class="fas fa-eye"></i> 보기
+                        </button>
+                    </td>
                 </tr>
             `;
         });
@@ -1025,6 +1221,181 @@
                 }
             }
         });
+    }
+
+    function showExitDetails(resultIdx) {
+        const result = backtestResults[resultIdx];
+
+        // Populate modal header info
+        document.getElementById('modalModelName').textContent = result.modelName;
+        document.getElementById('modalFold').textContent = `Fold ${result.foldNumber}`;
+        document.getElementById('modalTotalTrades').textContent = result.totalTrades;
+        document.getElementById('modalReturn').textContent = `${result.totalReturnPct.toFixed(2)}%`;
+        document.getElementById('modalReturn').className = result.totalReturnPct >= 0 ? 'text-success' : 'text-danger';
+
+        // Populate trade history with exit events
+        const historyContainer = document.getElementById('modalTradeHistory');
+
+        if (!result.tradeHistory || result.tradeHistory.length === 0) {
+            historyContainer.innerHTML = '<p class="text-center text-muted">거래 내역이 없습니다.</p>';
+        } else {
+            let historyHTML = '';
+
+            result.tradeHistory.forEach((trade, idx) => {
+                const hasExitEvents = trade.exitEvents && Array.isArray(trade.exitEvents) && trade.exitEvents.length > 0;
+
+                // Determine exit reason badge
+                let exitReasonBadge = '';
+                if (trade.exitReason === 'TAKE_PROFIT') {
+                    exitReasonBadge = '<span class="badge bg-success">익절 (TP)</span>';
+                } else if (trade.exitReason === 'STOP_LOSS') {
+                    exitReasonBadge = '<span class="badge bg-danger">손절 (SL)</span>';
+                } else if (trade.exitReason === 'TIMEOUT') {
+                    exitReasonBadge = '<span class="badge bg-warning">시간만료</span>';
+                } else {
+                    exitReasonBadge = `<span class="badge bg-secondary">${trade.exitReason}</span>`;
+                }
+
+                historyHTML += `
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #f8f9fa;">
+                            <span class="fw-bold">거래 #${idx + 1}</span>
+                            ${exitReasonBadge}
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <small class="text-muted">진입 시각</small><br>
+                                    <strong>${new Date(trade.entryDateTime).toLocaleString('ko-KR')}</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">청산 시각</small><br>
+                                    <strong>${new Date(trade.exitDateTime).toLocaleString('ko-KR')}</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">진입가</small><br>
+                                    <strong>${parseFloat(trade.entryPrice).toLocaleString('ko-KR')}원</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">최종 청산가</small><br>
+                                    <strong>${parseFloat(trade.exitPrice).toLocaleString('ko-KR')}원</strong>
+                                </div>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <small class="text-muted">투자 금액</small><br>
+                                    <strong>${parseFloat(trade.investmentAmount).toLocaleString('ko-KR')}원</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">손익</small><br>
+                                    <strong class="${parseFloat(trade.profit) >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${parseFloat(trade.profit).toLocaleString('ko-KR')}원
+                                    </strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">수익률</small><br>
+                                    <strong class="${parseFloat(trade.returnPct) >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${parseFloat(trade.returnPct).toFixed(2)}%
+                                    </strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">보유 기간</small><br>
+                                    <strong>${parseFloat(trade.holdingPeriodDays).toFixed(1)}일</strong>
+                                </div>
+                            </div>
+                            ${hasExitEvents ? `
+                                <hr>
+                                <h6 class="fw-bold mb-3"><i class="fas fa-layer-group me-2"></i>분할 청산 이벤트 (${trade.exitEvents.length}건)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 5%;">#</th>
+                                                <th style="width: 20%;">청산 시각</th>
+                                                <th style="width: 15%;">청산 가격</th>
+                                                <th style="width: 12%;">청산 비율</th>
+                                                <th style="width: 15%;">청산 금액</th>
+                                                <th style="width: 12%;">손익</th>
+                                                <th style="width: 10%;">수익률</th>
+                                                <th style="width: 18%;">청산 사유</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${trade.exitEvents.map((event, eventIdx) => {
+                                                let eventBadge = '';
+                                                let badgeColor = '';
+                                                if (event.exitReason === 'PROFIT_LADDER') {
+                                                    eventBadge = `Profit Ladder (${event.triggerCondition})`;
+                                                    badgeColor = '#A3B087';
+                                                } else if (event.exitReason === 'TIME_DECAY') {
+                                                    eventBadge = `Time-Decay (${event.triggerCondition})`;
+                                                    badgeColor = '#6C91BF';
+                                                } else if (event.exitReason === 'TAKE_PROFIT') {
+                                                    eventBadge = '익절 (TP)';
+                                                    badgeColor = '#28a745';
+                                                } else if (event.exitReason === 'STOP_LOSS') {
+                                                    eventBadge = '손절 (SL)';
+                                                    badgeColor = '#dc3545';
+                                                } else {
+                                                    eventBadge = event.exitReason;
+                                                    badgeColor = '#6c757d';
+                                                }
+
+                                                return `
+                                                    <tr>
+                                                        <td class="text-center">${eventIdx + 1}</td>
+                                                        <td>${new Date(event.exitDateTime).toLocaleString('ko-KR', {
+                                                            year: 'numeric',
+                                                            month: '2-digit',
+                                                            day: '2-digit',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}</td>
+                                                        <td class="text-end">${parseFloat(event.exitPrice).toLocaleString('ko-KR')}원</td>
+                                                        <td class="text-center"><span class="badge bg-secondary">${(parseFloat(event.exitRatio) * 100).toFixed(0)}%</span></td>
+                                                        <td class="text-end">${parseFloat(event.exitAmount).toLocaleString('ko-KR')}원</td>
+                                                        <td class="text-end ${parseFloat(event.profit) >= 0 ? 'text-success' : 'text-danger'} fw-bold">
+                                                            ${parseFloat(event.profit).toLocaleString('ko-KR')}원
+                                                        </td>
+                                                        <td class="text-end ${parseFloat(event.returnPct) >= 0 ? 'text-success' : 'text-danger'} fw-bold">
+                                                            ${parseFloat(event.returnPct).toFixed(2)}%
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge" style="background-color: ${badgeColor}; font-size: 0.75rem;">
+                                                                ${eventBadge}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                `;
+                                            }).join('')}
+                                        </tbody>
+                                        <tfoot class="table-light">
+                                            <tr class="fw-bold">
+                                                <td colspan="4" class="text-end">합계:</td>
+                                                <td class="text-end">${trade.exitEvents.reduce((sum, e) => sum + parseFloat(e.exitAmount), 0).toLocaleString('ko-KR')}원</td>
+                                                <td class="text-end ${parseFloat(trade.profit) >= 0 ? 'text-success' : 'text-danger'}">
+                                                    ${parseFloat(trade.profit).toLocaleString('ko-KR')}원
+                                                </td>
+                                                <td class="text-end ${parseFloat(trade.returnPct) >= 0 ? 'text-success' : 'text-danger'}">
+                                                    ${parseFloat(trade.returnPct).toFixed(2)}%
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            ` : '<p class="text-muted text-center">분할 청산 이벤트가 없습니다.</p>'}
+                        </div>
+                    </div>
+                `;
+            });
+
+            historyContainer.innerHTML = historyHTML;
+        }
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('exitDetailsModal'));
+        modal.show();
     }
 </script>
 </body>
