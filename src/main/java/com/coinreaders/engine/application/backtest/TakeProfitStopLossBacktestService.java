@@ -1,5 +1,6 @@
 package com.coinreaders.engine.application.backtest;
 
+import com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse.TradeDetail;
@@ -104,7 +105,8 @@ public class TakeProfitStopLossBacktestService {
 
             try {
                 Optional<TradeDetail> tradeOpt = simulateTrade(
-                    prediction, capital, tradeNumber, request.getHoldingPeriodDays()
+                    prediction, capital, tradeNumber, request.getHoldingPeriodDays(),
+                    request.getPositionSizingStrategy()
                 );
 
                 if (tradeOpt.isPresent()) {
@@ -145,7 +147,8 @@ public class TakeProfitStopLossBacktestService {
         HistoricalAiPrediction prediction,
         BigDecimal currentCapital,
         int tradeNumber,
-        int holdingPeriodDays
+        int holdingPeriodDays,
+        PositionSizingStrategy positionSizingStrategy
     ) {
         LocalDate entryDate = prediction.getPredictionDate();
 
@@ -162,12 +165,13 @@ public class TakeProfitStopLossBacktestService {
         BigDecimal entryPrice = entryCandle.get().getOpeningPrice();
         LocalDateTime actualEntryTime = entryCandle.get().getCandleDateTimeKst();
 
-        // 2. 포지션 사이징 (Kelly Criterion × Confidence)
+        // 2. 포지션 사이징 (선택된 전략에 따라)
         BigDecimal takeProfitPrice = prediction.getTakeProfitPrice();
         BigDecimal stopLossPrice = prediction.getStopLossPrice();
-        BigDecimal investmentRatio = calculateKellyPosition(
+        BigDecimal investmentRatio = calculatePositionSize(
             entryPrice, takeProfitPrice, stopLossPrice,
-            prediction.getPredProbaUp(), prediction.getConfidence()
+            prediction.getPredProbaUp(), prediction.getConfidence(),
+            positionSizingStrategy
         );
 
         if (investmentRatio.compareTo(BigDecimal.ZERO) <= 0) {
@@ -449,12 +453,11 @@ public class TakeProfitStopLossBacktestService {
      * - W: Win Probability = pred_proba_up
      * - Result: 0 ~ 1 (0% ~ 100%)
      */
-    private BigDecimal calculateKellyPosition(
+    private BigDecimal calculatePureKelly(
         BigDecimal entryPrice,
         BigDecimal takeProfitPrice,
         BigDecimal stopLossPrice,
-        BigDecimal predProbaUp,
-        BigDecimal confidence
+        BigDecimal predProbaUp
     ) {
         // Risk-Reward Ratio
         BigDecimal upside = takeProfitPrice.subtract(entryPrice);
@@ -472,8 +475,30 @@ public class TakeProfitStopLossBacktestService {
         BigDecimal numerator = riskRewardRatio.multiply(predProbaUp).subtract(oneMinus);
         BigDecimal kellyFraction = numerator.divide(riskRewardRatio, SCALE, RoundingMode.HALF_UP);
 
-        // Kelly × Confidence
-        BigDecimal finalRatio = kellyFraction.multiply(confidence);
+        // Clamp to [0, 1]
+        if (kellyFraction.compareTo(BigDecimal.ZERO) < 0) {
+            return BigDecimal.ZERO;
+        }
+        if (kellyFraction.compareTo(BigDecimal.ONE) > 0) {
+            return BigDecimal.ONE;
+        }
+
+        return kellyFraction.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Kelly Criterion × Confidence 포지션 사이징 (기존 방식)
+     * Formula: ((R × W - (1-W)) / R) × confidence
+     */
+    private BigDecimal calculateKellyPosition(
+        BigDecimal entryPrice,
+        BigDecimal takeProfitPrice,
+        BigDecimal stopLossPrice,
+        BigDecimal predProbaUp,
+        BigDecimal confidence
+    ) {
+        BigDecimal pureKelly = calculatePureKelly(entryPrice, takeProfitPrice, stopLossPrice, predProbaUp);
+        BigDecimal finalRatio = pureKelly.multiply(confidence);
 
         // Clamp to [0, 1]
         if (finalRatio.compareTo(BigDecimal.ZERO) < 0) {
@@ -484,6 +509,116 @@ public class TakeProfitStopLossBacktestService {
         }
 
         return finalRatio.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Conservative Kelly (확률 조정 방식)
+     * Formula:
+     *   adjusted_proba = pred_proba_up × confidence + 0.5 × (1 - confidence)
+     *   position = Kelly(adjusted_proba)
+     */
+    private BigDecimal calculateConservativeKelly(
+        BigDecimal entryPrice,
+        BigDecimal takeProfitPrice,
+        BigDecimal stopLossPrice,
+        BigDecimal predProbaUp,
+        BigDecimal confidence
+    ) {
+        // confidence로 확률 조정 (Bayesian Shrinkage)
+        BigDecimal adjustedProba = predProbaUp.multiply(confidence)
+            .add(new BigDecimal("0.5").multiply(BigDecimal.ONE.subtract(confidence)));
+
+        // 조정된 확률로 Pure Kelly 계산
+        return calculatePureKelly(entryPrice, takeProfitPrice, stopLossPrice, adjustedProba);
+    }
+
+    /**
+     * Estimation Risk Kelly (Bayesian Variance)
+     * Formula:
+     *   σ² = pred_proba × (1-pred_proba) / n_effective
+     *   n_effective = 1 + (confidence/0.5) × 99
+     *   adjustment = 1 - λ × σ²
+     *   position = Kelly(pred_proba) × adjustment
+     */
+    private BigDecimal calculateEstimationRiskKelly(
+        BigDecimal entryPrice,
+        BigDecimal takeProfitPrice,
+        BigDecimal stopLossPrice,
+        BigDecimal predProbaUp,
+        BigDecimal confidence
+    ) {
+        BigDecimal MAX_CONFIDENCE = new BigDecimal("0.5");
+        BigDecimal RISK_AVERSION = new BigDecimal("2.0"); // λ (람다) 파라미터
+
+        // n_effective 계산 (confidence를 샘플 크기로 해석)
+        BigDecimal nEffective = BigDecimal.ONE.add(
+            confidence.divide(MAX_CONFIDENCE, SCALE, RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("99"))
+        );
+
+        // Bayesian variance: σ² = p(1-p) / n
+        BigDecimal variance = predProbaUp
+            .multiply(BigDecimal.ONE.subtract(predProbaUp))
+            .divide(nEffective, SCALE, RoundingMode.HALF_UP);
+
+        // Pure Kelly 계산
+        BigDecimal pureKelly = calculatePureKelly(entryPrice, takeProfitPrice, stopLossPrice, predProbaUp);
+
+        // Adjustment factor: 1 - λ × σ²
+        BigDecimal adjustment = BigDecimal.ONE.subtract(RISK_AVERSION.multiply(variance));
+        adjustment = adjustment.max(BigDecimal.ZERO).min(BigDecimal.ONE);
+
+        // Adjusted Kelly
+        BigDecimal finalRatio = pureKelly.multiply(adjustment);
+
+        return finalRatio.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Half Kelly
+     * Formula: position = Kelly(pred_proba) × 0.5
+     */
+    private BigDecimal calculateHalfKelly(
+        BigDecimal entryPrice,
+        BigDecimal takeProfitPrice,
+        BigDecimal stopLossPrice,
+        BigDecimal predProbaUp
+    ) {
+        BigDecimal pureKelly = calculatePureKelly(entryPrice, takeProfitPrice, stopLossPrice, predProbaUp);
+        return pureKelly.multiply(new BigDecimal("0.5")).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Fixed 100% (비중 조절 없음)
+     * Formula: position = 1.0 (100%)
+     */
+    private BigDecimal calculateFixed100Percent() {
+        return BigDecimal.ONE;
+    }
+
+    /**
+     * 포지션 사이즈 계산 (전략에 따라 다른 메서드 호출)
+     */
+    private BigDecimal calculatePositionSize(
+        BigDecimal entryPrice,
+        BigDecimal takeProfitPrice,
+        BigDecimal stopLossPrice,
+        BigDecimal predProbaUp,
+        BigDecimal confidence,
+        PositionSizingStrategy strategy
+    ) {
+        return switch (strategy) {
+            case CONSERVATIVE_KELLY ->
+                calculateConservativeKelly(entryPrice, takeProfitPrice, stopLossPrice, predProbaUp, confidence);
+            case ESTIMATION_RISK_KELLY ->
+                calculateEstimationRiskKelly(entryPrice, takeProfitPrice, stopLossPrice, predProbaUp, confidence);
+            case HALF_KELLY ->
+                calculateHalfKelly(entryPrice, takeProfitPrice, stopLossPrice, predProbaUp);
+            case FIXED_100_PERCENT ->
+                calculateFixed100Percent();
+            case CURRENT_KELLY_TIMES_CONFIDENCE ->
+                calculateKellyPosition(entryPrice, takeProfitPrice, stopLossPrice, predProbaUp, confidence);
+        };
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.coinreaders.engine.application.backtest;
 
+import com.coinreaders.engine.application.backtest.dto.PositionSizingStrategy;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse;
 import com.coinreaders.engine.domain.entity.BacktestJob;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,7 +39,8 @@ public class AsyncBacktestService {
         List<Integer> foldNumbers,
         BigDecimal initialCapital,
         BigDecimal predProbaThreshold,
-        Integer holdingPeriodDays
+        Integer holdingPeriodDays,
+        PositionSizingStrategy positionSizingStrategy
     ) {
         // 1. Job ID 생성 및 작업 등록
         String jobId = UUID.randomUUID().toString();
@@ -46,16 +49,18 @@ public class AsyncBacktestService {
         BacktestJob job = BacktestJob.create(jobId, totalTasks);
         jobRepository.save(job);
 
-        log.info("배치 백테스팅 작업 등록: jobId={}, total={}",  jobId, totalTasks);
+        log.info("배치 백테스팅 작업 등록: jobId={}, total={}, strategy={}",
+            jobId, totalTasks, positionSizingStrategy);
 
         // 2. 비동기 실행 (별도 스레드에서 실행)
-        executeBatchAsync(jobId, modelNames, foldNumbers, initialCapital, predProbaThreshold, holdingPeriodDays);
+        executeBatchAsync(jobId, modelNames, foldNumbers, initialCapital, predProbaThreshold, holdingPeriodDays, positionSizingStrategy);
 
         return jobId;
     }
 
     /**
      * 실제 배치 실행 (비동기)
+     * 각 모델별로 Fold 1→2→3→...→7을 순차적으로 실행하며 자본을 누적
      */
     @Async("backtestExecutor")
     @Transactional
@@ -65,9 +70,10 @@ public class AsyncBacktestService {
         List<Integer> foldNumbers,
         BigDecimal initialCapital,
         BigDecimal predProbaThreshold,
-        Integer holdingPeriodDays
+        Integer holdingPeriodDays,
+        PositionSizingStrategy positionSizingStrategy
     ) {
-        log.info("=== 비동기 배치 백테스팅 시작: jobId={} ===", jobId);
+        log.info("=== 비동기 배치 백테스팅 시작: jobId={}, strategy={} ===", jobId, positionSizingStrategy);
 
         BacktestJob job = jobRepository.findById(jobId).orElseThrow();
         job.start();
@@ -76,28 +82,43 @@ public class AsyncBacktestService {
         int currentIndex = 0;
         int totalTasks = modelNames.size() * foldNumbers.size();
 
+        // Fold 번호를 오름차순으로 정렬 (1→2→3→...→7)
+        List<Integer> sortedFolds = new ArrayList<>(foldNumbers);
+        Collections.sort(sortedFolds);
+
         try {
             for (String modelName : modelNames) {
-                for (Integer foldNumber : foldNumbers) {
+                // 각 모델별로 초기 자본으로 시작
+                BigDecimal currentCapital = initialCapital;
+                BigDecimal modelStartCapital = initialCapital;
+
+                log.info("▶ 모델 [{}] 시작 - 초기 자본: {}원", modelName, currentCapital);
+
+                for (Integer foldNumber : sortedFolds) {
                     currentIndex++;
-                    log.info("진행: {}/{} - Model={}, Fold={}", currentIndex, totalTasks, modelName, foldNumber);
+                    log.info("진행: {}/{} - Model={}, Fold={}, 시작자본={}원",
+                        currentIndex, totalTasks, modelName, foldNumber, currentCapital);
 
                     try {
                         TakeProfitStopLossBacktestRequest request = TakeProfitStopLossBacktestRequest.builder()
                             .foldNumber(foldNumber)
                             .modelName(modelName)
-                            .initialCapital(initialCapital)
+                            .initialCapital(currentCapital) // 이전 Fold의 최종 자본 사용
                             .predProbaThreshold(predProbaThreshold)
                             .holdingPeriodDays(holdingPeriodDays)
+                            .positionSizingStrategy(positionSizingStrategy)
                             .build();
 
                         TakeProfitStopLossBacktestResponse response = backtestService.runBacktest(request);
+
+                        // 다음 Fold를 위해 최종 자본 업데이트
+                        currentCapital = response.getFinalCapital();
 
                         // 성공 카운트 증가
                         job.incrementCompleted();
                         jobRepository.save(job);
 
-                        log.info("✓ 완료: {}/{} - Model={}, Fold={}, 초기자본={}원 → 최종자본={}원 (수익률 {}%)",
+                        log.info("✓ 완료: {}/{} - Model={}, Fold={}, {}원 → {}원 (수익률 {}%)",
                             currentIndex, totalTasks, modelName, foldNumber,
                             response.getInitialCapital(),
                             response.getFinalCapital(),
@@ -107,11 +128,19 @@ public class AsyncBacktestService {
                         log.error("✗ 실패: {}/{} - Model={}, Fold={}, Error={}",
                             currentIndex, totalTasks, modelName, foldNumber, e.getMessage());
 
-                        // 실패 카운트 증가
+                        // 실패 시에도 자본은 유지 (다음 Fold 계속 진행)
                         job.incrementFailed();
                         jobRepository.save(job);
                     }
                 }
+
+                // 모델별 최종 결과 로그
+                BigDecimal modelTotalReturn = currentCapital.subtract(modelStartCapital);
+                BigDecimal modelReturnPct = modelTotalReturn.divide(modelStartCapital, 4, java.math.RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"));
+
+                log.info("◀ 모델 [{}] 완료 - {}원 → {}원 (누적 수익률 {}%)",
+                    modelName, modelStartCapital, currentCapital, modelReturnPct);
             }
 
             log.info("=== 배치 백테스팅 완료: jobId={}, 성공={}, 실패={} ===",
