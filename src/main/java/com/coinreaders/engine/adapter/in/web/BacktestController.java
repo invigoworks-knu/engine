@@ -277,7 +277,7 @@ public class BacktestController {
      */
     @PostMapping("/buy-hold/run-batch")
     public ResponseEntity<?> runBuyHoldBatchBacktest(@RequestBody BuyHoldBatchRequest batchRequest) {
-        log.info("Buy & Hold 배치 백테스팅 API 호출: Folds={}", batchRequest.foldNumbers);
+        log.info("Buy & Hold 배치 백테스팅 API 호출 (연속 실행): Folds={}", batchRequest.foldNumbers);
 
         // 입력 검증
         if (batchRequest.foldNumbers == null || batchRequest.foldNumbers.isEmpty()) {
@@ -287,30 +287,38 @@ public class BacktestController {
         try {
             java.util.List<TakeProfitStopLossBacktestResponse> results = new java.util.ArrayList<>();
 
+            // 연속 실행: 이전 Fold의 최종 자본을 다음 Fold의 초기 자본으로 사용
+            BigDecimal currentCapital = batchRequest.initialCapital != null ?
+                batchRequest.initialCapital : new BigDecimal("10000");
+
             for (Integer foldNumber : batchRequest.foldNumbers) {
-                log.info("=== Buy & Hold 실행 중: Fold={} ===", foldNumber);
+                log.info("=== Buy & Hold 실행 중: Fold={}, 초기자본={}원 ===", foldNumber, currentCapital);
 
                 BuyAndHoldBacktestRequest request = BuyAndHoldBacktestRequest.builder()
                     .foldNumber(foldNumber)
-                    .initialCapital(batchRequest.initialCapital != null ? batchRequest.initialCapital : new BigDecimal("10000"))
+                    .initialCapital(currentCapital)
                     .build();
 
                 try {
                     TakeProfitStopLossBacktestResponse response = buyAndHoldBacktestService.runBacktest(request);
                     results.add(response);
-                    log.info("✓ 완료: Fold={}, 초기자본={}원 → 최종자본={}원 (수익률 {}%)",
+
+                    // 다음 Fold의 초기 자본 = 현재 Fold의 최종 자본
+                    currentCapital = response.getFinalCapital();
+
+                    log.info("✓ 완료: Fold={}, {}원 → {}원 (수익률 {}%)",
                         foldNumber,
                         response.getInitialCapital(),
                         response.getFinalCapital(),
                         response.getTotalReturnPct());
                 } catch (Exception e) {
                     log.error("✗ 실패: Fold={}, Error={}", foldNumber, e.getMessage());
-                    // 실패한 경우에도 계속 진행
+                    // 실패한 경우 이전 자본 유지하고 계속 진행
                 }
             }
 
-            log.info("=== Buy & Hold 배치 백테스팅 완료: 총 {}건 중 {}건 성공 ===",
-                batchRequest.foldNumbers.size(), results.size());
+            log.info("=== Buy & Hold 배치 백테스팅 완료: 총 {}건 중 {}건 성공, 최종자본={}원 ===",
+                batchRequest.foldNumbers.size(), results.size(), currentCapital);
             return ResponseEntity.ok(results);
         } catch (Exception e) {
             log.error("Buy & Hold 배치 백테스팅 실패", e);

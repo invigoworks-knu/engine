@@ -249,20 +249,14 @@
                 </div>
                 <div class="card-body">
                     <ul class="nav nav-tabs mb-4" id="resultTabs" role="tablist">
-                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabSummary">전체 요약</button></li>
-                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabModels">모델 비교</button></li>
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabModels">모델 비교</button></li>
                         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCapitalTracking">자본 변화 추적</button></li>
                         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDetails">상세 내역</button></li>
                     </ul>
 
                     <div class="tab-content">
-                        <!-- Overall Summary Tab -->
-                        <div class="tab-pane fade show active" id="tabSummary">
-                            <div id="summaryContent"></div>
-                        </div>
-
                         <!-- Model Comparison Tab -->
-                        <div class="tab-pane fade" id="tabModels">
+                        <div class="tab-pane fade show active" id="tabModels">
                             <div id="modelContent"></div>
                         </div>
 
@@ -695,9 +689,6 @@
     function displayResults() {
         document.getElementById('resultsSection').style.display = 'block';
 
-        // Summary Tab
-        displaySummary();
-
         // Model Comparison Tab
         displayModelComparison();
 
@@ -706,193 +697,6 @@
 
         // Details Tab
         displayDetails();
-    }
-
-    function displaySummary() {
-        const content = document.getElementById('summaryContent');
-        if (backtestResults.length === 0) {
-            content.innerHTML = '<p class="text-center text-muted">결과 없음</p>';
-            return;
-        }
-
-        const avgReturn = backtestResults.reduce((sum, r) => sum + parseFloat(r.totalReturnPct), 0) / backtestResults.length;
-        const maxReturn = Math.max(...backtestResults.map(r => parseFloat(r.totalReturnPct)));
-        const minReturn = Math.min(...backtestResults.map(r => parseFloat(r.totalReturnPct)));
-        const totalTrades = backtestResults.reduce((sum, r) => sum + r.totalTrades, 0);
-        const avgWinRate = backtestResults.reduce((sum, r) => sum + parseFloat(r.winRate), 0) / backtestResults.length;
-
-        // Calculate exit reason statistics
-        let takeProfitTotal = 0;
-        let stopLossTotal = 0;
-        let timeoutTotal = 0;
-        let profitLadderTotal = 0;
-        let timeDecayTotal = 0;
-
-        backtestResults.forEach(r => {
-            takeProfitTotal += r.takeProfitExits || 0;
-            stopLossTotal += r.stopLossExits || 0;
-            timeoutTotal += r.timeoutExits || 0;
-
-            // Count Profit Ladder and Time-Decay from exitEvents
-            if (r.tradeHistory) {
-                r.tradeHistory.forEach(trade => {
-                    if (trade.exitEvents && Array.isArray(trade.exitEvents)) {
-                        trade.exitEvents.forEach(event => {
-                            if (event.exitReason === 'PROFIT_LADDER') profitLadderTotal++;
-                            else if (event.exitReason === 'TIME_DECAY') timeDecayTotal++;
-                        });
-                    }
-                });
-            }
-        });
-
-        content.innerHTML = `
-            <div class="row g-3 mb-4">
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="text-muted">평균 수익률</h6>
-                            <h3 class="${avgReturn >= 0 ? 'text-success' : 'text-danger'}">${avgReturn.toFixed(2)}%</h3>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="text-muted">최고 수익률</h6>
-                            <h3 class="text-success">${maxReturn.toFixed(2)}%</h3>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="text-muted">최저 수익률</h6>
-                            <h3 class="text-danger">${minReturn.toFixed(2)}%</h3>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="text-muted">총 거래 수</h6>
-                            <h3 class="text-primary">${totalTrades}</h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="text-muted">평균 승률</h6>
-                            <h3 class="text-info">${avgWinRate.toFixed(2)}%</h3>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="text-muted">테스트 조합 수</h6>
-                            <h3 class="text-secondary">${backtestResults.length}</h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header" style="background-color: var(--accent-dark); color: #FFFFFF;">
-                            <i class="fas fa-pie-chart me-2"></i>청산 사유 분석
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <canvas id="exitReasonChart" style="max-height: 300px;"></canvas>
-                                </div>
-                                <div class="col-md-6">
-                                    <table class="table table-sm">
-                                        <tbody>
-                                            <tr>
-                                                <td><span class="badge" style="background-color: #28a745;">익절 (TP)</span></td>
-                                                <td class="text-end fw-bold">${takeProfitTotal}건</td>
-                                                <td class="text-end text-muted">${((takeProfitTotal / totalTrades) * 100).toFixed(1)}%</td>
-                                            </tr>
-                                            <tr>
-                                                <td><span class="badge" style="background-color: #dc3545;">손절 (SL)</span></td>
-                                                <td class="text-end fw-bold">${stopLossTotal}건</td>
-                                                <td class="text-end text-muted">${((stopLossTotal / totalTrades) * 100).toFixed(1)}%</td>
-                                            </tr>
-                                            <tr>
-                                                <td><span class="badge" style="background-color: #A3B087;">Profit Ladder</span></td>
-                                                <td class="text-end fw-bold">${profitLadderTotal}건</td>
-                                                <td class="text-end text-muted">${totalTrades > 0 ? ((profitLadderTotal / totalTrades) * 100).toFixed(1) : '0.0'}%</td>
-                                            </tr>
-                                            <tr>
-                                                <td><span class="badge" style="background-color: #6C91BF;">Time-Decay</span></td>
-                                                <td class="text-end fw-bold">${timeDecayTotal}건</td>
-                                                <td class="text-end text-muted">${totalTrades > 0 ? ((timeDecayTotal / totalTrades) * 100).toFixed(1) : '0.0'}%</td>
-                                            </tr>
-                                            <tr>
-                                                <td><span class="badge" style="background-color: #ffc107;">시간만료</span></td>
-                                                <td class="text-end fw-bold">${timeoutTotal}건</td>
-                                                <td class="text-end text-muted">${((timeoutTotal / totalTrades) * 100).toFixed(1)}%</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Create pie chart
-        const ctx = document.getElementById('exitReasonChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'pie',
-            data: {
-                labels: ['익절 (TP)', '손절 (SL)', 'Profit Ladder', 'Time-Decay', '시간만료'],
-                datasets: [{
-                    data: [takeProfitTotal, stopLossTotal, profitLadderTotal, timeDecayTotal, timeoutTotal],
-                    backgroundColor: [
-                        '#28a745', // TP - green
-                        '#dc3545', // SL - red
-                        '#A3B087', // Profit Ladder - accent green
-                        '#6C91BF', // Time-Decay - accent blue
-                        '#ffc107'  // Timeout - yellow
-                    ],
-                    borderWidth: 2,
-                    borderColor: '#FFFFFF'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            font: { size: 12, family: 'Segoe UI' },
-                            color: '#313647',
-                            padding: 15
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || '';
-                                const value = context.parsed || 0;
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = ((value / total) * 100).toFixed(1);
-                                return `${label}: ${value}건 (${percentage}%)`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
     }
 
     function displayModelComparison() {
