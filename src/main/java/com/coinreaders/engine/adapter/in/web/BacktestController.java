@@ -2,6 +2,7 @@ package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.backtest.AsyncBacktestService;
 import com.coinreaders.engine.application.backtest.BuyAndHoldBacktestService;
+import com.coinreaders.engine.application.backtest.RuleBasedBacktestService;
 import com.coinreaders.engine.application.backtest.TakeProfitStopLossBacktestService;
 import com.coinreaders.engine.application.backtest.dto.BuyAndHoldBacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestRequest;

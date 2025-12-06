@@ -105,11 +105,19 @@ public class RuleBasedBacktestService {
         List<Integer> entrySignals = generateEntrySignals(fourHourCandles, indicators, startDate, endDate);
         log.info("진입 신호 생성: {}개", entrySignals.size());
 
-        // 6. 거래 시뮬레이션
-        List<TradeDetail> tradeHistory = simulateTrades(
-            fourHourCandles, indicators, entrySignals, initialCapital, minuteCandles);
+        // 6. 1분봉을 Map으로 변환 (성능 최적화: O(1) 조회)
+        Map<LocalDateTime, HistoricalMinuteOhlcv> minuteCandleMap = minuteCandles.stream()
+            .collect(Collectors.toMap(
+                HistoricalMinuteOhlcv::getCandleDateTimeKst,
+                c -> c,
+                (c1, c2) -> c1 // 중복 시 첫 번째 유지
+            ));
 
-        // 7. 최종 자본 계산
+        // 7. 거래 시뮬레이션
+        List<TradeDetail> tradeHistory = simulateTrades(
+            fourHourCandles, indicators, entrySignals, initialCapital, minuteCandleMap);
+
+        // 8. 최종 자본 계산
         BigDecimal finalCapital = tradeHistory.isEmpty() ?
             initialCapital :
             tradeHistory.get(tradeHistory.size() - 1).getCapitalAfter();
@@ -124,7 +132,7 @@ public class RuleBasedBacktestService {
         log.info("최종 자본: {}원", finalCapital);
         log.info("수익: {}원 ({}%)", totalReturn, totalReturnPct);
 
-        // 8. 응답 생성
+        // 9. 응답 생성
         return buildResponse(foldNumber, regime, startDate, endDate, initialCapital, finalCapital, tradeHistory);
     }
 
@@ -246,17 +254,12 @@ public class RuleBasedBacktestService {
         Map<String, List<BigDecimal>> indicators,
         List<Integer> entrySignals,
         BigDecimal initialCapital,
-        List<HistoricalMinuteOhlcv> minuteCandles
+        Map<LocalDateTime, HistoricalMinuteOhlcv> minuteCandleMap
     ) {
         List<TradeDetail> trades = new ArrayList<>();
         BigDecimal capital = initialCapital;
         int tradeNumber = 1;
         LocalDateTime lastExitTime = null;
-
-        List<BigDecimal> close = candles.stream().map(FourHourCandle::getClose).collect(Collectors.toList());
-        List<BigDecimal> ema = indicators.get("ema");
-        List<BigDecimal> atr = indicators.get("atr");
-        List<BigDecimal> rollingHigh = indicators.get("rolling_high");
 
         for (int entryIdx : entrySignals) {
             FourHourCandle entryCandle = candles.get(entryIdx);
@@ -270,7 +273,7 @@ public class RuleBasedBacktestService {
 
             try {
                 Optional<TradeDetail> tradeOpt = simulateSingleTrade(
-                    entryIdx, candles, indicators, capital, tradeNumber, minuteCandles);
+                    entryIdx, candles, indicators, capital, tradeNumber, minuteCandleMap);
 
                 if (tradeOpt.isPresent()) {
                     TradeDetail trade = tradeOpt.get();
@@ -296,25 +299,43 @@ public class RuleBasedBacktestService {
         Map<String, List<BigDecimal>> indicators,
         BigDecimal capital,
         int tradeNumber,
-        List<HistoricalMinuteOhlcv> minuteCandles
+        Map<LocalDateTime, HistoricalMinuteOhlcv> minuteCandleMap
     ) {
         FourHourCandle entryCandle = candles.get(entryIdx);
         LocalDateTime entryTime = entryCandle.getTimestamp();
 
-        // 1. 진입가 = 4시간봉 시작 시각의 1분봉 Open 가격
-        Optional<HistoricalMinuteOhlcv> entryMinuteCandleOpt = minuteCandles.stream()
-            .filter(c -> c.getCandleDateTimeKst().equals(entryTime) ||
-                        c.getCandleDateTimeKst().isAfter(entryTime))
-            .findFirst();
+        // 1. 진입가 = 4시간봉 시작 시각의 1분봉 Open 가격 (Map에서 O(1) 조회)
+        HistoricalMinuteOhlcv entryMinuteCandle = minuteCandleMap.get(entryTime);
 
-        if (entryMinuteCandleOpt.isEmpty()) {
-            log.warn("진입 시각 1분봉 없음: {}", entryTime);
-            return Optional.empty();
+        if (entryMinuteCandle == null) {
+            // 정확한 시각이 없으면 4시간봉의 Open 가격 사용
+            log.debug("진입 시각 1분봉 없음, 4시간봉 Open 사용: {}", entryTime);
+            BigDecimal entryPrice = entryCandle.getOpen();
+            return simulateTradeWithPrice(entryIdx, candles, indicators, capital, tradeNumber, entryPrice, entryTime);
         }
 
-        HistoricalMinuteOhlcv entryMinuteCandle = entryMinuteCandleOpt.get();
         BigDecimal entryPrice = entryMinuteCandle.getOpeningPrice();
         LocalDateTime actualEntryTime = entryMinuteCandle.getCandleDateTimeKst();
+
+        return simulateTradeWithPrice(entryIdx, candles, indicators, capital, tradeNumber, entryPrice, actualEntryTime);
+    }
+
+    /**
+     * 가격과 시각이 확정된 후의 거래 시뮬레이션
+     */
+    private Optional<TradeDetail> simulateTradeWithPrice(
+        int entryIdx,
+        List<FourHourCandle> candles,
+        Map<String, List<BigDecimal>> indicators,
+        BigDecimal capital,
+        int tradeNumber,
+        BigDecimal entryPrice,
+        LocalDateTime actualEntryTime
+    ) {
+        List<BigDecimal> close = candles.stream().map(FourHourCandle::getClose).collect(Collectors.toList());
+        List<BigDecimal> ema = indicators.get("ema");
+        List<BigDecimal> atr = indicators.get("atr");
+        List<BigDecimal> rollingHigh = indicators.get("rolling_high");
 
         // 2. 포지션 사이징 (80% 고정)
         BigDecimal positionSize = capital.multiply(POSITION_SIZE).setScale(2, RoundingMode.DOWN);
@@ -329,11 +350,6 @@ public class RuleBasedBacktestService {
         BigDecimal quantity = entryAmount.divide(entryPrice, SCALE, RoundingMode.DOWN);
 
         // 4. 청산 조건 체크 (4시간봉마다)
-        List<BigDecimal> close = candles.stream().map(FourHourCandle::getClose).collect(Collectors.toList());
-        List<BigDecimal> ema = indicators.get("ema");
-        List<BigDecimal> atr = indicators.get("atr");
-        List<BigDecimal> rollingHigh = indicators.get("rolling_high");
-
         String exitReason = null;
         BigDecimal exitPrice = null;
         LocalDateTime exitTime = null;
