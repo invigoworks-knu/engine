@@ -1,7 +1,9 @@
 package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.backtest.AsyncBacktestService;
+import com.coinreaders.engine.application.backtest.BuyAndHoldBacktestService;
 import com.coinreaders.engine.application.backtest.TakeProfitStopLossBacktestService;
+import com.coinreaders.engine.application.backtest.dto.BuyAndHoldBacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestRequest;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse;
 import com.coinreaders.engine.domain.entity.BacktestJob;
@@ -19,6 +21,7 @@ import java.math.BigDecimal;
 public class BacktestController {
 
     private final TakeProfitStopLossBacktestService tpSlBacktestService;
+    private final BuyAndHoldBacktestService buyAndHoldBacktestService;
     private final AsyncBacktestService asyncBacktestService;
 
     /**
@@ -234,5 +237,90 @@ public class BacktestController {
         int failedTasks,
         int progress,
         String errorMessage
+    ) {}
+
+    /**
+     * Buy & Hold 백테스팅 실행 API (단일 Fold)
+     * - Fold 시작 시점에 전액 매수, 종료 시점에 전액 매도
+     * - AI 모델 성능 비교를 위한 벤치마크 전략
+     *
+     * @param request 백테스팅 요청 파라미터
+     * @return 백테스팅 결과
+     */
+    @PostMapping("/buy-hold/run")
+    public ResponseEntity<?> runBuyHoldBacktest(@RequestBody BuyAndHoldBacktestRequest request) {
+        log.info("Buy & Hold 백테스팅 API 호출: Fold={}", request.getFoldNumber());
+
+        // 입력 검증
+        if (request.getFoldNumber() == null || request.getFoldNumber() < 1 || request.getFoldNumber() > 8) {
+            return ResponseEntity.badRequest().body("foldNumber must be between 1 and 8");
+        }
+        if (request.getInitialCapital() == null || request.getInitialCapital().compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest().body("initialCapital must be positive");
+        }
+
+        try {
+            TakeProfitStopLossBacktestResponse response = buyAndHoldBacktestService.runBacktest(request);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Buy & Hold 백테스팅 실패: Fold={}", request.getFoldNumber(), e);
+            return ResponseEntity.internalServerError().body("Backtest failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Buy & Hold 백테스팅 배치 실행 API (다중 Fold)
+     * - 여러 Fold에 대해 순차적으로 백테스팅 실행
+     *
+     * @param batchRequest 배치 요청 파라미터
+     * @return 모든 백테스팅 결과 리스트
+     */
+    @PostMapping("/buy-hold/run-batch")
+    public ResponseEntity<?> runBuyHoldBatchBacktest(@RequestBody BuyHoldBatchRequest batchRequest) {
+        log.info("Buy & Hold 배치 백테스팅 API 호출: Folds={}", batchRequest.foldNumbers);
+
+        // 입력 검증
+        if (batchRequest.foldNumbers == null || batchRequest.foldNumbers.isEmpty()) {
+            return ResponseEntity.badRequest().body("foldNumbers is required");
+        }
+
+        try {
+            java.util.List<TakeProfitStopLossBacktestResponse> results = new java.util.ArrayList<>();
+
+            for (Integer foldNumber : batchRequest.foldNumbers) {
+                log.info("=== Buy & Hold 실행 중: Fold={} ===", foldNumber);
+
+                BuyAndHoldBacktestRequest request = BuyAndHoldBacktestRequest.builder()
+                    .foldNumber(foldNumber)
+                    .initialCapital(batchRequest.initialCapital != null ? batchRequest.initialCapital : new BigDecimal("10000"))
+                    .build();
+
+                try {
+                    TakeProfitStopLossBacktestResponse response = buyAndHoldBacktestService.runBacktest(request);
+                    results.add(response);
+                    log.info("✓ 완료: Fold={}, 초기자본={}원 → 최종자본={}원 (수익률 {}%)",
+                        foldNumber,
+                        response.getInitialCapital(),
+                        response.getFinalCapital(),
+                        response.getTotalReturnPct());
+                } catch (Exception e) {
+                    log.error("✗ 실패: Fold={}, Error={}", foldNumber, e.getMessage());
+                    // 실패한 경우에도 계속 진행
+                }
+            }
+
+            log.info("=== Buy & Hold 배치 백테스팅 완료: 총 {}건 중 {}건 성공 ===",
+                batchRequest.foldNumbers.size(), results.size());
+            return ResponseEntity.ok(results);
+        } catch (Exception e) {
+            log.error("Buy & Hold 배치 백테스팅 실패", e);
+            return ResponseEntity.internalServerError().body("Batch backtest failed: " + e.getMessage());
+        }
+    }
+
+    // Buy & Hold 배치 요청 DTO
+    record BuyHoldBatchRequest(
+        java.util.List<Integer> foldNumbers,
+        BigDecimal initialCapital
     ) {}
 }

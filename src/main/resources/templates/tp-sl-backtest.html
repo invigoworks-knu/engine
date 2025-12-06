@@ -585,9 +585,12 @@
         }
     }
 
-    // 완료 후 결과 조회 (동기 API 재호출)
+    // 완료 후 결과 조회 (동기 API 재호출 + Buy & Hold 추가)
     async function fetchResults(batchRequest) {
         try {
+            addLog(`AI 모델 결과 조회 중...`);
+
+            // 1. AI 모델 결과 조회
             const response = await fetch('/api/backtest/tp-sl/run-batch', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -595,13 +598,37 @@
             });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch results');
+                throw new Error('Failed to fetch AI model results');
             }
 
-            backtestResults = await response.json();
+            const aiResults = await response.json();
+            addLog(`AI 모델 결과 조회 완료: ${aiResults.length}건`);
+
+            // 2. Buy & Hold 결과 조회 (동일한 Fold에 대해)
+            addLog(`Buy & Hold 벤치마크 실행 중...`);
+            const buyHoldResponse = await fetch('/api/backtest/buy-hold/run-batch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    foldNumbers: batchRequest.foldNumbers,
+                    initialCapital: batchRequest.initialCapital
+                })
+            });
+
+            let buyHoldResults = [];
+            if (buyHoldResponse.ok) {
+                buyHoldResults = await buyHoldResponse.json();
+                addLog(`Buy & Hold 결과 조회 완료: ${buyHoldResults.length}건`);
+            } else {
+                addLog(`Buy & Hold 실패 (건너뜀)`);
+            }
+
+            // 3. 결과 합치기 (Buy & Hold를 맨 앞에 배치)
+            backtestResults = [...buyHoldResults, ...aiResults];
+
             markAllCompleted();
             displayResults();
-            addLog(`결과 조회 완료: ${backtestResults.length}건`);
+            addLog(`전체 결과 조회 완료: ${backtestResults.length}건 (Buy & Hold: ${buyHoldResults.length}, AI 모델: ${aiResults.length})`);
         } catch (error) {
             console.error('Result fetch error:', error);
             addLog(`결과 조회 실패: ${error.message}`);
@@ -953,9 +980,14 @@
             avgSharpes.push(avgSharpe);
             avgWinRates.push(avgWinRate);
 
+            // Buy & Hold는 배경색 강조
+            const isBuyHold = model === 'Buy & Hold';
+            const rowStyle = isBuyHold ? 'style="background-color: #fff3cd;"' : '';
+            const modelLabel = isBuyHold ? `<i class="fas fa-chart-line me-1"></i>${model} <span class="badge bg-warning text-dark">벤치마크</span>` : model;
+
             tableHTML += `
-                <tr>
-                    <td class="fw-bold">${model}</td>
+                <tr ${rowStyle}>
+                    <td class="fw-bold">${modelLabel}</td>
                     <td class="${avgReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${avgReturn.toFixed(2)}%</td>
                     <td class="text-success">${maxReturn.toFixed(2)}%</td>
                     <td class="text-danger">${minReturn.toFixed(2)}%</td>
@@ -979,8 +1011,14 @@
                 datasets: [{
                     label: '평균 수익률 (%)',
                     data: avgReturns,
-                    backgroundColor: avgReturns.map(r => r >= 0 ? '#A3B087' : '#E07856'),
-                    borderColor: avgReturns.map(r => r >= 0 ? '#A3B087' : '#E07856'),
+                    backgroundColor: avgReturns.map((r, idx) => {
+                        if (modelNames[idx] === 'Buy & Hold') return '#ffc107'; // 골드
+                        return r >= 0 ? '#A3B087' : '#E07856';
+                    }),
+                    borderColor: avgReturns.map((r, idx) => {
+                        if (modelNames[idx] === 'Buy & Hold') return '#ffc107'; // 골드
+                        return r >= 0 ? '#A3B087' : '#E07856';
+                    }),
                     borderWidth: 1
                 }]
             },
@@ -1511,9 +1549,14 @@
                 result.modelName === r.modelName && result.foldNumber === r.foldNumber
             );
 
+            // Buy & Hold는 배경색 강조
+            const isBuyHold = r.modelName === 'Buy & Hold';
+            const rowStyle = isBuyHold ? 'style="background-color: #fff3cd;"' : '';
+            const modelLabel = isBuyHold ? `<i class="fas fa-chart-line me-1"></i>${r.modelName} <span class="badge bg-warning text-dark">벤치마크</span>` : r.modelName;
+
             tableHTML += `
-                <tr>
-                    <td class="fw-bold">${r.modelName}</td>
+                <tr ${rowStyle}>
+                    <td class="fw-bold">${modelLabel}</td>
                     <td>Fold ${r.foldNumber}</td>
                     <td><span class="badge bg-secondary">${r.regime}</span></td>
                     <td class="${r.totalReturnPct >= 0 ? 'text-success' : 'text-danger'} fw-bold">${r.totalReturnPct.toFixed(2)}%</td>
