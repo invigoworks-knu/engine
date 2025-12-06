@@ -24,8 +24,8 @@ import java.util.stream.Collectors;
 
 /**
  * Rule-Based 백테스팅 서비스
- * - Volatility Squeeze Breakout 전략
- * - 4시간봉 기술적 지표 기반
+ * - Trend Following 전략
+ * - 4시간봉 기술적 지표 기반 (SMA, EMA)
  * - Buy & Hold와 동일하게 벤치마크로 사용
  */
 @Slf4j
@@ -40,17 +40,14 @@ public class RuleBasedBacktestService {
     private static final BigDecimal FEE_RATE = new BigDecimal("0.0005"); // 0.05% (편도)
     private static final int SCALE = 8;
 
-    // 전략 파라미터 (Python 코드 기본값)
-    private static final int BB_PERIOD = 20;
-    private static final BigDecimal BB_MULTIPLIER = new BigDecimal("2.0");
-    private static final int EMA_PERIOD = 20;
-    private static final int ATR_PERIOD = 14;
-    private static final BigDecimal ATR_MULTIPLIER = new BigDecimal("4.0");
-    private static final BigDecimal VOLUME_SPIKE_THRESHOLD = new BigDecimal("2.5");
+    // 전략 파라미터 (Trend Following)
+    private static final int SHORT_SMA = 20;  // 단기 이동평균
+    private static final int LONG_SMA = 50;   // 장기 이동평균
+    private static final int EMA_PERIOD = 20; // 청산용 EMA
+    private static final int VOLUME_MA = 20;  // 거래량 이동평균
+    private static final BigDecimal VOLUME_THRESHOLD = new BigDecimal("1.2"); // 거래량 1.2배
     private static final BigDecimal POSITION_SIZE = new BigDecimal("0.8"); // 80%
-    private static final int SQUEEZE_WINDOW = 120; // 120개 4시간봉 = 20일
-    private static final double SQUEEZE_QUANTILE = 0.20; // 하위 20%
-    private static final BigDecimal NATR_THRESHOLD = new BigDecimal("2.5"); // 2.5%
+    private static final BigDecimal STOP_LOSS_PCT = new BigDecimal("0.95"); // 5% 손절
 
     /**
      * Rule-Based 백테스팅 실행
@@ -93,7 +90,7 @@ public class RuleBasedBacktestService {
         // 3. 4시간봉으로 리샘플링
         List<FourHourCandle> fourHourCandles = CandleResampler.resampleTo4Hour(minuteCandles);
 
-        if (fourHourCandles.size() < BB_PERIOD + SQUEEZE_WINDOW) {
+        if (fourHourCandles.size() < LONG_SMA + 10) {
             log.warn("4시간봉 데이터 부족: {}개", fourHourCandles.size());
             return createEmptyResponse(foldNumber, initialCapital);
         }
@@ -142,60 +139,35 @@ public class RuleBasedBacktestService {
     }
 
     /**
-     * 기술적 지표 계산
+     * 기술적 지표 계산 (Trend Following 전략)
      */
     private Map<String, List<BigDecimal>> calculateIndicators(List<FourHourCandle> candles) {
         Map<String, List<BigDecimal>> indicators = new HashMap<>();
 
         // 가격 리스트 추출
         List<BigDecimal> close = candles.stream().map(FourHourCandle::getClose).collect(Collectors.toList());
-        List<BigDecimal> high = candles.stream().map(FourHourCandle::getHigh).collect(Collectors.toList());
-        List<BigDecimal> low = candles.stream().map(FourHourCandle::getLow).collect(Collectors.toList());
         List<BigDecimal> volume = candles.stream().map(FourHourCandle::getVolume).collect(Collectors.toList());
 
-        // Bollinger Bands
-        BollingerBands bb = TechnicalIndicators.calculateBollingerBands(close, BB_PERIOD, BB_MULTIPLIER);
-        indicators.put("bb_sma", bb.sma);
-        indicators.put("bb_upper", bb.upper);
-        indicators.put("bb_lower", bb.lower);
-        indicators.put("bb_width", bb.width);
+        // SMA (단기/장기)
+        List<BigDecimal> sma20 = TechnicalIndicators.calculateSMA(close, SHORT_SMA);
+        List<BigDecimal> sma50 = TechnicalIndicators.calculateSMA(close, LONG_SMA);
+        indicators.put("sma20", sma20);
+        indicators.put("sma50", sma50);
 
-        // EMA
-        List<BigDecimal> ema = TechnicalIndicators.calculateEMA(close, EMA_PERIOD);
-        indicators.put("ema", ema);
-
-        // ATR & NATR
-        List<BigDecimal> atr = TechnicalIndicators.calculateATR(high, low, close, ATR_PERIOD);
-        List<BigDecimal> natr = TechnicalIndicators.calculateNATR(atr, close);
-        indicators.put("atr", atr);
-        indicators.put("natr", natr);
-
-        // Squeeze 임계값 (BB_Width의 rolling 20% quantile)
-        List<BigDecimal> squeezeThreshold = TechnicalIndicators.calculateRollingQuantile(
-            bb.width, SQUEEZE_WINDOW, SQUEEZE_QUANTILE);
-        indicators.put("squeeze_threshold", squeezeThreshold);
+        // EMA (청산용)
+        List<BigDecimal> ema20 = TechnicalIndicators.calculateEMA(close, EMA_PERIOD);
+        indicators.put("ema20", ema20);
 
         // Volume MA
-        List<BigDecimal> volumeMa = TechnicalIndicators.calculateSMA(volume, 20);
+        List<BigDecimal> volumeMa = TechnicalIndicators.calculateSMA(volume, VOLUME_MA);
         indicators.put("volume_ma", volumeMa);
 
-        // Volume Spike
-        List<Boolean> volumeSpike = TechnicalIndicators.detectVolumeSpike(
-            volume, volumeMa, VOLUME_SPIKE_THRESHOLD);
-        indicators.put("volume_spike", volumeSpike.stream()
-            .map(v -> v ? BigDecimal.ONE : BigDecimal.ZERO)
-            .collect(Collectors.toList()));
-
-        // Rolling High (Chandelier용)
-        List<BigDecimal> rollingHigh = TechnicalIndicators.calculateRollingMax(high, 20);
-        indicators.put("rolling_high", rollingHigh);
-
-        log.debug("기술적 지표 계산 완료");
+        log.info("✅ 지표 계산 완료: SMA(20), SMA(50), EMA(20), Volume MA(20)");
         return indicators;
     }
 
     /**
-     * 진입 신호 생성
+     * 진입 신호 생성 (Trend Following)
      */
     private List<Integer> generateEntrySignals(
         List<FourHourCandle> candles,
@@ -206,19 +178,17 @@ public class RuleBasedBacktestService {
         List<Integer> signals = new ArrayList<>();
 
         List<BigDecimal> close = candles.stream().map(FourHourCandle::getClose).collect(Collectors.toList());
-        List<BigDecimal> bbWidth = indicators.get("bb_width");
-        List<BigDecimal> bbUpper = indicators.get("bb_upper");
-        List<BigDecimal> natr = indicators.get("natr");
-        List<BigDecimal> squeezeThreshold = indicators.get("squeeze_threshold");
-        List<BigDecimal> volumeSpike = indicators.get("volume_spike");
+        List<BigDecimal> volume = candles.stream().map(FourHourCandle::getVolume).collect(Collectors.toList());
+        List<BigDecimal> sma20 = indicators.get("sma20");
+        List<BigDecimal> sma50 = indicators.get("sma50");
+        List<BigDecimal> volumeMa = indicators.get("volume_ma");
 
-        // 디버깅을 위한 카운터
+        // 디버깅 카운터
         int totalCandles = 0;
         int foldRangeCandles = 0;
         int nullIndicators = 0;
-        int setupCount = 0;
-        int breakoutCount = 0;
-        int volumeCount = 0;
+        int trendCount = 0;     // Close > SMA20 > SMA50
+        int volumeCount = 0;    // Volume > MA × 1.2
         int allConditionsCount = 0;
 
         for (int i = 1; i < candles.size(); i++) {
@@ -232,47 +202,46 @@ public class RuleBasedBacktestService {
             }
             foldRangeCandles++;
 
-            // 전날(i-1) 조건 확인
             int prevIdx = i - 1;
 
-            if (bbWidth.get(prevIdx) == null || bbUpper.get(prevIdx) == null ||
-                natr.get(prevIdx) == null || squeezeThreshold.get(prevIdx) == null) {
+            // 지표 null 체크
+            if (sma20.get(prevIdx) == null || sma50.get(prevIdx) == null || volumeMa.get(prevIdx) == null) {
                 nullIndicators++;
                 continue;
             }
 
-            // 조건 1: Setup (Squeeze OR 낮은 변동성)
-            boolean isSqueeze = bbWidth.get(prevIdx).compareTo(squeezeThreshold.get(prevIdx)) < 0;
-            boolean isLowVolatility = natr.get(prevIdx).compareTo(NATR_THRESHOLD) < 0;
-            boolean setupCondition = isSqueeze || isLowVolatility;
-            if (setupCondition) setupCount++;
+            // 조건 1: 상승 추세 (Close > SMA20 > SMA50)
+            boolean aboveSma20 = close.get(prevIdx).compareTo(sma20.get(prevIdx)) > 0;
+            boolean aboveSma50 = close.get(prevIdx).compareTo(sma50.get(prevIdx)) > 0;
+            boolean trendCondition = aboveSma20 && aboveSma50;
+            if (trendCondition) trendCount++;
 
-            // 조건 2: Breakout (Close > BB Upper)
-            boolean breakoutCondition = close.get(prevIdx).compareTo(bbUpper.get(prevIdx)) > 0;
-            if (breakoutCondition) breakoutCount++;
-
-            // 조건 3: Volume Spike
-            boolean volumeCondition = volumeSpike.get(prevIdx).compareTo(BigDecimal.ZERO) > 0;
+            // 조건 2: 거래량 증가 (Volume > MA × 1.2)
+            BigDecimal volumeThreshold = volumeMa.get(prevIdx).multiply(VOLUME_THRESHOLD);
+            boolean volumeCondition = volume.get(prevIdx).compareTo(volumeThreshold) > 0;
             if (volumeCondition) volumeCount++;
 
             // 진입 신호
-            if (setupCondition && breakoutCondition && volumeCondition) {
+            if (trendCondition && volumeCondition) {
                 signals.add(i);
                 allConditionsCount++;
-                log.info("✅ 진입 신호 발생: index={}, date={}, squeeze={}, lowVol={}, breakout={}, volume={}",
-                    i, currentDate, isSqueeze, isLowVolatility, breakoutCondition, volumeCondition);
+                log.info("✅ 진입 신호: index={}, date={}, Close={}, SMA20={}, SMA50={}, Vol={}",
+                    i, currentDate,
+                    close.get(prevIdx).setScale(0, RoundingMode.HALF_UP),
+                    sma20.get(prevIdx).setScale(0, RoundingMode.HALF_UP),
+                    sma50.get(prevIdx).setScale(0, RoundingMode.HALF_UP),
+                    volume.get(prevIdx).setScale(0, RoundingMode.HALF_UP));
             }
         }
 
         // 디버깅 요약
-        log.info("📊 진입 조건 분석:");
+        log.info("📊 진입 조건 분석 (Trend Following):");
         log.info("  - 전체 4시간봉: {}개", totalCandles);
         log.info("  - Fold 기간 내: {}개", foldRangeCandles);
-        log.info("  - 지표 null로 제외: {}개", nullIndicators);
-        log.info("  - Setup 조건 만족: {}개", setupCount);
-        log.info("  - Breakout 조건 만족: {}개", breakoutCount);
-        log.info("  - Volume 조건 만족: {}개", volumeCount);
-        log.info("  - 모든 조건 만족: {}개", allConditionsCount);
+        log.info("  - 지표 null 제외: {}개", nullIndicators);
+        log.info("  - 상승 추세 (Close>SMA20>SMA50): {}개", trendCount);
+        log.info("  - 거래량 증가 (Vol>MA×1.2): {}개", volumeCount);
+        log.info("  - ✅ 모든 조건 만족: {}개", allConditionsCount);
 
         return signals;
     }
@@ -366,9 +335,7 @@ public class RuleBasedBacktestService {
         LocalDateTime actualEntryTime
     ) {
         List<BigDecimal> close = candles.stream().map(FourHourCandle::getClose).collect(Collectors.toList());
-        List<BigDecimal> ema = indicators.get("ema");
-        List<BigDecimal> atr = indicators.get("atr");
-        List<BigDecimal> rollingHigh = indicators.get("rolling_high");
+        List<BigDecimal> ema20 = indicators.get("ema20");
 
         // 2. 포지션 사이징 (80% 고정)
         BigDecimal positionSize = capital.multiply(POSITION_SIZE).setScale(2, RoundingMode.DOWN);
@@ -393,19 +360,19 @@ public class RuleBasedBacktestService {
         for (int i = entryIdx + 1; i < candles.size(); i++) {
             FourHourCandle checkCandle = candles.get(i);
 
-            if (ema.get(i) == null || atr.get(i) == null || rollingHigh.get(i) == null) {
+            if (ema20.get(i) == null) {
                 continue;
             }
 
-            // 조건 1: EMA 하향 돌파
-            boolean emaExit = close.get(i).compareTo(ema.get(i)) < 0;
+            // 조건 1: EMA(20) 하향 돌파
+            boolean emaExit = close.get(i).compareTo(ema20.get(i)) < 0;
 
-            // 조건 2: Chandelier Trailing Stop
-            BigDecimal chandelier = rollingHigh.get(i).subtract(atr.get(i).multiply(ATR_MULTIPLIER));
-            boolean chandelierExit = close.get(i).compareTo(chandelier) < 0;
+            // 조건 2: 손절 (진입가 대비 5% 하락)
+            BigDecimal stopLossPrice = entryPrice.multiply(STOP_LOSS_PCT);
+            boolean stopLossExit = close.get(i).compareTo(stopLossPrice) < 0;
 
-            if (emaExit || chandelierExit) {
-                exitReason = emaExit ? "EMA_CROSS" : "CHANDELIER_STOP";
+            if (emaExit || stopLossExit) {
+                exitReason = emaExit ? "EMA_CROSS" : "STOP_LOSS";
                 exitTime = checkCandle.getTimestamp();
                 exitPrice = checkCandle.getOpen(); // 다음 4시간봉 시작가로 청산
                 break;
