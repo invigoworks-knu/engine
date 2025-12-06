@@ -57,7 +57,7 @@ public class BuyAndHoldBacktestService {
 
         LocalDate startDate = predictions.get(0).getPredictionDate();
         LocalDate endDate = predictions.get(predictions.size() - 1).getPredictionDate();
-        String regime = predictions.get(0).getRegime();
+        String regime = determineRegime(request.getFoldNumber());
 
         log.info("Fold {} 기간: {} ~ {} ({}일)", request.getFoldNumber(), startDate, endDate,
             java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate));
@@ -65,7 +65,7 @@ public class BuyAndHoldBacktestService {
         // 2. 매수 시점: 시작일 09:00 가격
         LocalDateTime entryTime = startDate.atTime(9, 0);
         HistoricalMinuteOhlcv entryCandle = minuteOhlcvRepository
-            .findByMarketAndCandleDateTimeUtc(MARKET, entryTime)
+            .findFirstByMarketAndCandleDateTimeKstGreaterThanEqualOrderByCandleDateTimeKstAsc(MARKET, entryTime)
             .orElse(null);
 
         if (entryCandle == null) {
@@ -84,8 +84,8 @@ public class BuyAndHoldBacktestService {
             return createEmptyResponse(request);
         }
 
-        BigDecimal exitPrice = exitCandle.getClosingPrice();
-        LocalDateTime actualExitTime = exitCandle.getCandleDateTimeUtc();
+        BigDecimal exitPrice = exitCandle.getTradePrice();
+        LocalDateTime actualExitTime = exitCandle.getCandleDateTimeKst();
 
         // 4. 손익 계산
         BigDecimal investmentAmount = request.getInitialCapital();
@@ -162,30 +162,36 @@ public class BuyAndHoldBacktestService {
     }
 
     /**
-     * 특정 날짜에 가장 가까운 1분봉 캔들 조회
+     * 특정 날짜에 가장 가까운 1분봉 캔들 조회 (가장 마지막 시간부터 역순 검색)
      */
     private HistoricalMinuteOhlcv findNearestCandle(LocalDate date) {
-        // 23:59부터 역순으로 검색
-        for (int minute = 59; minute >= 0; minute--) {
-            LocalDateTime time = date.atTime(23, minute);
-            var candle = minuteOhlcvRepository.findByMarketAndCandleDateTimeUtc(MARKET, time);
-            if (candle.isPresent()) {
-                return candle.get();
-            }
-        }
+        // 다음날 00:00 직전까지 검색 (역순)
+        LocalDateTime endTime = date.plusDays(1).atStartOfDay().minusMinutes(1);
+        LocalDateTime startTime = date.atTime(22, 0);
 
-        // 23:00 ~ 22:00까지 확장 검색
-        for (int hour = 23; hour >= 22; hour--) {
-            for (int minute = 59; minute >= 0; minute--) {
-                LocalDateTime time = date.atTime(hour, minute);
-                var candle = minuteOhlcvRepository.findByMarketAndCandleDateTimeUtc(MARKET, time);
-                if (candle.isPresent()) {
-                    return candle.get();
-                }
-            }
+        // 가장 가까운 1분봉 조회 (역순으로 가장 최근 것)
+        var candles = minuteOhlcvRepository.findByMarketAndCandleDateTimeKstBetweenOrderByCandleDateTimeKstAsc(
+            MARKET, startTime, endTime.plusMinutes(1)
+        );
+
+        if (!candles.isEmpty()) {
+            return candles.get(candles.size() - 1); // 가장 마지막 캔들 반환
         }
 
         return null;
+    }
+
+    /**
+     * Fold 번호에 따른 시장 체제 추정
+     */
+    private String determineRegime(Integer foldNumber) {
+        return switch (foldNumber) {
+            case 1, 2 -> "BEAR";
+            case 3, 4 -> "SIDEWAYS";
+            case 5, 6, 7 -> "BULL";
+            case 8 -> "MIXED";
+            default -> "UNKNOWN";
+        };
     }
 
     /**
