@@ -50,4 +50,10 @@ public class TakeProfitStopLossBacktestRequest {
      */
     @Builder.Default
     private Integer holdingPeriodDays = 8;
+
+    /**
+     * 포지션 사이징 전략 (기본값: CONSERVATIVE_KELLY)
+     */
+    @Builder.Default
+    private PositionSizingStrategy positionSizingStrategy = PositionSizingStrategy.CONSERVATIVE_KELLY;
 }
