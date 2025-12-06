@@ -1464,8 +1464,9 @@
                         callbacks: {
                             title: function(context) {
                                 const point = context[0].raw;
-                                if (!point.trade) return '시작 시점';
-                                return `거래 #${point.trade.tradeNumber}`;
+                                const modelInfo = context[0].dataset.label; // "ModelName - Fold N"
+                                if (!point.trade) return `${modelInfo} - 시작 시점`;
+                                return `${modelInfo} - 거래 #${point.trade.tradeNumber}`;
                             },
                             label: function(context) {
                                 const point = context.raw;
