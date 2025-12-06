@@ -67,6 +67,8 @@
         /* Result tables */
         .result-table { font-size: 0.95rem; }
         .result-table th { background-color: var(--accent-dark); color: #FFFFFF; font-weight: 600; }
+        .result-table th[onclick] { user-select: none; transition: background-color 0.2s; }
+        .result-table th[onclick]:hover { background-color: var(--accent-green); }
         .result-table td { vertical-align: middle; }
 
         /* Badges */
@@ -364,6 +366,18 @@
 
     let backtestResults = [];
     let capitalChart = null;
+
+    // Sorting state for details table
+    let sortColumn = 'sharpeRatio';
+    let sortDirection = 'desc';
+
+    // Filter state
+    let filterReturnMin = -Infinity;
+    let filterReturnMax = Infinity;
+    let filterMddMin = -Infinity;
+    let filterMddMax = Infinity;
+    let filterSharpeMin = -Infinity;
+    let filterSharpeMax = Infinity;
 
     document.addEventListener('DOMContentLoaded', checkDataStatus);
 
@@ -1227,31 +1241,256 @@
         content.innerHTML = tableHTML;
     }
 
+    function sortResults(column) {
+        if (sortColumn === column) {
+            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortColumn = column;
+            sortDirection = 'desc';
+        }
+        displayDetails();
+    }
+
+    function applyFilters() {
+        const returnMin = parseFloat(document.getElementById('filterReturnMin').value) || -Infinity;
+        const returnMax = parseFloat(document.getElementById('filterReturnMax').value) || Infinity;
+        const mddMin = parseFloat(document.getElementById('filterMddMin').value) || -Infinity;
+        const mddMax = parseFloat(document.getElementById('filterMddMax').value) || Infinity;
+        const sharpeMin = parseFloat(document.getElementById('filterSharpeMin').value) || -Infinity;
+        const sharpeMax = parseFloat(document.getElementById('filterSharpeMax').value) || Infinity;
+
+        filterReturnMin = returnMin;
+        filterReturnMax = returnMax;
+        filterMddMin = mddMin;
+        filterMddMax = mddMax;
+        filterSharpeMin = sharpeMin;
+        filterSharpeMax = sharpeMax;
+
+        displayDetails();
+    }
+
+    function resetFilters() {
+        document.getElementById('filterReturnMin').value = '';
+        document.getElementById('filterReturnMax').value = '';
+        document.getElementById('filterMddMin').value = '';
+        document.getElementById('filterMddMax').value = '';
+        document.getElementById('filterSharpeMin').value = '';
+        document.getElementById('filterSharpeMax').value = '';
+
+        filterReturnMin = -Infinity;
+        filterReturnMax = Infinity;
+        filterMddMin = -Infinity;
+        filterMddMax = Infinity;
+        filterSharpeMin = -Infinity;
+        filterSharpeMax = Infinity;
+
+        displayDetails();
+    }
+
+    function exportToCSV() {
+        if (backtestResults.length === 0) {
+            showToast('내보낼 데이터가 없습니다.', false);
+            return;
+        }
+
+        // Apply same filtering as display
+        let filteredResults = backtestResults.filter(r => {
+            return r.totalReturnPct >= filterReturnMin && r.totalReturnPct <= filterReturnMax &&
+                   r.maxDrawdown >= filterMddMin && r.maxDrawdown <= filterMddMax &&
+                   r.sharpeRatio >= filterSharpeMin && r.sharpeRatio <= filterSharpeMax;
+        });
+
+        // CSV header
+        const headers = ['모델', 'Fold', '체제', '수익률(%)', '거래수', '익절', '손절', 'Profit Ladder', 'Time-Decay', '시간만료', '승률(%)', 'MDD(%)', 'Sharpe'];
+        let csvContent = headers.join(',') + '\n';
+
+        // CSV rows
+        filteredResults.forEach(r => {
+            let profitLadderCount = 0;
+            let timeDecayCount = 0;
+
+            if (r.tradeHistory) {
+                r.tradeHistory.forEach(trade => {
+                    if (trade.exitEvents && Array.isArray(trade.exitEvents)) {
+                        trade.exitEvents.forEach(event => {
+                            if (event.exitReason === 'PROFIT_LADDER') profitLadderCount++;
+                            else if (event.exitReason === 'TIME_DECAY') timeDecayCount++;
+                        });
+                    }
+                });
+            }
+
+            const row = [
+                r.modelName,
+                r.foldNumber,
+                r.regime,
+                r.totalReturnPct.toFixed(2),
+                r.totalTrades,
+                r.takeProfitExits,
+                r.stopLossExits,
+                profitLadderCount,
+                timeDecayCount,
+                r.timeoutExits,
+                r.winRate.toFixed(2),
+                r.maxDrawdown.toFixed(2),
+                r.sharpeRatio.toFixed(2)
+            ];
+            csvContent += row.join(',') + '\n';
+        });
+
+        // Download file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `backtest_results_${timestamp}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast(`CSV 파일이 다운로드되었습니다. (${filteredResults.length}건)`, true);
+    }
+
     function displayDetails() {
         const content = document.getElementById('detailsContent');
 
+        // Filter controls UI
+        const getSortIndicator = (column) => {
+            if (sortColumn === column) {
+                return sortDirection === 'asc' ? ' ↑' : ' ↓';
+            }
+            return '';
+        };
+
+        let filterHTML = `
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background-color: var(--accent-dark); color: #FFFFFF;">
+                    <span><i class="fas fa-filter me-2"></i>필터 및 내보내기</span>
+                    <button class="btn btn-sm btn-success" onclick="exportToCSV()">
+                        <i class="fas fa-download me-1"></i>CSV 내보내기
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold"><i class="fas fa-percentage me-1"></i>수익률 (%)</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="filterReturnMin" placeholder="최소" step="0.1">
+                                <span class="input-group-text">~</span>
+                                <input type="number" class="form-control" id="filterReturnMax" placeholder="최대" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold"><i class="fas fa-chart-line me-1"></i>MDD (%)</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="filterMddMin" placeholder="최소" step="0.1">
+                                <span class="input-group-text">~</span>
+                                <input type="number" class="form-control" id="filterMddMax" placeholder="최대" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold"><i class="fas fa-chart-bar me-1"></i>Sharpe Ratio</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="filterSharpeMin" placeholder="최소" step="0.1">
+                                <span class="input-group-text">~</span>
+                                <input type="number" class="form-control" id="filterSharpeMax" placeholder="최대" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-12 text-end">
+                            <button class="btn btn-sm btn-primary" onclick="applyFilters()">
+                                <i class="fas fa-check me-1"></i>필터 적용
+                            </button>
+                            <button class="btn btn-sm btn-secondary ms-2" onclick="resetFilters()">
+                                <i class="fas fa-undo me-1"></i>초기화
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Apply filters
+        let filteredResults = backtestResults.filter(r => {
+            return r.totalReturnPct >= filterReturnMin && r.totalReturnPct <= filterReturnMax &&
+                   r.maxDrawdown >= filterMddMin && r.maxDrawdown <= filterMddMax &&
+                   r.sharpeRatio >= filterSharpeMin && r.sharpeRatio <= filterSharpeMax;
+        });
+
+        // Apply sorting
+        filteredResults.sort((a, b) => {
+            let aVal, bVal;
+
+            switch(sortColumn) {
+                case 'modelName':
+                    aVal = a.modelName;
+                    bVal = b.modelName;
+                    break;
+                case 'foldNumber':
+                    aVal = a.foldNumber;
+                    bVal = b.foldNumber;
+                    break;
+                case 'totalReturnPct':
+                    aVal = parseFloat(a.totalReturnPct);
+                    bVal = parseFloat(b.totalReturnPct);
+                    break;
+                case 'totalTrades':
+                    aVal = a.totalTrades;
+                    bVal = b.totalTrades;
+                    break;
+                case 'winRate':
+                    aVal = parseFloat(a.winRate);
+                    bVal = parseFloat(b.winRate);
+                    break;
+                case 'maxDrawdown':
+                    aVal = parseFloat(a.maxDrawdown);
+                    bVal = parseFloat(b.maxDrawdown);
+                    break;
+                case 'sharpeRatio':
+                    aVal = parseFloat(a.sharpeRatio);
+                    bVal = parseFloat(b.sharpeRatio);
+                    break;
+                default:
+                    aVal = 0;
+                    bVal = 0;
+            }
+
+            if (typeof aVal === 'string') {
+                return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            } else {
+                return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            }
+        });
+
         let tableHTML = `
+            <div class="mb-2 text-muted">
+                <i class="fas fa-info-circle me-1"></i>총 ${filteredResults.length}건 (전체 ${backtestResults.length}건 중)
+                ${filteredResults.length < backtestResults.length ? ' - 필터가 적용되었습니다.' : ''}
+            </div>
             <table class="table table-striped table-hover result-table">
                 <thead><tr>
-                    <th>모델</th>
-                    <th>Fold</th>
+                    <th onclick="sortResults('modelName')" style="cursor: pointer;">모델${getSortIndicator('modelName')}</th>
+                    <th onclick="sortResults('foldNumber')" style="cursor: pointer;">Fold${getSortIndicator('foldNumber')}</th>
                     <th>체제</th>
-                    <th>수익률</th>
-                    <th>거래 수</th>
+                    <th onclick="sortResults('totalReturnPct')" style="cursor: pointer;">수익률${getSortIndicator('totalReturnPct')}</th>
+                    <th onclick="sortResults('totalTrades')" style="cursor: pointer;">거래 수${getSortIndicator('totalTrades')}</th>
                     <th>익절</th>
                     <th>손절</th>
                     <th>Profit Ladder</th>
                     <th>Time-Decay</th>
                     <th>시간만료</th>
-                    <th>승률</th>
-                    <th>MDD</th>
-                    <th>Sharpe</th>
+                    <th onclick="sortResults('winRate')" style="cursor: pointer;">승률${getSortIndicator('winRate')}</th>
+                    <th onclick="sortResults('maxDrawdown')" style="cursor: pointer;">MDD${getSortIndicator('maxDrawdown')}</th>
+                    <th onclick="sortResults('sharpeRatio')" style="cursor: pointer;">Sharpe${getSortIndicator('sharpeRatio')}</th>
                     <th>상세 보기</th>
                 </tr></thead>
                 <tbody>
         `;
 
-        backtestResults.forEach((r, idx) => {
+        filteredResults.forEach((r, idx) => {
             // Count Profit Ladder and Time-Decay events from tradeHistory
             let profitLadderCount = 0;
             let timeDecayCount = 0;
@@ -1266,6 +1505,11 @@
                     }
                 });
             }
+
+            // Find the original index in backtestResults for showExitDetails()
+            const originalIdx = backtestResults.findIndex(result =>
+                result.modelName === r.modelName && result.foldNumber === r.foldNumber
+            );
 
             tableHTML += `
                 <tr>
@@ -1283,7 +1527,7 @@
                     <td>${r.maxDrawdown.toFixed(2)}%</td>
                     <td>${r.sharpeRatio.toFixed(2)}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="showExitDetails(${idx})">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showExitDetails(${originalIdx})">
                             <i class="fas fa-eye"></i> 보기
                         </button>
                     </td>
@@ -1292,7 +1536,7 @@
         });
 
         tableHTML += '</tbody></table>';
-        content.innerHTML = tableHTML;
+        content.innerHTML = filterHTML + tableHTML;
     }
 
     function displayCapitalTracking() {
