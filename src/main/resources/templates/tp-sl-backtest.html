@@ -703,36 +703,91 @@
         const content = document.getElementById('modelContent');
         const modelStats = {};
 
+        // 모델별로 Fold 결과 수집
         backtestResults.forEach(r => {
             if (!modelStats[r.modelName]) {
                 modelStats[r.modelName] = {
-                    returns: [],
-                    winRates: [],
-                    mdds: [],
-                    sharpes: [],
-                    trades: 0
+                    folds: []
                 };
             }
-            modelStats[r.modelName].returns.push(parseFloat(r.totalReturnPct));
-            modelStats[r.modelName].winRates.push(parseFloat(r.winRate));
-            modelStats[r.modelName].mdds.push(parseFloat(r.maxDrawdown));
-            modelStats[r.modelName].sharpes.push(parseFloat(r.sharpeRatio));
-            modelStats[r.modelName].trades += r.totalTrades;
+            modelStats[r.modelName].folds.push(r);
         });
 
         // Prepare data for charts
         const modelNames = Object.keys(modelStats);
-        const avgReturns = [];
-        const avgMDDs = [];
-        const avgSharpes = [];
-        const avgWinRates = [];
+        const totalReturns = [];
+        const totalMDDs = [];
+        const totalSharpes = [];
+        const totalWinRates = [];
+        const maxReturns = [];
+        const minReturns = [];
+        const totalTrades = [];
+
+        // 각 모델별 전체 기간 지표 계산
+        Object.entries(modelStats).forEach(([model, stats]) => {
+            // Fold를 번호순으로 정렬
+            const sortedFolds = stats.folds.sort((a, b) => a.foldNumber - b.foldNumber);
+
+            // 1. 전체 수익률 계산 (복리)
+            const initialCapital = sortedFolds[0].initialCapital;
+            const finalCapital = sortedFolds[sortedFolds.length - 1].finalCapital;
+            const totalReturn = ((finalCapital - initialCapital) / initialCapital) * 100;
+
+            // 2. Fold별 수익률 (최대/최소용)
+            const foldReturns = sortedFolds.map(f => parseFloat(f.totalReturnPct));
+            const maxReturn = Math.max(...foldReturns);
+            const minReturn = Math.min(...foldReturns);
+
+            // 3. 전체 거래 수집
+            let allTrades = [];
+            sortedFolds.forEach(fold => {
+                if (fold.tradeHistory && fold.tradeHistory.length > 0) {
+                    allTrades = allTrades.concat(fold.tradeHistory);
+                }
+            });
+
+            // 4. 전체 승률 계산
+            const winningTrades = allTrades.filter(t => parseFloat(t.profit) > 0).length;
+            const totalWinRate = allTrades.length > 0 ? (winningTrades / allTrades.length) * 100 : 0;
+
+            // 5. 전체 MDD 계산 (모든 거래의 자본 변화 추적)
+            let peak = initialCapital;
+            let maxDD = 0;
+            allTrades.forEach(trade => {
+                const current = parseFloat(trade.capitalAfter);
+                if (current > peak) peak = current;
+                const drawdown = ((peak - current) / peak) * 100;
+                if (drawdown > maxDD) maxDD = drawdown;
+            });
+
+            // 6. 전체 Sharpe Ratio 계산 (모든 거래 기준)
+            let totalSharpe = 0;
+            if (allTrades.length >= 2) {
+                const avgReturn = allTrades.reduce((sum, t) => sum + parseFloat(t.returnPct), 0) / allTrades.length;
+                const variance = allTrades.reduce((sum, t) => {
+                    const diff = parseFloat(t.returnPct) - avgReturn;
+                    return sum + (diff * diff);
+                }, 0) / allTrades.length;
+                const stdDev = Math.sqrt(variance);
+                totalSharpe = stdDev > 0 ? avgReturn / stdDev : 0;
+            }
+
+            // 통계 저장
+            stats.totalReturn = totalReturn;
+            stats.maxReturn = maxReturn;
+            stats.minReturn = minReturn;
+            stats.totalWinRate = totalWinRate;
+            stats.totalMDD = maxDD;
+            stats.totalSharpe = totalSharpe;
+            stats.totalTrades = allTrades.length;
+        });
 
         let tableHTML = `
             <div class="row mb-4">
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header" style="background-color: var(--accent-dark); color: #FFFFFF;">
-                            <i class="fas fa-chart-bar me-2"></i>모델별 평균 수익률 비교
+                            <i class="fas fa-chart-bar me-2"></i>모델별 전체 수익률 비교
                         </div>
                         <div class="card-body">
                             <canvas id="modelReturnChart" style="max-height: 300px;"></canvas>
@@ -765,29 +820,25 @@
             <table class="table table-striped result-table">
                 <thead><tr>
                     <th>모델</th>
-                    <th>평균 수익률</th>
-                    <th>최대 수익률</th>
-                    <th>최소 수익률</th>
-                    <th>평균 승률</th>
-                    <th>평균 MDD</th>
-                    <th>평균 Sharpe</th>
+                    <th>전체 수익률</th>
+                    <th>최대 수익률 (Fold)</th>
+                    <th>최소 수익률 (Fold)</th>
+                    <th>전체 승률</th>
+                    <th>전체 MDD</th>
+                    <th>전체 Sharpe</th>
                     <th>총 거래 수</th>
                 </tr></thead>
                 <tbody>
         `;
 
         Object.entries(modelStats).forEach(([model, stats]) => {
-            const avgReturn = stats.returns.reduce((a,b)=>a+b,0) / stats.returns.length;
-            const maxReturn = Math.max(...stats.returns);
-            const minReturn = Math.min(...stats.returns);
-            const avgWinRate = stats.winRates.reduce((a,b)=>a+b,0) / stats.winRates.length;
-            const avgMDD = stats.mdds.reduce((a,b)=>a+b,0) / stats.mdds.length;
-            const avgSharpe = stats.sharpes.reduce((a,b)=>a+b,0) / stats.sharpes.length;
-
-            avgReturns.push(avgReturn);
-            avgMDDs.push(avgMDD);
-            avgSharpes.push(avgSharpe);
-            avgWinRates.push(avgWinRate);
+            totalReturns.push(stats.totalReturn);
+            totalMDDs.push(stats.totalMDD);
+            totalSharpes.push(stats.totalSharpe);
+            totalWinRates.push(stats.totalWinRate);
+            maxReturns.push(stats.maxReturn);
+            minReturns.push(stats.minReturn);
+            totalTrades.push(stats.totalTrades);
 
             // Buy & Hold는 배경색 강조
             const isBuyHold = model === 'Buy & Hold';
@@ -797,13 +848,13 @@
             tableHTML += `
                 <tr ${rowStyle}>
                     <td class="fw-bold">${modelLabel}</td>
-                    <td class="${avgReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${avgReturn.toFixed(2)}%</td>
-                    <td class="text-success">${maxReturn.toFixed(2)}%</td>
-                    <td class="text-danger">${minReturn.toFixed(2)}%</td>
-                    <td>${avgWinRate.toFixed(2)}%</td>
-                    <td class="${avgMDD <= 10 ? 'text-success' : avgMDD <= 20 ? 'text-warning' : 'text-danger'}">${avgMDD.toFixed(2)}%</td>
-                    <td class="${avgSharpe >= 2 ? 'text-success' : avgSharpe >= 1 ? 'text-warning' : 'text-danger'}">${avgSharpe.toFixed(2)}</td>
-                    <td>${stats.trades}</td>
+                    <td class="${stats.totalReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${stats.totalReturn.toFixed(2)}%</td>
+                    <td class="text-success">${stats.maxReturn.toFixed(2)}%</td>
+                    <td class="text-danger">${stats.minReturn.toFixed(2)}%</td>
+                    <td>${stats.totalWinRate.toFixed(2)}%</td>
+                    <td class="${stats.totalMDD <= 10 ? 'text-success' : stats.totalMDD <= 20 ? 'text-warning' : 'text-danger'}">${stats.totalMDD.toFixed(2)}%</td>
+                    <td class="${stats.totalSharpe >= 2 ? 'text-success' : stats.totalSharpe >= 1 ? 'text-warning' : 'text-danger'}">${stats.totalSharpe.toFixed(2)}</td>
+                    <td>${stats.totalTrades}</td>
                 </tr>
             `;
         });
@@ -818,13 +869,13 @@
             data: {
                 labels: modelNames,
                 datasets: [{
-                    label: '평균 수익률 (%)',
-                    data: avgReturns,
-                    backgroundColor: avgReturns.map((r, idx) => {
+                    label: '전체 수익률 (%)',
+                    data: totalReturns,
+                    backgroundColor: totalReturns.map((r, idx) => {
                         if (modelNames[idx] === 'Buy & Hold') return '#ffc107'; // 골드
                         return r >= 0 ? '#A3B087' : '#E07856';
                     }),
-                    borderColor: avgReturns.map((r, idx) => {
+                    borderColor: totalReturns.map((r, idx) => {
                         if (modelNames[idx] === 'Buy & Hold') return '#ffc107'; // 골드
                         return r >= 0 ? '#A3B087' : '#E07856';
                     }),
@@ -873,7 +924,7 @@
                 datasets: [
                     {
                         label: 'MDD (%)',
-                        data: avgMDDs,
+                        data: totalMDDs,
                         backgroundColor: '#E07856',
                         borderColor: '#E07856',
                         borderWidth: 1,
@@ -881,7 +932,7 @@
                     },
                     {
                         label: 'Sharpe Ratio',
-                        data: avgSharpes,
+                        data: totalSharpes,
                         backgroundColor: '#6C91BF',
                         borderColor: '#6C91BF',
                         borderWidth: 1,
@@ -938,16 +989,16 @@
         const radarCtx = document.getElementById('modelRadarChart').getContext('2d');
 
         // Normalize metrics to 0-100 scale for radar chart
-        const maxReturn = Math.max(...avgReturns.map(Math.abs));
-        const maxWinRate = Math.max(...avgWinRates);
-        const maxMDD = Math.max(...avgMDDs);
-        const maxSharpe = Math.max(...avgSharpes);
+        const maxReturn = Math.max(...totalReturns.map(Math.abs));
+        const maxWinRate = Math.max(...totalWinRates);
+        const maxMDD = Math.max(...totalMDDs);
+        const maxSharpe = Math.max(...totalSharpes);
 
         const radarDatasets = modelNames.map((model, idx) => {
-            const normalizedReturn = (avgReturns[idx] / maxReturn) * 100;
-            const normalizedWinRate = (avgWinRates[idx] / maxWinRate) * 100;
-            const normalizedMDD = 100 - (avgMDDs[idx] / maxMDD) * 100; // Invert MDD (lower is better)
-            const normalizedSharpe = (avgSharpes[idx] / maxSharpe) * 100;
+            const normalizedReturn = (totalReturns[idx] / maxReturn) * 100;
+            const normalizedWinRate = (totalWinRates[idx] / maxWinRate) * 100;
+            const normalizedMDD = 100 - (totalMDDs[idx] / maxMDD) * 100; // Invert MDD (lower is better)
+            const normalizedSharpe = (totalSharpes[idx] / maxSharpe) * 100;
 
             const colors = ['#A3B087', '#6C91BF', '#E07856', '#435663', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2', '#e83e8c', '#fd7e14', '#20c997'];
             const color = colors[idx % colors.length];
@@ -968,7 +1019,7 @@
         new Chart(radarCtx, {
             type: 'radar',
             data: {
-                labels: ['수익률', '승률', '낮은 MDD', 'Sharpe Ratio'],
+                labels: ['전체 수익률', '전체 승률', '낮은 MDD', 'Sharpe Ratio'],
                 datasets: radarDatasets
             },
             options: {
@@ -988,12 +1039,12 @@
                             label: function(context) {
                                 const modelIdx = context.datasetIndex;
                                 const metricIdx = context.dataIndex;
-                                const metrics = ['수익률', '승률', 'MDD', 'Sharpe'];
+                                const metrics = ['전체 수익률', '전체 승률', 'MDD', 'Sharpe'];
                                 const values = [
-                                    `${avgReturns[modelIdx].toFixed(2)}%`,
-                                    `${avgWinRates[modelIdx].toFixed(2)}%`,
-                                    `${avgMDDs[modelIdx].toFixed(2)}%`,
-                                    avgSharpes[modelIdx].toFixed(2)
+                                    `${totalReturns[modelIdx].toFixed(2)}%`,
+                                    `${totalWinRates[modelIdx].toFixed(2)}%`,
+                                    `${totalMDDs[modelIdx].toFixed(2)}%`,
+                                    totalSharpes[modelIdx].toFixed(2)
                                 ];
                                 return `${context.dataset.label} - ${metrics[metricIdx]}: ${values[metricIdx]}`;
                             }
