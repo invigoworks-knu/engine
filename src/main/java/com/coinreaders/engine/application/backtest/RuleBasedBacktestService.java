@@ -212,7 +212,17 @@ public class RuleBasedBacktestService {
         List<BigDecimal> squeezeThreshold = indicators.get("squeeze_threshold");
         List<BigDecimal> volumeSpike = indicators.get("volume_spike");
 
+        // 디버깅을 위한 카운터
+        int totalCandles = 0;
+        int foldRangeCandles = 0;
+        int nullIndicators = 0;
+        int setupCount = 0;
+        int breakoutCount = 0;
+        int volumeCount = 0;
+        int allConditionsCount = 0;
+
         for (int i = 1; i < candles.size(); i++) {
+            totalCandles++;
             FourHourCandle currentCandle = candles.get(i);
             LocalDate currentDate = currentCandle.getTimestamp().toLocalDate();
 
@@ -220,12 +230,14 @@ public class RuleBasedBacktestService {
             if (currentDate.isBefore(startDate) || currentDate.isAfter(endDate)) {
                 continue;
             }
+            foldRangeCandles++;
 
             // 전날(i-1) 조건 확인
             int prevIdx = i - 1;
 
             if (bbWidth.get(prevIdx) == null || bbUpper.get(prevIdx) == null ||
                 natr.get(prevIdx) == null || squeezeThreshold.get(prevIdx) == null) {
+                nullIndicators++;
                 continue;
             }
 
@@ -233,20 +245,34 @@ public class RuleBasedBacktestService {
             boolean isSqueeze = bbWidth.get(prevIdx).compareTo(squeezeThreshold.get(prevIdx)) < 0;
             boolean isLowVolatility = natr.get(prevIdx).compareTo(NATR_THRESHOLD) < 0;
             boolean setupCondition = isSqueeze || isLowVolatility;
+            if (setupCondition) setupCount++;
 
             // 조건 2: Breakout (Close > BB Upper)
             boolean breakoutCondition = close.get(prevIdx).compareTo(bbUpper.get(prevIdx)) > 0;
+            if (breakoutCondition) breakoutCount++;
 
             // 조건 3: Volume Spike
             boolean volumeCondition = volumeSpike.get(prevIdx).compareTo(BigDecimal.ZERO) > 0;
+            if (volumeCondition) volumeCount++;
 
             // 진입 신호
             if (setupCondition && breakoutCondition && volumeCondition) {
                 signals.add(i);
-                log.debug("진입 신호 발생: index={}, date={}, squeeze={}, lowVol={}, breakout={}, volume={}",
+                allConditionsCount++;
+                log.info("✅ 진입 신호 발생: index={}, date={}, squeeze={}, lowVol={}, breakout={}, volume={}",
                     i, currentDate, isSqueeze, isLowVolatility, breakoutCondition, volumeCondition);
             }
         }
+
+        // 디버깅 요약
+        log.info("📊 진입 조건 분석:");
+        log.info("  - 전체 4시간봉: {}개", totalCandles);
+        log.info("  - Fold 기간 내: {}개", foldRangeCandles);
+        log.info("  - 지표 null로 제외: {}개", nullIndicators);
+        log.info("  - Setup 조건 만족: {}개", setupCount);
+        log.info("  - Breakout 조건 만족: {}개", breakoutCount);
+        log.info("  - Volume 조건 만족: {}개", volumeCount);
+        log.info("  - 모든 조건 만족: {}개", allConditionsCount);
 
         return signals;
     }
