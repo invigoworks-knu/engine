@@ -57,7 +57,7 @@ public class RuleBasedBacktestService {
      */
     @Transactional(readOnly = true)
     public TakeProfitStopLossBacktestResponse runBacktest(Integer foldNumber, BigDecimal initialCapital) {
-        log.info("=== Rule-Based 백테스팅 시작: Fold={} ===", foldNumber);
+        log.info("=== Rule-Based 백테스팅 시작: Fold={}, 초기자본={}원 ===", foldNumber, initialCapital);
 
         // 1. Fold 기간 파악 (AI 예측 데이터 기준)
         List<HistoricalAiPrediction> predictions = aiPredictionRepository
@@ -103,7 +103,12 @@ public class RuleBasedBacktestService {
 
         // 5. 진입/청산 신호 생성
         List<Integer> entrySignals = generateEntrySignals(fourHourCandles, indicators, startDate, endDate);
-        log.info("진입 신호 생성: {}개", entrySignals.size());
+        log.info("진입 신호 생성: {}개 (4시간봉 총 {}개, Fold 기간: {} ~ {})",
+            entrySignals.size(), fourHourCandles.size(), startDate, endDate);
+
+        if (entrySignals.isEmpty()) {
+            log.warn("⚠️ 진입 신호가 하나도 생성되지 않았습니다. 전략 조건을 확인하세요.");
+        }
 
         // 6. 1분봉을 Map으로 변환 (성능 최적화: O(1) 조회)
         Map<LocalDateTime, HistoricalMinuteOhlcv> minuteCandleMap = minuteCandles.stream()
@@ -256,6 +261,7 @@ public class RuleBasedBacktestService {
         BigDecimal initialCapital,
         Map<LocalDateTime, HistoricalMinuteOhlcv> minuteCandleMap
     ) {
+        log.info("거래 시뮬레이션 시작: 초기자본={}원, 진입신호={}개", initialCapital, entrySignals.size());
         List<TradeDetail> trades = new ArrayList<>();
         BigDecimal capital = initialCapital;
         int tradeNumber = 1;
@@ -287,6 +293,7 @@ public class RuleBasedBacktestService {
             }
         }
 
+        log.info("거래 시뮬레이션 완료: 총 {}건 거래 실행", trades.size());
         return trades;
     }
 
@@ -340,7 +347,10 @@ public class RuleBasedBacktestService {
         // 2. 포지션 사이징 (80% 고정)
         BigDecimal positionSize = capital.multiply(POSITION_SIZE).setScale(2, RoundingMode.DOWN);
 
+        log.debug("포지션 계산: 자본={}원, 포지션크기={}원 ({}%)", capital, positionSize, POSITION_SIZE.multiply(new BigDecimal("100")));
+
         if (positionSize.compareTo(BigDecimal.ONE) < 0) {
+            log.warn("포지션 크기 너무 작음 (< 1원), 거래 제외: capital={}, positionSize={}", capital, positionSize);
             return Optional.empty();
         }
 
