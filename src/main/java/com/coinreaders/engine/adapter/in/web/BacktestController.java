@@ -22,6 +22,7 @@ public class BacktestController {
 
     private final TakeProfitStopLossBacktestService tpSlBacktestService;
     private final BuyAndHoldBacktestService buyAndHoldBacktestService;
+    private final RuleBasedBacktestService ruleBasedBacktestService;
     private final AsyncBacktestService asyncBacktestService;
 
     /**
@@ -153,7 +154,49 @@ public class BacktestController {
                     modelName, modelStartCapital, currentCapital, modelReturnPct);
             }
 
-            log.info("=== 배치 백테스팅 완료: 총 {}건 중 {}건 성공 ===", totalCombinations, results.size());
+            // ===== 벤치마크 자동 추가 =====
+            log.info("=== 벤치마크 전략 실행 시작 (Buy & Hold, Rule-Based) ===");
+
+            // Buy & Hold 벤치마크
+            try {
+                BigDecimal benchmarkCapital = initialCapitalBase;
+                for (Integer foldNumber : sortedFolds) {
+                    log.info("▶ Buy & Hold 실행 중: Fold={}, 초기자본={}원", foldNumber, benchmarkCapital);
+
+                    BuyAndHoldBacktestRequest bhRequest = BuyAndHoldBacktestRequest.builder()
+                        .foldNumber(foldNumber)
+                        .initialCapital(benchmarkCapital)
+                        .build();
+
+                    TakeProfitStopLossBacktestResponse bhResponse = buyAndHoldBacktestService.runBacktest(bhRequest);
+                    results.add(bhResponse);
+                    benchmarkCapital = bhResponse.getFinalCapital();
+
+                    log.info("✓ Buy & Hold 완료: Fold={}, {}원 → {}원 (수익률 {}%)",
+                        foldNumber, bhResponse.getInitialCapital(), bhResponse.getFinalCapital(), bhResponse.getTotalReturnPct());
+                }
+            } catch (Exception e) {
+                log.error("Buy & Hold 벤치마크 실패", e);
+            }
+
+            // Rule-Based 벤치마크
+            try {
+                BigDecimal ruleBasedCapital = initialCapitalBase;
+                for (Integer foldNumber : sortedFolds) {
+                    log.info("▶ Rule-Based 실행 중: Fold={}, 초기자본={}원", foldNumber, ruleBasedCapital);
+
+                    TakeProfitStopLossBacktestResponse rbResponse = ruleBasedBacktestService.runBacktest(foldNumber, ruleBasedCapital);
+                    results.add(rbResponse);
+                    ruleBasedCapital = rbResponse.getFinalCapital();
+
+                    log.info("✓ Rule-Based 완료: Fold={}, {}원 → {}원 (수익률 {}%)",
+                        foldNumber, rbResponse.getInitialCapital(), rbResponse.getFinalCapital(), rbResponse.getTotalReturnPct());
+                }
+            } catch (Exception e) {
+                log.error("Rule-Based 벤치마크 실패", e);
+            }
+
+            log.info("=== 배치 백테스팅 완료: 총 {}건 (ML모델 + 벤치마크 포함) ===", results.size());
             return ResponseEntity.ok(results);
         } catch (Exception e) {
             log.error("배치 백테스팅 실패", e);
