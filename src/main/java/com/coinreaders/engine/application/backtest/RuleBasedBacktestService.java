@@ -374,7 +374,7 @@ public class RuleBasedBacktestService {
             if (emaExit || stopLossExit) {
                 exitReason = emaExit ? "EMA_CROSS" : "STOP_LOSS";
                 exitTime = checkCandle.getTimestamp();
-                exitPrice = checkCandle.getOpen(); // 다음 4시간봉 시작가로 청산
+                exitPrice = checkCandle.getClose(); // 현재 캔들 종가로 청산
                 break;
             }
         }
@@ -455,8 +455,10 @@ public class RuleBasedBacktestService {
         BigDecimal totalReturnPct = totalReturn.divide(initialCapital, 4, RoundingMode.HALF_UP)
             .multiply(new BigDecimal("100"));
 
-        // 승률 계산
+        // 거래 통계 계산
         long winCount = tradeHistory.stream().filter(t -> t.getProfit().compareTo(BigDecimal.ZERO) > 0).count();
+        long lossCount = tradeHistory.stream().filter(t -> t.getProfit().compareTo(BigDecimal.ZERO) < 0).count();
+
         BigDecimal winRate = tradeHistory.isEmpty() ? BigDecimal.ZERO :
             BigDecimal.valueOf(winCount).divide(BigDecimal.valueOf(tradeHistory.size()), 4, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
@@ -468,6 +470,33 @@ public class RuleBasedBacktestService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(BigDecimal.valueOf(tradeHistory.size()), 2, RoundingMode.HALF_UP);
 
+        // 청산 사유별 집계
+        int emaCrossExits = (int) tradeHistory.stream().filter(t -> "EMA_CROSS".equals(t.getExitReason())).count();
+        int stopLossExits = (int) tradeHistory.stream().filter(t -> "STOP_LOSS".equals(t.getExitReason())).count();
+        int timeoutExits = (int) tradeHistory.stream().filter(t -> "END_OF_PERIOD".equals(t.getExitReason())).count();
+
+        // 평균 수익/손실
+        BigDecimal avgWin = winCount > 0 ?
+            tradeHistory.stream()
+                .filter(t -> t.getProfit().compareTo(BigDecimal.ZERO) > 0)
+                .map(TradeDetail::getReturnPct)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(winCount), 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+
+        BigDecimal avgLoss = lossCount > 0 ?
+            tradeHistory.stream()
+                .filter(t -> t.getProfit().compareTo(BigDecimal.ZERO) < 0)
+                .map(TradeDetail::getReturnPct)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(lossCount), 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+
+        // 손익비
+        BigDecimal winLossRatio = (lossCount > 0 && avgLoss.compareTo(BigDecimal.ZERO) != 0) ?
+            avgWin.divide(avgLoss.abs(), 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+
         return TakeProfitStopLossBacktestResponse.builder()
             .modelName("Rule-Based")
             .foldNumber(foldNumber)
@@ -478,8 +507,16 @@ public class RuleBasedBacktestService {
             .finalCapital(finalCapital)
             .totalReturnPct(totalReturnPct)
             .totalTrades(tradeHistory.size())
+            .takeProfitExits(emaCrossExits)    // EMA 크로스는 익절로 간주
+            .stopLossExits(stopLossExits)
+            .timeoutExits(timeoutExits)
             .winRate(winRate)
             .avgHoldingDays(avgHoldingDays)
+            .maxDrawdown(BigDecimal.ZERO)      // 추후 구현 가능
+            .sharpeRatio(BigDecimal.ZERO)      // 추후 구현 가능
+            .avgWin(avgWin)
+            .avgLoss(avgLoss)
+            .winLossRatio(winLossRatio)
             .tradeHistory(tradeHistory)
             .build();
     }
