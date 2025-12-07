@@ -48,6 +48,15 @@ public class TakeProfitStopLossBacktestResponse {
     // 거래 상세 내역
     private List<TradeDetail> tradeHistory;
 
+    // ===== CUSUM 전용 필드 =====
+    private String strategy;            // CUSUM 전략명 (예: target_24h_Jackpot)
+    private String mlModel;             // CUSUM ML 모델 (예: LGBM, XGB)
+    private String strategyTimeframe;   // 타임프레임 (4h, 12h, 24h, 48h)
+    private String strategyType;        // 전략 타입 (Scalp, Balanced, Classic, Trend, Jackpot)
+    private BigDecimal avgConfidence;   // 평균 AI 확신도
+    private BigDecimal avgSelectivity;  // 평균 CUSUM 선별율 (%)
+    private BigDecimal avgInvestmentRatio; // 평균 투자 비중 (Kelly)
+
     /**
      * 개별 거래 상세 정보
      */
@@ -84,6 +93,13 @@ public class TakeProfitStopLossBacktestResponse {
 
         // 분할 청산 이벤트 리스트 (비어있으면 단일 청산)
         private List<ExitEvent> exitEvents;
+
+        // ===== CUSUM 전용 필드 =====
+        private String strategy;                // CUSUM 전략명 (예: target_24h_Jackpot)
+        private String mlModel;                 // CUSUM ML 모델 (예: LGBM)
+        private BigDecimal cusumSelectivity;    // CUSUM 선별율 (%)
+        private BigDecimal threshold;           // AI 확신도 임계값
+        private Boolean isCorrect;              // 예측 정확 여부
     }
 
     /**
