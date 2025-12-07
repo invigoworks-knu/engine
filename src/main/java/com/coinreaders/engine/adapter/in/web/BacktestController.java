@@ -534,17 +534,15 @@ public class BacktestController {
                 strategies = cusumSignalBacktestService.getAvailableStrategies();
             }
 
-            // 모델 목록 결정
-            java.util.List<String> models = batchRequest.models;
-            if (models == null || models.isEmpty()) {
-                models = java.util.List.of((String) null); // 전체 모델
-            }
-
             // Fold 목록 결정
             java.util.List<Integer> folds = batchRequest.foldNumbers;
             if (folds == null || folds.isEmpty()) {
                 folds = cusumSignalBacktestService.getAvailableFolds();
             }
+
+            // 모델 (현재는 전략 내에서 null로 처리 - 전체 모델 대상)
+            String model = (batchRequest.models != null && !batchRequest.models.isEmpty())
+                ? batchRequest.models.get(0) : null;
 
             // 배치 실행
             for (String strategy : strategies) {
@@ -556,7 +554,7 @@ public class BacktestController {
 
                     try {
                         TakeProfitStopLossBacktestResponse response =
-                            cusumSignalBacktestService.runBacktest(fold, strategy, null, currentCapital);
+                            cusumSignalBacktestService.runBacktest(fold, strategy, model, currentCapital);
 
                         results.add(response);
                         currentCapital = response.getFinalCapital();
