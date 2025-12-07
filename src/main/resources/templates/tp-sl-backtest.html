@@ -183,7 +183,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">초기 자본 (KRW)</label>
-                            <input type="number" class="form-control" id="cusumInitialCapital" value="10000000" step="1000000">
+                            <input type="number" class="form-control" id="cusumInitialCapital" value="10000" step="1000">
                         </div>
                     </div>
                     <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runCusumBacktest()" id="btnCusumRun" style="display: none;">
@@ -2485,7 +2485,7 @@
         const strategy = document.getElementById('cusumStrategy').value;
         const model = document.getElementById('cusumModel').value;
         const fold = document.getElementById('cusumFold').value;
-        const initialCapital = parseFloat(document.getElementById('cusumInitialCapital').value) || 10000000;
+        const initialCapital = parseFloat(document.getElementById('cusumInitialCapital').value) || 10000;
 
         // 요청 파라미터 구성 (백엔드 CusumBatchRequest 형식에 맞춤)
         const requestBody = {

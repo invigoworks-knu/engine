@@ -526,12 +526,18 @@ public class BacktestController {
         try {
             java.util.List<TakeProfitStopLossBacktestResponse> results = new java.util.ArrayList<>();
             BigDecimal initialCapital = batchRequest.initialCapital != null ?
-                batchRequest.initialCapital : new BigDecimal("10000000");
+                batchRequest.initialCapital : new BigDecimal("10000");
 
             // 전략 목록 결정
             java.util.List<String> strategies = batchRequest.strategies;
             if (strategies == null || strategies.isEmpty()) {
                 strategies = cusumSignalBacktestService.getAvailableStrategies();
+            }
+
+            // 모델 목록 결정 (null/빈 리스트면 전체 모델)
+            java.util.List<String> models = batchRequest.models;
+            if (models == null || models.isEmpty()) {
+                models = cusumSignalBacktestService.getAvailableModels();
             }
 
             // Fold 목록 결정
@@ -540,33 +546,31 @@ public class BacktestController {
                 folds = cusumSignalBacktestService.getAvailableFolds();
             }
 
-            // 모델 (현재는 전략 내에서 null로 처리 - 전체 모델 대상)
-            String model = (batchRequest.models != null && !batchRequest.models.isEmpty())
-                ? batchRequest.models.get(0) : null;
-
-            // 배치 실행
+            // 배치 실행: 전략 × 모델 × Fold 조합
             for (String strategy : strategies) {
-                BigDecimal currentCapital = initialCapital;
+                for (String model : models) {
+                    BigDecimal currentCapital = initialCapital;
 
-                for (Integer fold : folds) {
-                    log.info("▶ CUSUM 실행: Strategy={}, Fold={}, Capital={}",
-                        strategy, fold, currentCapital);
+                    for (Integer fold : folds) {
+                        log.info("▶ CUSUM 실행: Strategy={}, Model={}, Fold={}, Capital={}",
+                            strategy, model, fold, currentCapital);
 
-                    try {
-                        TakeProfitStopLossBacktestResponse response =
-                            cusumSignalBacktestService.runBacktest(fold, strategy, model, currentCapital);
+                        try {
+                            TakeProfitStopLossBacktestResponse response =
+                                cusumSignalBacktestService.runBacktest(fold, strategy, model, currentCapital);
 
-                        results.add(response);
-                        currentCapital = response.getFinalCapital();
+                            results.add(response);
+                            currentCapital = response.getFinalCapital();
 
-                        log.info("✓ 완료: Strategy={}, Fold={}, {}원 → {}원 ({}%)",
-                            strategy, fold,
-                            response.getInitialCapital(),
-                            response.getFinalCapital(),
-                            response.getTotalReturnPct());
-                    } catch (Exception e) {
-                        log.error("✗ 실패: Strategy={}, Fold={}, Error={}",
-                            strategy, fold, e.getMessage());
+                            log.info("✓ 완료: Strategy={}, Model={}, Fold={}, {}원 → {}원 ({}%)",
+                                strategy, model, fold,
+                                response.getInitialCapital(),
+                                response.getFinalCapital(),
+                                response.getTotalReturnPct());
+                        } catch (Exception e) {
+                            log.error("✗ 실패: Strategy={}, Model={}, Fold={}, Error={}",
+                                strategy, model, fold, e.getMessage());
+                        }
                     }
                 }
             }
