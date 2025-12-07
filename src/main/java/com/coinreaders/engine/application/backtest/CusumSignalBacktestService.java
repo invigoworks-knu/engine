@@ -58,7 +58,7 @@ import java.util.stream.Stream;
 public class CusumSignalBacktestService {
 
     private static final String CSV_PATH = "cusum_signals/backend_signals_master.csv";
-    private static final String MARKET = "KRW-BTC"; // 백테스팅 대상 마켓
+    private static final String MARKET = "KRW-ETH"; // 백테스팅 대상 마켓
     private static final BigDecimal FEE_RATE = new BigDecimal("0.0004"); // 0.04% 편도 수수료
     private static final BigDecimal DEFAULT_POSITION_RATIO = new BigDecimal("0.8"); // 기본값: 자본의 80%
     private static final int SCALE = 8; // 소수점 자릿수
