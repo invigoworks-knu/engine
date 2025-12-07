@@ -29,6 +29,25 @@ import java.util.stream.Collectors;
  * 1. CUSUM Filter로 노이즈 제거된 신호만 사용
  * 2. Triple Barrier Method로 라벨링된 데이터
  * 3. AI가 전략 검증 (Buy/Pass 판단)
+ *
+ * CSV 컬럼 매핑 (실제 명세 기준):
+ * - signal_time: 트리거 시각
+ * - strategy: 전략 ID
+ * - model: 모델 ID
+ * - fold_id: 검증 차수
+ * - primary_signal: 1차 신호
+ * - ml_prediction: AI 예측 (1=상승, 0=하락)
+ * - final_action: BUY/PASS
+ * - confidence: 확신도
+ * - threshold: 기준점
+ * - cusum_selectivity_pct: 희소성
+ * - suggested_weight: 매수 비중 (Kelly Criterion)
+ * - entry_price_ref: 참고 진입가
+ * - take_profit_price: 익절가
+ * - stop_loss_price: 손절가
+ * - expiration_time: 타임 컷
+ * - actual_direction: 실제 방향
+ * - correct: 정답 여부
  */
 @Slf4j
 @Service
@@ -37,7 +56,7 @@ public class CusumSignalBacktestService {
 
     private static final String CSV_PATH = "cusum_signals/backend_signals_master.csv";
     private static final BigDecimal FEE_RATE = new BigDecimal("0.0005"); // 0.05% 편도 수수료
-    private static final BigDecimal POSITION_SIZE_RATIO = new BigDecimal("0.8"); // 자본의 80% 투자
+    private static final BigDecimal DEFAULT_POSITION_RATIO = new BigDecimal("0.8"); // 기본값: 자본의 80%
 
     // 메모리에 캐싱된 신호 데이터
     private List<CusumSignalData> allSignals = new ArrayList<>();
@@ -85,10 +104,10 @@ public class CusumSignalBacktestService {
                 header[0] = header[0].substring(1);
             }
 
-            // 컬럼 인덱스 매핑 (유연한 처리)
+            // 컬럼 인덱스 매핑 (유연한 처리 - 대소문자 무시, 공백 제거)
             Map<String, Integer> columnIndex = new HashMap<>();
             for (int i = 0; i < header.length; i++) {
-                columnIndex.put(header[i].trim().toLowerCase(), i);
+                columnIndex.put(header[i].trim().toLowerCase().replace(" ", "_"), i);
             }
 
             log.info("CSV 컬럼: {}", Arrays.asList(header));
@@ -123,62 +142,75 @@ public class CusumSignalBacktestService {
     }
 
     /**
-     * CSV 라인 파싱
+     * CSV 라인 파싱 (실제 컬럼명 기준)
      */
     private CusumSignalData parseCsvLine(String[] line, Map<String, Integer> columnIndex) {
-        // 필수 컬럼 확인
-        Integer foldIdIdx = columnIndex.get("fold_id");
+        // 필수 컬럼 확인 (실제 컬럼명 기준)
         Integer signalTimeIdx = columnIndex.get("signal_time");
-        Integer strategyIdx = columnIndex.get("strategy");
-        Integer modelIdx = columnIndex.get("model");
-        Integer finalActionIdx = columnIndex.get("final_action");
-        Integer entryPriceIdx = columnIndex.get("entry_price");
+        Integer entryPriceIdx = columnIndex.get("entry_price_ref");
 
-        if (foldIdIdx == null || signalTimeIdx == null || entryPriceIdx == null) {
+        // 이전 컬럼명도 지원 (하위 호환)
+        if (entryPriceIdx == null) {
+            entryPriceIdx = columnIndex.get("entry_price");
+        }
+
+        if (signalTimeIdx == null || entryPriceIdx == null) {
             return null;
         }
 
-        // 값 추출
-        Integer foldId = parseInteger(getColumnValue(line, foldIdIdx));
+        // 값 추출 (실제 컬럼명 기준)
         LocalDateTime signalTime = parseDateTime(getColumnValue(line, signalTimeIdx));
-        String strategy = getColumnValue(line, strategyIdx);
-        String model = getColumnValue(line, modelIdx);
+        String strategy = getColumnValue(line, columnIndex.get("strategy"));
+        String model = getColumnValue(line, columnIndex.get("model"));
+        Integer foldId = parseInteger(getColumnValue(line, columnIndex.get("fold_id")));
+
+        // 매매 신호 및 필터링
         Boolean primarySignal = parseBoolean(getColumnValue(line, columnIndex.get("primary_signal")));
-        Integer mlPredict = parseInteger(getColumnValue(line, columnIndex.get("ml_predict")));
-        String finalAction = getColumnValue(line, finalActionIdx);
-        Integer suggested = parseInteger(getColumnValue(line, columnIndex.get("suggested")));
-        BigDecimal entryPrice = parseBigDecimal(getColumnValue(line, entryPriceIdx));
-        BigDecimal takeProfit = parseBigDecimal(getColumnValue(line, columnIndex.get("take_profit")));
-        BigDecimal stopLoss = parseBigDecimal(getColumnValue(line, columnIndex.get("stop_loss_1")));
-        LocalDateTime expiration = parseDateTime(getColumnValue(line, columnIndex.get("expiration")));
+        Integer mlPrediction = parseInteger(getColumnValue(line,
+            columnIndex.get("ml_prediction") != null ? columnIndex.get("ml_prediction") : columnIndex.get("ml_predict")));
+        String finalAction = getColumnValue(line, columnIndex.get("final_action"));
         BigDecimal confidence = parseBigDecimal(getColumnValue(line, columnIndex.get("confidence")));
         BigDecimal threshold = parseBigDecimal(getColumnValue(line, columnIndex.get("threshold")));
+        BigDecimal cusumSelectivityPct = parseBigDecimal(getColumnValue(line,
+            columnIndex.get("cusum_selectivity_pct") != null ? columnIndex.get("cusum_selectivity_pct") : columnIndex.get("cusum_sel")));
+
+        // 실행 및 자금 관리
+        BigDecimal suggestedWeight = parseBigDecimal(getColumnValue(line,
+            columnIndex.get("suggested_weight") != null ? columnIndex.get("suggested_weight") : columnIndex.get("suggested")));
+        BigDecimal entryPriceRef = parseBigDecimal(getColumnValue(line, entryPriceIdx));
+        BigDecimal takeProfitPrice = parseBigDecimal(getColumnValue(line,
+            columnIndex.get("take_profit_price") != null ? columnIndex.get("take_profit_price") : columnIndex.get("take_profit")));
+        BigDecimal stopLossPrice = parseBigDecimal(getColumnValue(line,
+            columnIndex.get("stop_loss_price") != null ? columnIndex.get("stop_loss_price") : columnIndex.get("stop_loss_1")));
+        LocalDateTime expirationTime = parseDateTime(getColumnValue(line,
+            columnIndex.get("expiration_time") != null ? columnIndex.get("expiration_time") : columnIndex.get("expiration")));
+
+        // 사후 검증용
         Integer actualDirection = parseInteger(getColumnValue(line, columnIndex.get("actual_direction")));
         Boolean correct = parseBoolean(getColumnValue(line, columnIndex.get("correct")));
-        BigDecimal cusumSel = parseBigDecimal(getColumnValue(line, columnIndex.get("cusum_sel")));
 
-        if (foldId == null || signalTime == null || entryPrice == null) {
+        if (signalTime == null || entryPriceRef == null) {
             return null;
         }
 
         return CusumSignalData.builder()
-            .foldId(foldId)
             .signalTime(signalTime)
             .strategy(strategy)
             .model(model)
+            .foldId(foldId)
             .primarySignal(primarySignal)
-            .mlPredict(mlPredict)
+            .mlPrediction(mlPrediction)
             .finalAction(finalAction)
-            .suggested(suggested)
-            .entryPrice(entryPrice)
-            .takeProfit(takeProfit)
-            .stopLoss(stopLoss)
-            .expiration(expiration)
             .confidence(confidence)
             .threshold(threshold)
+            .cusumSelectivityPct(cusumSelectivityPct)
+            .suggestedWeight(suggestedWeight)
+            .entryPriceRef(entryPriceRef)
+            .takeProfitPrice(takeProfitPrice)
+            .stopLossPrice(stopLossPrice)
+            .expirationTime(expirationTime)
             .actualDirection(actualDirection)
             .correct(correct)
-            .cusumSel(cusumSel)
             .build();
     }
 
@@ -285,7 +317,7 @@ public class CusumSignalBacktestService {
      * CUSUM 신호 기반 백테스팅 실행
      *
      * @param foldNumber    Fold 번호 (null이면 전체)
-     * @param strategy      전략명 (null이면 전체, 예: "target_4h_LGBM")
+     * @param strategy      전략명 (null이면 전체, 예: "target_24h_Jackpot")
      * @param model         모델명 (null이면 전체, 예: "LGBM")
      * @param initialCapital 초기 자본
      * @return 백테스팅 결과
@@ -324,6 +356,7 @@ public class CusumSignalBacktestService {
 
     /**
      * 백테스팅 실행 로직
+     * - suggested_weight를 포지션 사이징에 반영 (Kelly Criterion)
      */
     private TakeProfitStopLossBacktestResponse executeBacktest(
             List<CusumSignalData> signals,
@@ -364,8 +397,10 @@ public class CusumSignalBacktestService {
                 continue;
             }
 
-            // 포지션 크기 계산 (자본의 80%)
-            BigDecimal positionSize = capital.multiply(POSITION_SIZE_RATIO);
+            // ★ 포지션 크기 계산: suggested_weight 사용 (Kelly Criterion 반영)
+            // suggested_weight가 있으면 사용, 없으면 기본값 80%
+            BigDecimal investmentRatio = signal.getInvestmentRatio();
+            BigDecimal positionSize = capital.multiply(investmentRatio);
             BigDecimal quantity = positionSize.divide(entryPrice, 8, RoundingMode.HALF_DOWN);
 
             // 진입 수수료
@@ -375,7 +410,8 @@ public class CusumSignalBacktestService {
             String exitReason;
             BigDecimal exitPrice;
 
-            // correct == TRUE면 익절, FALSE면 손절
+            // correct == TRUE면 익절 (take_profit_price에서 청산)
+            // correct == FALSE면 손절 (stop_loss_price에서 청산)
             Boolean correct = signal.getCorrect();
             if (correct != null && correct) {
                 // 익절
@@ -425,7 +461,7 @@ public class CusumSignalBacktestService {
                 maxDrawdown = drawdown;
             }
 
-            // 보유 기간
+            // 보유 기간 (expiration_time 또는 strategy에서 추출)
             int holdingHours = signal.getHoldingHours();
             totalHoldingHours = totalHoldingHours.add(BigDecimal.valueOf(holdingHours));
 
@@ -444,7 +480,7 @@ public class CusumSignalBacktestService {
                 .takeProfitPrice(takeProfit)
                 .stopLossPrice(stopLoss)
                 .positionSize(positionSize)
-                .investmentRatio(POSITION_SIZE_RATIO)
+                .investmentRatio(investmentRatio) // suggested_weight 반영
                 .profit(profit)
                 .returnPct(returnPct)
                 .exitReason(exitReason)

@@ -167,6 +167,49 @@
                         </button>
                     </div>
 
+                    <!-- CUSUM 신호 기반 백테스팅 -->
+                    <div class="card mb-4" style="border: 2px solid #A3B087;">
+                        <div class="card-header" style="background-color: #A3B087; color: #FFFFFF;">
+                            <i class="fas fa-filter me-2"></i>CUSUM 신호 기반 백테스팅 (Triple Barrier Method)
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-center mb-3">
+                                <div class="col-md-8">
+                                    <p class="mb-1"><strong>새로운 ML 파이프라인:</strong> CUSUM 필터 → Triple Barrier 라벨링 → AI 검증</p>
+                                    <p class="mb-0">CUSUM 데이터: <span id="cusumStatus" class="badge bg-secondary">확인 중</span> <span id="cusumCount" class="small text-muted"></span></p>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <button class="btn btn-success btn-sm" onclick="loadCusumData()" id="btnCusum">
+                                        <i class="fas fa-download me-1"></i> CUSUM 데이터 로드
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row g-3 mb-3" id="cusumOptions" style="display: none;">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">전략 선택</label>
+                                    <select class="form-select" id="cusumStrategy">
+                                        <option value="">전체 전략</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">모델 선택</label>
+                                    <select class="form-select" id="cusumModel">
+                                        <option value="">전체 모델</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Fold 선택</label>
+                                    <select class="form-select" id="cusumFold">
+                                        <option value="">전체 Fold</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-success w-100 py-2 fw-bold" onclick="runCusumBacktest()" id="btnCusumRun" style="display: none;">
+                                <i class="fas fa-play me-2"></i>CUSUM 백테스팅 실행
+                            </button>
+                        </div>
+                    </div>
+
                     <hr class="my-4">
 
                     <h6 class="fw-bold mb-3">커스텀 설정</h6>
@@ -370,7 +413,16 @@
     let filterSharpeMax = Infinity;
     let filterFold = null; // Fold 필터 (null = 전체)
 
-    document.addEventListener('DOMContentLoaded', checkDataStatus);
+    // CUSUM 관련 변수
+    let cusumDataLoaded = false;
+    let cusumStrategies = [];
+    let cusumModels = [];
+    let cusumFolds = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        checkDataStatus();
+        checkCusumStatus();
+    });
 
     function checkDataStatus() {
         fetch('/api/v1/data/status').then(r=>r.json()).then(d => {
@@ -1762,6 +1814,183 @@
         // Show modal
         const modal = new bootstrap.Modal(document.getElementById('exitDetailsModal'));
         modal.show();
+    }
+
+    // =====================================================
+    // CUSUM 신호 기반 백테스팅 함수들
+    // =====================================================
+
+    function checkCusumStatus() {
+        fetch('/api/backtest/cusum/status')
+            .then(r => r.json())
+            .then(data => {
+                const statusBadge = document.getElementById('cusumStatus');
+                const countSpan = document.getElementById('cusumCount');
+                const loadBtn = document.getElementById('btnCusum');
+                const optionsDiv = document.getElementById('cusumOptions');
+                const runBtn = document.getElementById('btnCusumRun');
+
+                // API 응답 형식에 맞춤: dataLoaded, totalSignals, availableStrategies, etc.
+                if (data.dataLoaded) {
+                    cusumDataLoaded = true;
+                    statusBadge.textContent = '완료';
+                    statusBadge.className = 'badge bg-success';
+                    countSpan.textContent = `(${data.totalSignals.toLocaleString()}건)`;
+                    loadBtn.disabled = true;
+                    loadBtn.innerHTML = '<i class="fas fa-check me-1"></i> 로드 완료';
+
+                    // 옵션 영역 표시
+                    optionsDiv.style.display = 'flex';
+                    runBtn.style.display = 'block';
+
+                    // 드롭다운 옵션 채우기
+                    populateCusumOptions(data);
+                } else {
+                    cusumDataLoaded = false;
+                    statusBadge.textContent = '미적재';
+                    statusBadge.className = 'badge bg-danger';
+                    countSpan.textContent = '';
+                    optionsDiv.style.display = 'none';
+                    runBtn.style.display = 'none';
+                }
+            })
+            .catch(e => {
+                console.error('CUSUM status check failed:', e);
+                const statusBadge = document.getElementById('cusumStatus');
+                statusBadge.textContent = '확인 실패';
+                statusBadge.className = 'badge bg-warning';
+            });
+    }
+
+    function populateCusumOptions(data) {
+        // 전략 드롭다운 (API 응답: availableStrategies)
+        const strategySelect = document.getElementById('cusumStrategy');
+        strategySelect.innerHTML = '<option value="">전체 전략</option>';
+        if (data.availableStrategies) {
+            data.availableStrategies.forEach(s => {
+                strategySelect.innerHTML += `<option value="${s}">${s}</option>`;
+            });
+            cusumStrategies = data.availableStrategies;
+        }
+
+        // 모델 드롭다운 (API 응답: availableModels)
+        const modelSelect = document.getElementById('cusumModel');
+        modelSelect.innerHTML = '<option value="">전체 모델</option>';
+        if (data.availableModels) {
+            data.availableModels.forEach(m => {
+                modelSelect.innerHTML += `<option value="${m}">${m}</option>`;
+            });
+            cusumModels = data.availableModels;
+        }
+
+        // Fold 드롭다운 (API 응답: availableFolds)
+        const foldSelect = document.getElementById('cusumFold');
+        foldSelect.innerHTML = '<option value="">전체 Fold</option>';
+        if (data.availableFolds) {
+            data.availableFolds.forEach(f => {
+                foldSelect.innerHTML += `<option value="${f}">Fold ${f}</option>`;
+            });
+            cusumFolds = data.availableFolds;
+        }
+    }
+
+    function loadCusumData() {
+        const btn = document.getElementById('btnCusum');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로딩 중... (CSV 파싱)';
+
+        showToast('CUSUM 신호 데이터 로드를 시작합니다. 데이터 크기에 따라 시간이 소요될 수 있습니다.', true);
+
+        fetch('/api/backtest/cusum/load', { method: 'POST' })
+            .then(r => {
+                if (!r.ok) throw new Error('CUSUM 데이터 로드 실패');
+                return r.json();
+            })
+            .then(data => {
+                // API 응답 형식: loadedSignals (not signalCount)
+                const count = data.loadedSignals || 0;
+                showToast(`CUSUM 데이터 로드 완료! ${count.toLocaleString()}건 적재됨`, true);
+                checkCusumStatus();
+            })
+            .catch(e => {
+                console.error(e);
+                showToast('CUSUM 데이터 로드 중 오류가 발생했습니다. CSV 파일을 확인해주세요.', false);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download me-1"></i> CUSUM 데이터 로드';
+            });
+    }
+
+    async function runCusumBacktest() {
+        if (!cusumDataLoaded) {
+            showToast('먼저 CUSUM 데이터를 로드해주세요.', false);
+            return;
+        }
+
+        const strategy = document.getElementById('cusumStrategy').value;
+        const model = document.getElementById('cusumModel').value;
+        const fold = document.getElementById('cusumFold').value;
+        const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 10000;
+
+        // 요청 파라미터 구성
+        const requestBody = {
+            initialCapital: initialCapital
+        };
+        if (strategy) requestBody.strategy = strategy;
+        if (model) requestBody.model = model;
+        if (fold) requestBody.foldId = parseInt(fold);
+
+        // 스피너 표시
+        document.getElementById('spinnerOverlay').classList.add('active');
+        document.getElementById('spinnerMessage').textContent = 'CUSUM 백테스팅 실행 중...';
+
+        // 로그 초기화 및 진행 섹션 표시
+        document.getElementById('progressSection').style.display = 'block';
+        document.getElementById('resultsSection').style.display = 'none';
+        const logs = document.getElementById('progressLogs');
+        logs.innerHTML = '';
+        addLog(`CUSUM 백테스팅 시작 - 전략: ${strategy || '전체'}, 모델: ${model || '전체'}, Fold: ${fold || '전체'}`);
+
+        try {
+            // 배치 실행 (여러 조합)
+            const response = await fetch('/api/backtest/cusum/run-batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error('CUSUM 백테스팅 실행 실패');
+            }
+
+            const results = await response.json();
+            addLog(`CUSUM 백테스팅 완료! ${results.length}건의 결과`);
+
+            // 결과를 기존 backtestResults에 추가 (CUSUM 태그 추가)
+            const cusumResults = results.map(r => ({
+                ...r,
+                modelName: `[CUSUM] ${r.strategy || ''} - ${r.model || ''}`,
+                foldNumber: r.foldId || 0,
+                regime: 'CUSUM',
+                // 기본값 설정 (API 응답에 없는 경우)
+                takeProfitExits: r.takeProfitExits || 0,
+                stopLossExits: r.stopLossExits || 0,
+                timeoutExits: r.timeoutExits || 0,
+                tradeHistory: r.tradeHistory || []
+            }));
+
+            // 기존 결과에 CUSUM 결과 추가
+            backtestResults = [...backtestResults.filter(r => !r.modelName.startsWith('[CUSUM]')), ...cusumResults];
+
+            displayResults();
+            showToast(`CUSUM 백테스팅 완료! ${results.length}건 결과`, true);
+
+        } catch (e) {
+            console.error(e);
+            addLog(`오류 발생: ${e.message}`);
+            showToast('CUSUM 백테스팅 중 오류가 발생했습니다.', false);
+        } finally {
+            document.getElementById('spinnerOverlay').classList.remove('active');
+        }
     }
 </script>
 </body>
