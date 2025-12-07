@@ -2480,13 +2480,14 @@
         const fold = document.getElementById('cusumFold').value;
         const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 10000;
 
-        // 요청 파라미터 구성
+        // 요청 파라미터 구성 (백엔드 CusumBatchRequest 형식에 맞춤)
         const requestBody = {
             initialCapital: initialCapital
         };
-        if (strategy) requestBody.strategy = strategy;
-        if (model) requestBody.model = model;
-        if (fold) requestBody.foldId = parseInt(fold);
+        // 백엔드는 List를 기대하므로 단일 값을 배열로 감싸서 전송
+        if (strategy) requestBody.strategies = [strategy];
+        if (model) requestBody.models = [model];
+        if (fold) requestBody.foldNumbers = [parseInt(fold)];
 
         // 스피너 표시
         document.getElementById('spinnerOverlay').classList.add('active');
@@ -2515,10 +2516,11 @@
             addLog(`CUSUM 백테스팅 완료! ${results.length}건의 결과`);
 
             // 결과를 기존 backtestResults에 추가 (CUSUM 태그 추가)
+            // 백엔드 Response 필드: strategy, mlModel, foldNumber, strategyTimeframe, strategyType 등
             const cusumResults = results.map(r => ({
                 ...r,
-                modelName: `[CUSUM] ${r.strategy || ''} - ${r.model || ''}`,
-                foldNumber: r.foldId || 0,
+                modelName: `[CUSUM] ${r.strategy || ''} - ${r.mlModel || ''}`,
+                foldNumber: r.foldNumber || 0,
                 regime: 'CUSUM',
                 // 기본값 설정 (API 응답에 없는 경우)
                 takeProfitExits: r.takeProfitExits || 0,
