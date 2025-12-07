@@ -145,72 +145,79 @@
                 </div>
             </div>
 
-            <!-- Configuration Section -->
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-cog me-2"></i>백테스팅 설정
+            <!-- CUSUM 신호 기반 백테스팅 (별도 카드) -->
+            <div class="card" style="border: 2px solid #A3B087;">
+                <div class="card-header" style="background-color: #A3B087; color: #FFFFFF;">
+                    <i class="fas fa-filter me-2"></i>CUSUM 신호 기반 백테스팅 (Triple Barrier Method)
                 </div>
                 <div class="card-body p-4">
-                    <h6 class="fw-bold mb-3">프리셋 선택</h6>
-                    <div class="d-flex flex-wrap justify-content-center mb-4">
-                        <button class="btn btn-info preset-btn" onclick="setPreset('all')">
-                            <i class="fas fa-globe me-2"></i>전체 (12모델 × Fold1-7)
-                        </button>
-                        <button class="btn btn-info preset-btn" onclick="setPreset('deeplearning')">
-                            <i class="fas fa-brain me-2"></i>딥러닝 (3모델 × Fold1-7)
-                        </button>
-                        <button class="btn btn-info preset-btn" onclick="setPreset('ensemble')">
-                            <i class="fas fa-layer-group me-2"></i>앙상블 (9모델 × Fold1-7)
-                        </button>
-                        <button class="btn btn-info preset-btn" onclick="setPreset('gru')">
-                            <i class="fas fa-robot me-2"></i>GRU only (Fold1-7)
-                        </button>
-                    </div>
-
-                    <!-- CUSUM 신호 기반 백테스팅 -->
-                    <div class="card mb-4" style="border: 2px solid #A3B087;">
-                        <div class="card-header" style="background-color: #A3B087; color: #FFFFFF;">
-                            <i class="fas fa-filter me-2"></i>CUSUM 신호 기반 백테스팅 (Triple Barrier Method)
+                    <div class="row align-items-center mb-3">
+                        <div class="col-md-8">
+                            <p class="mb-1"><strong>새로운 ML 파이프라인:</strong> CUSUM 필터 → Triple Barrier 라벨링 → AI 검증</p>
+                            <p class="mb-0">CUSUM 데이터: <span id="cusumStatus" class="badge bg-secondary">확인 중</span> <span id="cusumCount" class="small text-muted"></span></p>
                         </div>
-                        <div class="card-body">
-                            <div class="row align-items-center mb-3">
-                                <div class="col-md-8">
-                                    <p class="mb-1"><strong>새로운 ML 파이프라인:</strong> CUSUM 필터 → Triple Barrier 라벨링 → AI 검증</p>
-                                    <p class="mb-0">CUSUM 데이터: <span id="cusumStatus" class="badge bg-secondary">확인 중</span> <span id="cusumCount" class="small text-muted"></span></p>
-                                </div>
-                                <div class="col-md-4 text-end">
-                                    <button class="btn btn-success btn-sm" onclick="loadCusumData()" id="btnCusum">
-                                        <i class="fas fa-download me-1"></i> CUSUM 데이터 로드
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="row g-3 mb-3" id="cusumOptions" style="display: none;">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">전략 선택</label>
-                                    <select class="form-select" id="cusumStrategy">
-                                        <option value="">전체 전략</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">모델 선택</label>
-                                    <select class="form-select" id="cusumModel">
-                                        <option value="">전체 모델</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">Fold 선택</label>
-                                    <select class="form-select" id="cusumFold">
-                                        <option value="">전체 Fold</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-success w-100 py-2 fw-bold" onclick="runCusumBacktest()" id="btnCusumRun" style="display: none;">
-                                <i class="fas fa-play me-2"></i>CUSUM 백테스팅 실행
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-success btn-sm" onclick="loadCusumData()" id="btnCusum">
+                                <i class="fas fa-download me-1"></i> CUSUM 데이터 로드
                             </button>
                         </div>
                     </div>
+                    <div class="row g-3 mb-3" id="cusumOptions" style="display: none;">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">전략 선택</label>
+                            <select class="form-select" id="cusumStrategy">
+                                <option value="">전체 전략</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">모델 선택</label>
+                            <select class="form-select" id="cusumModel">
+                                <option value="">전체 모델</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Fold 선택</label>
+                            <select class="form-select" id="cusumFold">
+                                <option value="">전체 Fold</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">초기 자본 (KRW)</label>
+                            <input type="number" class="form-control" id="cusumInitialCapital" value="10000000" step="1000000">
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runCusumBacktest()" id="btnCusumRun" style="display: none;">
+                        <i class="fas fa-play me-2"></i>CUSUM 백테스팅 실행
+                    </button>
+                </div>
+            </div>
 
-                    <hr class="my-4">
+            <!-- 이전 백테스팅 설정 (Legacy) -->
+            <div class="card">
+                <div class="card-header" style="background-color: #6c757d; color: #FFFFFF;">
+                    <i class="fas fa-history me-2"></i>이전 백테스팅 설정 (AI 예측 기반)
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-secondary mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        기존 AI 예측값과 1분봉 데이터를 사용하는 레거시 백테스팅입니다. 새로운 CUSUM 기반 백테스팅 사용을 권장합니다.
+                    </div>
+
+                    <h6 class="fw-bold mb-3">프리셋 선택</h6>
+                    <div class="d-flex flex-wrap justify-content-center mb-4">
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('all')">
+                            <i class="fas fa-globe me-2"></i>전체 (12모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('deeplearning')">
+                            <i class="fas fa-brain me-2"></i>딥러닝 (3모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('ensemble')">
+                            <i class="fas fa-layer-group me-2"></i>앙상블 (9모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('gru')">
+                            <i class="fas fa-robot me-2"></i>GRU only (Fold1-7)
+                        </button>
+                    </div>
 
                     <h6 class="fw-bold mb-3">커스텀 설정</h6>
                     <div class="row g-3 mb-3">
@@ -263,8 +270,8 @@
                         </div>
                     </div>
 
-                    <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runBatchBacktest()">
-                        <i class="fas fa-play me-2"></i>배치 백테스팅 실행
+                    <button type="button" class="btn btn-secondary w-100 py-3 fw-bold fs-5" onclick="runBatchBacktest()">
+                        <i class="fas fa-play me-2"></i>이전 방식 백테스팅 실행
                     </button>
                 </div>
             </div>
@@ -2478,7 +2485,7 @@
         const strategy = document.getElementById('cusumStrategy').value;
         const model = document.getElementById('cusumModel').value;
         const fold = document.getElementById('cusumFold').value;
-        const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 10000;
+        const initialCapital = parseFloat(document.getElementById('cusumInitialCapital').value) || 10000000;
 
         // 요청 파라미터 구성 (백엔드 CusumBatchRequest 형식에 맞춤)
         const requestBody = {
