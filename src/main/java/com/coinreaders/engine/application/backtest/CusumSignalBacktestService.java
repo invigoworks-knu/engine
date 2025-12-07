@@ -380,6 +380,14 @@ public class CusumSignalBacktestService {
         BigDecimal totalWin = BigDecimal.ZERO;
         BigDecimal totalLoss = BigDecimal.ZERO;
 
+        // CUSUM 집계용 변수
+        BigDecimal totalConfidence = BigDecimal.ZERO;
+        BigDecimal totalSelectivity = BigDecimal.ZERO;
+        BigDecimal totalInvestmentRatio = BigDecimal.ZERO;
+        int confidenceCount = 0;
+        int selectivityCount = 0;
+        int investmentRatioCount = 0;
+
         LocalDateTime currentPositionEnd = null; // 현재 포지션 종료 시각 (중복 진입 방지)
 
         for (CusumSignalData signal : signals) {
@@ -402,6 +410,18 @@ public class CusumSignalBacktestService {
             BigDecimal investmentRatio = signal.getInvestmentRatio();
             BigDecimal positionSize = capital.multiply(investmentRatio);
             BigDecimal quantity = positionSize.divide(entryPrice, 8, RoundingMode.HALF_DOWN);
+
+            // CUSUM 집계 (평균 계산용)
+            if (signal.getConfidence() != null) {
+                totalConfidence = totalConfidence.add(signal.getConfidence());
+                confidenceCount++;
+            }
+            if (signal.getCusumSelectivityPct() != null) {
+                totalSelectivity = totalSelectivity.add(signal.getCusumSelectivityPct());
+                selectivityCount++;
+            }
+            totalInvestmentRatio = totalInvestmentRatio.add(investmentRatio);
+            investmentRatioCount++;
 
             // 진입 수수료
             BigDecimal entryFee = positionSize.multiply(FEE_RATE);
@@ -488,6 +508,12 @@ public class CusumSignalBacktestService {
                 .predProbaUp(signal.getConfidence())
                 .confidence(signal.getConfidence())
                 .capitalAfter(capital)
+                // CUSUM 전용 필드
+                .strategy(signal.getStrategy())
+                .mlModel(signal.getModel())
+                .cusumSelectivity(signal.getCusumSelectivityPct())
+                .threshold(signal.getThreshold())
+                .isCorrect(signal.getCorrect())
                 .build();
 
             tradeHistory.add(trade);
@@ -530,6 +556,23 @@ public class CusumSignalBacktestService {
         // 모델명 결정
         String modelName = buildModelName(foldNumber, strategy, model);
 
+        // CUSUM 평균 계산
+        BigDecimal avgConfidence = confidenceCount > 0 ?
+            totalConfidence.divide(BigDecimal.valueOf(confidenceCount), 4, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        BigDecimal avgSelectivity = selectivityCount > 0 ?
+            totalSelectivity.divide(BigDecimal.valueOf(selectivityCount), 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        BigDecimal avgInvestmentRatio = investmentRatioCount > 0 ?
+            totalInvestmentRatio.divide(BigDecimal.valueOf(investmentRatioCount), 4, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
+        // 전략 타임프레임 및 타입 추출 (첫 번째 신호에서)
+        String strategyTimeframe = null;
+        String strategyType = null;
+        if (!signals.isEmpty()) {
+            CusumSignalData firstSignal = signals.get(0);
+            strategyTimeframe = firstSignal.getStrategyTimeframe();
+            strategyType = firstSignal.getStrategyType();
+        }
+
         log.info("CUSUM 백테스팅 완료: {} trades, {} → {} ({}%)",
             totalTrades, initialCapital, capital, totalReturnPct);
 
@@ -554,6 +597,14 @@ public class CusumSignalBacktestService {
             .avgLoss(avgLoss)
             .winLossRatio(winLossRatio)
             .tradeHistory(tradeHistory)
+            // CUSUM 전용 필드
+            .strategy(strategy)
+            .mlModel(model)
+            .strategyTimeframe(strategyTimeframe)
+            .strategyType(strategyType)
+            .avgConfidence(avgConfidence)
+            .avgSelectivity(avgSelectivity)
+            .avgInvestmentRatio(avgInvestmentRatio)
             .build();
     }
 

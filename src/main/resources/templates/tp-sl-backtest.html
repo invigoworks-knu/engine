@@ -295,6 +295,7 @@
                         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabModels">모델 비교</button></li>
                         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCapitalTracking">자본 변화 추적</button></li>
                         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDetails">상세 내역</button></li>
+                        <li class="nav-item" id="cusumTabItem" style="display: none;"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCusumAnalysis"><i class="fas fa-filter me-1"></i>CUSUM 분석</button></li>
                     </ul>
 
                     <div class="tab-content">
@@ -327,6 +328,11 @@
                         <!-- Details Tab -->
                         <div class="tab-pane fade" id="tabDetails">
                             <div id="detailsContent"></div>
+                        </div>
+
+                        <!-- CUSUM Analysis Tab -->
+                        <div class="tab-pane fade" id="tabCusumAnalysis">
+                            <div id="cusumAnalysisContent"></div>
                         </div>
                     </div>
                 </div>
@@ -418,6 +424,7 @@
     let cusumStrategies = [];
     let cusumModels = [];
     let cusumFolds = [];
+    let isCusumMode = false; // CUSUM 백테스팅 결과인지 여부
 
     document.addEventListener('DOMContentLoaded', function() {
         checkDataStatus();
@@ -741,6 +748,12 @@
     function displayResults() {
         document.getElementById('resultsSection').style.display = 'block';
 
+        // CUSUM 결과가 있는지 확인
+        const hasCusumResults = backtestResults.some(r => r.regime === 'CUSUM');
+
+        // CUSUM 분석 탭 표시/숨김
+        document.getElementById('cusumTabItem').style.display = hasCusumResults ? 'block' : 'none';
+
         // Model Comparison Tab
         displayModelComparison();
 
@@ -749,6 +762,11 @@
 
         // Details Tab
         displayDetails();
+
+        // CUSUM Analysis Tab (CUSUM 결과가 있을 때만)
+        if (hasCusumResults) {
+            displayCusumAnalysis();
+        }
     }
 
     function displayModelComparison() {
@@ -1370,10 +1388,15 @@
             }
         });
 
+        // CUSUM 결과가 있는지 확인
+        const hasCusumResults = filteredResults.some(r => r.regime === 'CUSUM');
+        const hasNonCusumResults = filteredResults.some(r => r.regime !== 'CUSUM');
+
         let tableHTML = `
             <div class="mb-2 text-muted">
                 <i class="fas fa-info-circle me-1"></i>총 ${filteredResults.length}건 (전체 ${backtestResults.length}건 중)
                 ${filteredResults.length < backtestResults.length ? ' - 필터가 적용되었습니다.' : ''}
+                ${hasCusumResults ? ' <span class="badge bg-success"><i class="fas fa-filter me-1"></i>CUSUM 결과 포함</span>' : ''}
             </div>
             <table class="table table-striped table-hover result-table">
                 <thead><tr>
@@ -1384,8 +1407,8 @@
                     <th onclick="sortResults('totalTrades')" style="cursor: pointer;">거래 수${getSortIndicator('totalTrades')}</th>
                     <th>익절</th>
                     <th>손절</th>
-                    <th>Profit Ladder</th>
-                    <th>Time-Decay</th>
+                    ${hasNonCusumResults ? '<th>Profit Ladder</th><th>Time-Decay</th>' : ''}
+                    ${hasCusumResults ? '<th>확신도</th><th>투자비중</th>' : ''}
                     <th>시간만료</th>
                     <th onclick="sortResults('winRate')" style="cursor: pointer;">승률${getSortIndicator('winRate')}</th>
                     <th onclick="sortResults('maxDrawdown')" style="cursor: pointer;">MDD${getSortIndicator('maxDrawdown')}</th>
@@ -1421,17 +1444,24 @@
             const rowStyle = isBuyHold ? 'style="background-color: #fff3cd;"' : '';
             const modelLabel = isBuyHold ? `<i class="fas fa-chart-line me-1"></i>${r.modelName} <span class="badge bg-warning text-dark">벤치마크</span>` : r.modelName;
 
+            // CUSUM 결과인지 확인
+            const isCusum = r.regime === 'CUSUM';
+            const confidence = r.avgConfidence ? (parseFloat(r.avgConfidence) * 100).toFixed(1) : '-';
+            const investRatio = r.avgInvestmentRatio ? (parseFloat(r.avgInvestmentRatio) * 100).toFixed(0) : '-';
+
             tableHTML += `
                 <tr ${rowStyle}>
                     <td class="fw-bold">${modelLabel}</td>
                     <td>Fold ${r.foldNumber}</td>
-                    <td><span class="badge bg-secondary">${r.regime}</span></td>
+                    <td><span class="badge ${isCusum ? 'bg-success' : 'bg-secondary'}">${r.regime}</span></td>
                     <td class="${r.totalReturnPct >= 0 ? 'text-success' : 'text-danger'} fw-bold">${r.totalReturnPct.toFixed(2)}%</td>
                     <td>${r.totalTrades}</td>
                     <td class="text-success">${r.takeProfitExits}</td>
                     <td class="text-danger">${r.stopLossExits}</td>
-                    <td><span class="badge" style="background-color: #A3B087;">${profitLadderCount}</span></td>
-                    <td><span class="badge" style="background-color: #6C91BF;">${timeDecayCount}</span></td>
+                    ${hasNonCusumResults ? `<td><span class="badge" style="background-color: #A3B087;">${profitLadderCount}</span></td>
+                    <td><span class="badge" style="background-color: #6C91BF;">${timeDecayCount}</span></td>` : ''}
+                    ${hasCusumResults ? `<td>${isCusum ? '<span class="badge" style="background-color: #A3B087;">' + confidence + '%</span>' : '-'}</td>
+                    <td>${isCusum ? investRatio + '%' : '-'}</td>` : ''}
                     <td class="text-warning">${r.timeoutExits}</td>
                     <td>${r.winRate.toFixed(2)}%</td>
                     <td>${r.maxDrawdown.toFixed(2)}%</td>
@@ -1674,13 +1704,48 @@
                     exitReasonBadge = `<span class="badge bg-secondary">${trade.exitReason}</span>`;
                 }
 
+                // CUSUM 거래인지 확인
+                const isCusumTrade = trade.strategy || trade.mlModel || trade.cusumSelectivity;
+                const cusumInfoHTML = isCusumTrade ? `
+                    <div class="row g-3 mb-3" style="background-color: #f0f7f0; padding: 10px; border-radius: 8px; margin-top: 5px;">
+                        <div class="col-12">
+                            <small class="fw-bold text-success"><i class="fas fa-filter me-1"></i>CUSUM 신호 정보</small>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">전략</small><br>
+                            <strong>${trade.strategy || '-'}</strong>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">ML 모델</small><br>
+                            <span class="badge bg-primary">${trade.mlModel || '-'}</span>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">확신도</small><br>
+                            <span class="badge" style="background-color: #A3B087;">${trade.confidence ? (parseFloat(trade.confidence) * 100).toFixed(1) + '%' : '-'}</span>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">투자 비중</small><br>
+                            <strong>${trade.investmentRatio ? (parseFloat(trade.investmentRatio) * 100).toFixed(0) + '%' : '-'}</strong>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">CUSUM 선별율</small><br>
+                            <span class="badge" style="background-color: #E07856;">${trade.cusumSelectivity ? parseFloat(trade.cusumSelectivity).toFixed(1) + '%' : '-'}</span>
+                        </div>
+                        <div class="col-md-1">
+                            <small class="text-muted">정확</small><br>
+                            ${trade.isCorrect === true ? '<i class="fas fa-check-circle text-success"></i>' : trade.isCorrect === false ? '<i class="fas fa-times-circle text-danger"></i>' : '-'}
+                        </div>
+                    </div>
+                ` : '';
+
                 historyHTML += `
                     <div class="card mb-3">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #f8f9fa;">
-                            <span class="fw-bold">거래 #${idx + 1}</span>
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: ${isCusumTrade ? '#e8f5e9' : '#f8f9fa'};">
+                            <span class="fw-bold">거래 #${idx + 1} ${isCusumTrade ? '<span class="badge bg-success ms-2">CUSUM</span>' : ''}</span>
                             ${exitReasonBadge}
                         </div>
                         <div class="card-body">
+                            ${cusumInfoHTML}
                             <div class="row g-3 mb-3">
                                 <div class="col-md-3">
                                     <small class="text-muted">진입 시각</small><br>
@@ -1702,7 +1767,7 @@
                             <div class="row g-3 mb-3">
                                 <div class="col-md-3">
                                     <small class="text-muted">투자 금액</small><br>
-                                    <strong>${parseFloat(trade.investmentAmount).toLocaleString('ko-KR')}원</strong>
+                                    <strong>${(trade.positionSize || trade.investmentAmount) ? parseFloat(trade.positionSize || trade.investmentAmount).toLocaleString('ko-KR') + '원' : '-'}</strong>
                                 </div>
                                 <div class="col-md-3">
                                     <small class="text-muted">손익</small><br>
@@ -1718,7 +1783,7 @@
                                 </div>
                                 <div class="col-md-3">
                                     <small class="text-muted">보유 기간</small><br>
-                                    <strong>${parseFloat(trade.holdingPeriodDays).toFixed(1)}일</strong>
+                                    <strong>${parseFloat(trade.holdingDays || trade.holdingPeriodDays || 0).toFixed(1)}일</strong>
                                 </div>
                             </div>
                             ${hasExitEvents ? `
@@ -1892,6 +1957,338 @@
             });
             cusumFolds = data.availableFolds;
         }
+    }
+
+    /**
+     * CUSUM 전용 분석 탭 표시
+     * - 전략별/모델별/타임프레임별 비교 분석
+     */
+    function displayCusumAnalysis() {
+        const content = document.getElementById('cusumAnalysisContent');
+        const cusumResults = backtestResults.filter(r => r.regime === 'CUSUM');
+
+        if (cusumResults.length === 0) {
+            content.innerHTML = '<div class="alert alert-info">CUSUM 백테스팅 결과가 없습니다.</div>';
+            return;
+        }
+
+        // 1. 전략별 집계
+        const strategyStats = {};
+        // 2. 모델별 집계 (LGBM, XGB, CAT, ET)
+        const modelStats = {};
+        // 3. 타임프레임별 집계
+        const timeframeStats = {};
+        // 4. 전략 타입별 집계 (Scalp, Balanced, Classic, Trend, Jackpot)
+        const strategyTypeStats = {};
+
+        cusumResults.forEach(r => {
+            // 전략별
+            const strategyKey = r.strategy || r.modelName;
+            if (!strategyStats[strategyKey]) {
+                strategyStats[strategyKey] = { results: [], totalReturn: 0, totalTrades: 0, wins: 0, totalConfidence: 0, totalSelectivity: 0, count: 0 };
+            }
+            strategyStats[strategyKey].results.push(r);
+            strategyStats[strategyKey].totalReturn += parseFloat(r.totalReturnPct) || 0;
+            strategyStats[strategyKey].totalTrades += r.totalTrades || 0;
+            strategyStats[strategyKey].wins += r.takeProfitExits || 0;
+            strategyStats[strategyKey].totalConfidence += parseFloat(r.avgConfidence) || 0;
+            strategyStats[strategyKey].totalSelectivity += parseFloat(r.avgSelectivity) || 0;
+            strategyStats[strategyKey].count++;
+
+            // 모델별
+            const modelKey = r.mlModel || 'Unknown';
+            if (!modelStats[modelKey]) {
+                modelStats[modelKey] = { results: [], totalReturn: 0, totalTrades: 0, wins: 0, count: 0 };
+            }
+            modelStats[modelKey].results.push(r);
+            modelStats[modelKey].totalReturn += parseFloat(r.totalReturnPct) || 0;
+            modelStats[modelKey].totalTrades += r.totalTrades || 0;
+            modelStats[modelKey].wins += r.takeProfitExits || 0;
+            modelStats[modelKey].count++;
+
+            // 타임프레임별
+            const tfKey = r.strategyTimeframe || '4h';
+            if (!timeframeStats[tfKey]) {
+                timeframeStats[tfKey] = { results: [], totalReturn: 0, totalTrades: 0, wins: 0, count: 0 };
+            }
+            timeframeStats[tfKey].results.push(r);
+            timeframeStats[tfKey].totalReturn += parseFloat(r.totalReturnPct) || 0;
+            timeframeStats[tfKey].totalTrades += r.totalTrades || 0;
+            timeframeStats[tfKey].wins += r.takeProfitExits || 0;
+            timeframeStats[tfKey].count++;
+
+            // 전략 타입별
+            const typeKey = r.strategyType || 'Unknown';
+            if (!strategyTypeStats[typeKey]) {
+                strategyTypeStats[typeKey] = { results: [], totalReturn: 0, totalTrades: 0, wins: 0, count: 0 };
+            }
+            strategyTypeStats[typeKey].results.push(r);
+            strategyTypeStats[typeKey].totalReturn += parseFloat(r.totalReturnPct) || 0;
+            strategyTypeStats[typeKey].totalTrades += r.totalTrades || 0;
+            strategyTypeStats[typeKey].wins += r.takeProfitExits || 0;
+            strategyTypeStats[typeKey].count++;
+        });
+
+        let html = `
+            <!-- CUSUM 요약 정보 -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-center" style="border-left: 4px solid #A3B087;">
+                        <div class="card-body">
+                            <h6 class="text-muted"><i class="fas fa-chart-line me-1"></i>총 결과</h6>
+                            <h3 class="mb-0">${cusumResults.length}건</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center" style="border-left: 4px solid #6C91BF;">
+                        <div class="card-body">
+                            <h6 class="text-muted"><i class="fas fa-exchange-alt me-1"></i>총 거래 수</h6>
+                            <h3 class="mb-0">${cusumResults.reduce((sum, r) => sum + (r.totalTrades || 0), 0)}회</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center" style="border-left: 4px solid #A3B087;">
+                        <div class="card-body">
+                            <h6 class="text-muted"><i class="fas fa-brain me-1"></i>평균 확신도</h6>
+                            <h3 class="mb-0">${(cusumResults.reduce((sum, r) => sum + (parseFloat(r.avgConfidence) || 0), 0) / cusumResults.length * 100).toFixed(1)}%</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center" style="border-left: 4px solid #E07856;">
+                        <div class="card-body">
+                            <h6 class="text-muted"><i class="fas fa-filter me-1"></i>평균 선별율</h6>
+                            <h3 class="mb-0">${(cusumResults.reduce((sum, r) => sum + (parseFloat(r.avgSelectivity) || 0), 0) / cusumResults.length).toFixed(1)}%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ML 모델별 성과 비교 -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header" style="background-color: #435663; color: #FFFFFF;">
+                            <i class="fas fa-robot me-2"></i>ML 모델별 성과 비교
+                        </div>
+                        <div class="card-body">
+                            <canvas id="cusumModelChart" style="max-height: 250px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header" style="background-color: #435663; color: #FFFFFF;">
+                            <i class="fas fa-clock me-2"></i>타임프레임별 성과 비교
+                        </div>
+                        <div class="card-body">
+                            <canvas id="cusumTimeframeChart" style="max-height: 250px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 전략 타입별 성과 테이블 -->
+            <div class="card mb-4">
+                <div class="card-header" style="background-color: #A3B087; color: #FFFFFF;">
+                    <i class="fas fa-chess-knight me-2"></i>전략 타입별 성과 비교 (Scalp / Balanced / Classic / Trend / Jackpot)
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped result-table">
+                        <thead><tr>
+                            <th>전략 타입</th>
+                            <th>결과 수</th>
+                            <th>총 거래</th>
+                            <th>평균 수익률</th>
+                            <th>승률</th>
+                        </tr></thead>
+                        <tbody>
+        `;
+
+        // 전략 타입별 테이블 행
+        const strategyTypeOrder = ['Scalp', 'Balanced', 'Classic', 'Trend', 'Jackpot'];
+        strategyTypeOrder.forEach(type => {
+            const stats = strategyTypeStats[type];
+            if (stats) {
+                const avgReturn = stats.count > 0 ? stats.totalReturn / stats.count : 0;
+                const winRate = stats.totalTrades > 0 ? (stats.wins / stats.totalTrades) * 100 : 0;
+                html += `
+                    <tr>
+                        <td class="fw-bold">${type}</td>
+                        <td>${stats.count}</td>
+                        <td>${stats.totalTrades}</td>
+                        <td class="${avgReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${avgReturn.toFixed(2)}%</td>
+                        <td>${winRate.toFixed(1)}%</td>
+                    </tr>
+                `;
+            }
+        });
+
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ML 모델별 상세 테이블 -->
+            <div class="card mb-4">
+                <div class="card-header" style="background-color: #6C91BF; color: #FFFFFF;">
+                    <i class="fas fa-brain me-2"></i>ML 모델별 상세 성과 (LGBM / XGB / CAT / ET)
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped result-table">
+                        <thead><tr>
+                            <th>ML 모델</th>
+                            <th>결과 수</th>
+                            <th>총 거래</th>
+                            <th>평균 수익률</th>
+                            <th>승률</th>
+                            <th>총 수익률</th>
+                        </tr></thead>
+                        <tbody>
+        `;
+
+        // ML 모델별 테이블 행
+        Object.entries(modelStats).sort((a, b) => b[1].totalReturn - a[1].totalReturn).forEach(([model, stats]) => {
+            const avgReturn = stats.count > 0 ? stats.totalReturn / stats.count : 0;
+            const winRate = stats.totalTrades > 0 ? (stats.wins / stats.totalTrades) * 100 : 0;
+            html += `
+                <tr>
+                    <td class="fw-bold"><span class="badge bg-primary">${model}</span></td>
+                    <td>${stats.count}</td>
+                    <td>${stats.totalTrades}</td>
+                    <td class="${avgReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${avgReturn.toFixed(2)}%</td>
+                    <td>${winRate.toFixed(1)}%</td>
+                    <td class="${stats.totalReturn >= 0 ? 'text-success' : 'text-danger'} fw-bold">${stats.totalReturn.toFixed(2)}%</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CUSUM 상세 결과 테이블 -->
+            <div class="card">
+                <div class="card-header" style="background-color: var(--accent-dark); color: #FFFFFF;">
+                    <i class="fas fa-list me-2"></i>CUSUM 상세 결과 (확신도, 투자 비중, 선별율 포함)
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover result-table" style="font-size: 0.85rem;">
+                            <thead><tr>
+                                <th>전략</th>
+                                <th>모델</th>
+                                <th>Fold</th>
+                                <th>타임프레임</th>
+                                <th>수익률</th>
+                                <th>거래 수</th>
+                                <th>승률</th>
+                                <th>평균 확신도</th>
+                                <th>투자 비중</th>
+                                <th>CUSUM 선별율</th>
+                                <th>MDD</th>
+                            </tr></thead>
+                            <tbody>
+        `;
+
+        // CUSUM 상세 결과 테이블
+        cusumResults.sort((a, b) => (parseFloat(b.totalReturnPct) || 0) - (parseFloat(a.totalReturnPct) || 0)).forEach(r => {
+            const confidence = r.avgConfidence ? (parseFloat(r.avgConfidence) * 100).toFixed(1) : '-';
+            const investRatio = r.avgInvestmentRatio ? (parseFloat(r.avgInvestmentRatio) * 100).toFixed(0) : '-';
+            const selectivity = r.avgSelectivity ? parseFloat(r.avgSelectivity).toFixed(1) : '-';
+
+            html += `
+                <tr>
+                    <td class="fw-bold">${r.strategy || '-'}</td>
+                    <td><span class="badge bg-secondary">${r.mlModel || '-'}</span></td>
+                    <td>Fold ${r.foldNumber || '-'}</td>
+                    <td><span class="badge" style="background-color: #6C91BF;">${r.strategyTimeframe || '-'}</span></td>
+                    <td class="${parseFloat(r.totalReturnPct) >= 0 ? 'text-success' : 'text-danger'} fw-bold">${parseFloat(r.totalReturnPct).toFixed(2)}%</td>
+                    <td>${r.totalTrades || 0}</td>
+                    <td>${parseFloat(r.winRate).toFixed(1)}%</td>
+                    <td><span class="badge" style="background-color: #A3B087;">${confidence}%</span></td>
+                    <td>${investRatio}%</td>
+                    <td><span class="badge" style="background-color: #E07856;">${selectivity}%</span></td>
+                    <td>${parseFloat(r.maxDrawdown).toFixed(1)}%</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        content.innerHTML = html;
+
+        // 차트 생성
+        setTimeout(() => {
+            // ML 모델별 차트
+            const modelLabels = Object.keys(modelStats);
+            const modelReturns = modelLabels.map(m => modelStats[m].count > 0 ? modelStats[m].totalReturn / modelStats[m].count : 0);
+            const modelColors = modelLabels.map(m => {
+                const avgRet = modelStats[m].count > 0 ? modelStats[m].totalReturn / modelStats[m].count : 0;
+                return avgRet >= 0 ? '#A3B087' : '#E07856';
+            });
+
+            new Chart(document.getElementById('cusumModelChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: modelLabels,
+                    datasets: [{
+                        label: '평균 수익률 (%)',
+                        data: modelReturns,
+                        backgroundColor: modelColors,
+                        borderColor: modelColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: '평균 수익률 (%)' } }
+                    }
+                }
+            });
+
+            // 타임프레임별 차트
+            const tfOrder = ['4h', '12h', '24h', '48h'];
+            const tfLabels = tfOrder.filter(tf => timeframeStats[tf]);
+            const tfReturns = tfLabels.map(tf => timeframeStats[tf].count > 0 ? timeframeStats[tf].totalReturn / timeframeStats[tf].count : 0);
+            const tfColors = tfReturns.map(r => r >= 0 ? '#6C91BF' : '#E07856');
+
+            new Chart(document.getElementById('cusumTimeframeChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: tfLabels,
+                    datasets: [{
+                        label: '평균 수익률 (%)',
+                        data: tfReturns,
+                        backgroundColor: tfColors,
+                        borderColor: tfColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: '평균 수익률 (%)' } }
+                    }
+                }
+            });
+        }, 100);
     }
 
     function loadCusumData() {
