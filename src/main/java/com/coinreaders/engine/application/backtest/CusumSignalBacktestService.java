@@ -2,6 +2,8 @@ package com.coinreaders.engine.application.backtest;
 
 import com.coinreaders.engine.application.backtest.dto.CusumSignalData;
 import com.coinreaders.engine.application.backtest.dto.TakeProfitStopLossBacktestResponse;
+import com.coinreaders.engine.domain.entity.HistoricalMinuteOhlcv;
+import com.coinreaders.engine.domain.repository.HistoricalMinuteOhlcvRepository;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * CUSUM 필터 기반 신호 백테스팅 서비스
@@ -55,8 +58,13 @@ import java.util.stream.Collectors;
 public class CusumSignalBacktestService {
 
     private static final String CSV_PATH = "cusum_signals/backend_signals_master.csv";
-    private static final BigDecimal FEE_RATE = new BigDecimal("0.0005"); // 0.05% 편도 수수료
+    private static final String MARKET = "KRW-BTC"; // 백테스팅 대상 마켓
+    private static final BigDecimal FEE_RATE = new BigDecimal("0.0004"); // 0.04% 편도 수수료
     private static final BigDecimal DEFAULT_POSITION_RATIO = new BigDecimal("0.8"); // 기본값: 자본의 80%
+    private static final int SCALE = 8; // 소수점 자릿수
+
+    // 1분봉 데이터 Repository (실제 가격 추적용)
+    private final HistoricalMinuteOhlcvRepository minuteOhlcvRepository;
 
     // 메모리에 캐싱된 신호 데이터
     private List<CusumSignalData> allSignals = new ArrayList<>();
@@ -396,20 +404,48 @@ public class CusumSignalBacktestService {
                 continue;
             }
 
-            // 진입가, TP, SL 확인
-            BigDecimal entryPrice = signal.getEntryPrice();
+            // 1. 실제 진입 시각의 1분봉 찾기 (CSV의 signal_time 이후 첫 1분봉)
+            Optional<HistoricalMinuteOhlcv> entryCandle = minuteOhlcvRepository
+                .findFirstByMarketAndCandleDateTimeKstGreaterThanEqualOrderByCandleDateTimeKstAsc(
+                    MARKET, signal.getSignalTime()
+                );
+
+            if (entryCandle.isEmpty()) {
+                log.warn("진입 시각 1분봉 없음: signalTime={}", signal.getSignalTime());
+                continue;
+            }
+
+            // 실제 진입 가격 및 시각
+            BigDecimal entryPrice = entryCandle.get().getOpeningPrice();
+            LocalDateTime actualEntryTime = entryCandle.get().getCandleDateTimeKst();
+
+            // TP/SL 가격 (CSV에서 제공)
             BigDecimal takeProfit = signal.getTakeProfit();
             BigDecimal stopLoss = signal.getStopLoss();
 
             if (entryPrice == null || entryPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("진입 가격 오류: entryPrice={}", entryPrice);
                 continue;
             }
 
-            // ★ 포지션 크기 계산: suggested_weight 사용 (Kelly Criterion 반영)
-            // suggested_weight가 있으면 사용, 없으면 기본값 80%
+            if (takeProfit == null || stopLoss == null) {
+                log.warn("TP/SL 없음: signal={}", signal.getSignalTime());
+                continue;
+            }
+
+            // 2. 포지션 크기 계산 (suggested_weight 사용)
             BigDecimal investmentRatio = signal.getInvestmentRatio();
             BigDecimal positionSize = capital.multiply(investmentRatio);
-            BigDecimal quantity = positionSize.divide(entryPrice, 8, RoundingMode.HALF_DOWN);
+
+            if (positionSize.compareTo(BigDecimal.ONE) < 0) {
+                log.debug("포지션 크기가 너무 작음 (< 1원), 거래 제외");
+                continue;
+            }
+
+            // 진입 수수료 차감
+            BigDecimal entryFee = positionSize.multiply(FEE_RATE).setScale(2, RoundingMode.UP);
+            BigDecimal entryAmount = positionSize.subtract(entryFee);
+            BigDecimal quantity = entryAmount.divide(entryPrice, SCALE, RoundingMode.DOWN);
 
             // CUSUM 집계 (평균 계산용)
             if (signal.getConfidence() != null) {
@@ -423,40 +459,69 @@ public class CusumSignalBacktestService {
             totalInvestmentRatio = totalInvestmentRatio.add(investmentRatio);
             investmentRatioCount++;
 
-            // 진입 수수료
-            BigDecimal entryFee = positionSize.multiply(FEE_RATE);
+            // 3. 1분봉 추적하여 TP/SL 도달 확인 (Look-ahead Bias 제거)
+            int holdingHours = signal.getHoldingHours();
+            LocalDateTime exitCheckStart = actualEntryTime.plusMinutes(1);
+            LocalDateTime exitCheckEnd = actualEntryTime.plusHours(holdingHours);
 
-            // 청산 결정 (correct 필드 활용)
-            String exitReason;
-            BigDecimal exitPrice;
+            String exitReason = null;
+            BigDecimal exitPrice = null;
+            LocalDateTime exitTime = null;
+            HistoricalMinuteOhlcv lastCandle = null;
 
-            // correct == TRUE면 익절 (take_profit_price에서 청산)
-            // correct == FALSE면 손절 (stop_loss_price에서 청산)
-            Boolean correct = signal.getCorrect();
-            if (correct != null && correct) {
-                // 익절
-                exitReason = "TAKE_PROFIT";
-                exitPrice = (takeProfit != null) ? takeProfit : entryPrice.multiply(new BigDecimal("1.015"));
-                takeProfitExits++;
-                winCount++;
-            } else {
-                // 손절 또는 만료
-                if (stopLoss != null && stopLoss.compareTo(BigDecimal.ZERO) > 0) {
-                    exitReason = "STOP_LOSS";
-                    exitPrice = stopLoss;
-                    stopLossExits++;
-                } else {
-                    exitReason = "TIMEOUT";
-                    exitPrice = entryPrice.multiply(new BigDecimal("0.99")); // 가정: 1% 손실
-                    timeoutExits++;
+            try (Stream<HistoricalMinuteOhlcv> candleStream = minuteOhlcvRepository
+                    .streamByMarketAndDateTimeRange(MARKET, exitCheckStart, exitCheckEnd)) {
+
+                var iterator = candleStream.iterator();
+                boolean hasData = false;
+
+                while (iterator.hasNext()) {
+                    HistoricalMinuteOhlcv candle = iterator.next();
+                    hasData = true;
+                    lastCandle = candle;
+
+                    // Take Profit 체크 (고가가 TP 이상)
+                    if (candle.getHighPrice().compareTo(takeProfit) >= 0) {
+                        exitReason = "TAKE_PROFIT";
+                        exitPrice = takeProfit;
+                        exitTime = candle.getCandleDateTimeKst();
+                        takeProfitExits++;
+                        break;
+                    }
+
+                    // Stop Loss 체크 (저가가 SL 이하)
+                    if (candle.getLowPrice().compareTo(stopLoss) <= 0) {
+                        exitReason = "STOP_LOSS";
+                        exitPrice = stopLoss;
+                        exitTime = candle.getCandleDateTimeKst();
+                        stopLossExits++;
+                        break;
+                    }
+                }
+
+                if (!hasData) {
+                    log.warn("추적 기간 1분봉 데이터 없음: entry={}, exitCheckEnd={}",
+                        actualEntryTime, exitCheckEnd);
+                    continue;
                 }
             }
 
-            // 청산 금액 및 수수료
-            BigDecimal exitAmount = quantity.multiply(exitPrice);
-            BigDecimal exitFee = exitAmount.multiply(FEE_RATE);
+            // 4. Timeout 처리 (TP/SL 미도달)
+            if (exitReason == null && lastCandle != null) {
+                exitReason = "TIMEOUT";
+                exitPrice = lastCandle.getTradePrice(); // 마지막 1분봉의 종가
+                exitTime = lastCandle.getCandleDateTimeKst();
+                timeoutExits++;
+            }
 
-            // 손익 계산
+            if (exitPrice == null || exitTime == null) {
+                log.warn("청산 가격/시간 없음: signal={}", signal.getSignalTime());
+                continue;
+            }
+
+            // 5. 손익 계산
+            BigDecimal exitAmount = quantity.multiply(exitPrice);
+            BigDecimal exitFee = exitAmount.multiply(FEE_RATE).setScale(2, RoundingMode.UP);
             BigDecimal profit = exitAmount.subtract(exitFee).subtract(positionSize).subtract(entryFee);
             BigDecimal returnPct = profit.divide(positionSize, 6, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
@@ -467,6 +532,7 @@ public class CusumSignalBacktestService {
             // 승/패 누적
             if (profit.compareTo(BigDecimal.ZERO) > 0) {
                 totalWin = totalWin.add(profit);
+                winCount++;
             } else {
                 totalLoss = totalLoss.add(profit.abs());
             }
@@ -481,30 +547,32 @@ public class CusumSignalBacktestService {
                 maxDrawdown = drawdown;
             }
 
-            // 보유 기간 (expiration_time 또는 strategy에서 추출)
-            int holdingHours = signal.getHoldingHours();
-            totalHoldingHours = totalHoldingHours.add(BigDecimal.valueOf(holdingHours));
+            // 보유 기간 계산
+            long actualHoldingMinutes = java.time.Duration.between(actualEntryTime, exitTime).toMinutes();
+            BigDecimal actualHoldingDays = BigDecimal.valueOf(actualHoldingMinutes)
+                .divide(new BigDecimal("1440"), 2, RoundingMode.HALF_UP); // 1440분 = 1일
+            totalHoldingHours = totalHoldingHours.add(BigDecimal.valueOf(actualHoldingMinutes / 60.0));
 
-            // 포지션 종료 시각 업데이트
-            currentPositionEnd = signal.getSignalTime().plusHours(holdingHours);
+            // 포지션 종료 시각 업데이트 (중복 진입 방지)
+            currentPositionEnd = exitTime;
 
-            // 거래 내역 기록
+            // 6. 거래 내역 기록
             TakeProfitStopLossBacktestResponse.TradeDetail trade = TakeProfitStopLossBacktestResponse.TradeDetail.builder()
                 .tradeNumber(++totalTrades)
-                .entryDate(signal.getSignalTime().toLocalDate())
-                .entryDateTime(signal.getSignalTime())
+                .entryDate(actualEntryTime.toLocalDate())
+                .entryDateTime(actualEntryTime)
                 .entryPrice(entryPrice)
-                .exitDate(currentPositionEnd.toLocalDate())
-                .exitDateTime(currentPositionEnd)
+                .exitDate(exitTime.toLocalDate())
+                .exitDateTime(exitTime)
                 .exitPrice(exitPrice)
                 .takeProfitPrice(takeProfit)
                 .stopLossPrice(stopLoss)
                 .positionSize(positionSize)
-                .investmentRatio(investmentRatio) // suggested_weight 반영
+                .investmentRatio(investmentRatio)
                 .profit(profit)
                 .returnPct(returnPct)
                 .exitReason(exitReason)
-                .holdingDays(BigDecimal.valueOf(holdingHours).divide(new BigDecimal("24"), 2, RoundingMode.HALF_UP))
+                .holdingDays(actualHoldingDays)
                 .predProbaUp(signal.getConfidence())
                 .confidence(signal.getConfidence())
                 .capitalAfter(capital)
@@ -513,7 +581,7 @@ public class CusumSignalBacktestService {
                 .mlModel(signal.getModel())
                 .cusumSelectivity(signal.getCusumSelectivityPct())
                 .threshold(signal.getThreshold())
-                .isCorrect(signal.getCorrect())
+                .isCorrect(signal.getCorrect()) // 참고용으로만 보관 (사용하지 않음)
                 .build();
 
             tradeHistory.add(trade);
