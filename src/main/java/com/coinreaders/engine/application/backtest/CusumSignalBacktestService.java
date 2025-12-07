@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -330,6 +331,7 @@ public class CusumSignalBacktestService {
      * @param initialCapital 초기 자본
      * @return 백테스팅 결과
      */
+    @Transactional(readOnly = true)
     public TakeProfitStopLossBacktestResponse runBacktest(
             Integer foldNumber,
             String strategy,
