@@ -145,72 +145,79 @@
                 </div>
             </div>
 
-            <!-- Configuration Section -->
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-cog me-2"></i>백테스팅 설정
+            <!-- CUSUM 신호 기반 백테스팅 (별도 카드) -->
+            <div class="card" style="border: 2px solid #A3B087;">
+                <div class="card-header" style="background-color: #A3B087; color: #FFFFFF;">
+                    <i class="fas fa-filter me-2"></i>CUSUM 신호 기반 백테스팅 (Triple Barrier Method)
                 </div>
                 <div class="card-body p-4">
-                    <h6 class="fw-bold mb-3">프리셋 선택</h6>
-                    <div class="d-flex flex-wrap justify-content-center mb-4">
-                        <button class="btn btn-info preset-btn" onclick="setPreset('all')">
-                            <i class="fas fa-globe me-2"></i>전체 (12모델 × Fold1-7)
-                        </button>
-                        <button class="btn btn-info preset-btn" onclick="setPreset('deeplearning')">
-                            <i class="fas fa-brain me-2"></i>딥러닝 (3모델 × Fold1-7)
-                        </button>
-                        <button class="btn btn-info preset-btn" onclick="setPreset('ensemble')">
-                            <i class="fas fa-layer-group me-2"></i>앙상블 (9모델 × Fold1-7)
-                        </button>
-                        <button class="btn btn-info preset-btn" onclick="setPreset('gru')">
-                            <i class="fas fa-robot me-2"></i>GRU only (Fold1-7)
-                        </button>
-                    </div>
-
-                    <!-- CUSUM 신호 기반 백테스팅 -->
-                    <div class="card mb-4" style="border: 2px solid #A3B087;">
-                        <div class="card-header" style="background-color: #A3B087; color: #FFFFFF;">
-                            <i class="fas fa-filter me-2"></i>CUSUM 신호 기반 백테스팅 (Triple Barrier Method)
+                    <div class="row align-items-center mb-3">
+                        <div class="col-md-8">
+                            <p class="mb-1"><strong>새로운 ML 파이프라인:</strong> CUSUM 필터 → Triple Barrier 라벨링 → AI 검증</p>
+                            <p class="mb-0">CUSUM 데이터: <span id="cusumStatus" class="badge bg-secondary">확인 중</span> <span id="cusumCount" class="small text-muted"></span></p>
                         </div>
-                        <div class="card-body">
-                            <div class="row align-items-center mb-3">
-                                <div class="col-md-8">
-                                    <p class="mb-1"><strong>새로운 ML 파이프라인:</strong> CUSUM 필터 → Triple Barrier 라벨링 → AI 검증</p>
-                                    <p class="mb-0">CUSUM 데이터: <span id="cusumStatus" class="badge bg-secondary">확인 중</span> <span id="cusumCount" class="small text-muted"></span></p>
-                                </div>
-                                <div class="col-md-4 text-end">
-                                    <button class="btn btn-success btn-sm" onclick="loadCusumData()" id="btnCusum">
-                                        <i class="fas fa-download me-1"></i> CUSUM 데이터 로드
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="row g-3 mb-3" id="cusumOptions" style="display: none;">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">전략 선택</label>
-                                    <select class="form-select" id="cusumStrategy">
-                                        <option value="">전체 전략</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">모델 선택</label>
-                                    <select class="form-select" id="cusumModel">
-                                        <option value="">전체 모델</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">Fold 선택</label>
-                                    <select class="form-select" id="cusumFold">
-                                        <option value="">전체 Fold</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-success w-100 py-2 fw-bold" onclick="runCusumBacktest()" id="btnCusumRun" style="display: none;">
-                                <i class="fas fa-play me-2"></i>CUSUM 백테스팅 실행
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-success btn-sm" onclick="loadCusumData()" id="btnCusum">
+                                <i class="fas fa-download me-1"></i> CUSUM 데이터 로드
                             </button>
                         </div>
                     </div>
+                    <div class="row g-3 mb-3" id="cusumOptions" style="display: none;">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">전략 선택</label>
+                            <select class="form-select" id="cusumStrategy">
+                                <option value="">전체 전략</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">모델 선택</label>
+                            <select class="form-select" id="cusumModel">
+                                <option value="">전체 모델</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Fold 선택</label>
+                            <select class="form-select" id="cusumFold">
+                                <option value="">전체 Fold</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">초기 자본 (KRW)</label>
+                            <input type="number" class="form-control" id="cusumInitialCapital" value="10000" step="1000">
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runCusumBacktest()" id="btnCusumRun" style="display: none;">
+                        <i class="fas fa-play me-2"></i>CUSUM 백테스팅 실행
+                    </button>
+                </div>
+            </div>
 
-                    <hr class="my-4">
+            <!-- 이전 백테스팅 설정 (Legacy) -->
+            <div class="card">
+                <div class="card-header" style="background-color: #6c757d; color: #FFFFFF;">
+                    <i class="fas fa-history me-2"></i>이전 백테스팅 설정 (AI 예측 기반)
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-secondary mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        기존 AI 예측값과 1분봉 데이터를 사용하는 레거시 백테스팅입니다. 새로운 CUSUM 기반 백테스팅 사용을 권장합니다.
+                    </div>
+
+                    <h6 class="fw-bold mb-3">프리셋 선택</h6>
+                    <div class="d-flex flex-wrap justify-content-center mb-4">
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('all')">
+                            <i class="fas fa-globe me-2"></i>전체 (12모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('deeplearning')">
+                            <i class="fas fa-brain me-2"></i>딥러닝 (3모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('ensemble')">
+                            <i class="fas fa-layer-group me-2"></i>앙상블 (9모델 × Fold1-7)
+                        </button>
+                        <button class="btn btn-secondary preset-btn" onclick="setPreset('gru')">
+                            <i class="fas fa-robot me-2"></i>GRU only (Fold1-7)
+                        </button>
+                    </div>
 
                     <h6 class="fw-bold mb-3">커스텀 설정</h6>
                     <div class="row g-3 mb-3">
@@ -263,8 +270,8 @@
                         </div>
                     </div>
 
-                    <button type="button" class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="runBatchBacktest()">
-                        <i class="fas fa-play me-2"></i>배치 백테스팅 실행
+                    <button type="button" class="btn btn-secondary w-100 py-3 fw-bold fs-5" onclick="runBatchBacktest()">
+                        <i class="fas fa-play me-2"></i>이전 방식 백테스팅 실행
                     </button>
                 </div>
             </div>
@@ -306,20 +313,82 @@
 
                         <!-- Capital Tracking Tab -->
                         <div class="tab-pane fade" id="tabCapitalTracking">
+                            <!-- 기본 필터 -->
                             <div class="row mb-3">
-                                <div class="col-md-6">
+                                <div class="col-md-3">
                                     <label class="form-label fw-bold">모델 선택</label>
                                     <select class="form-select" id="chartModelFilter" onchange="updateCapitalChart()">
                                         <option value="">전체 모델</option>
                                     </select>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-3">
                                     <label class="form-label fw-bold">Fold 선택</label>
                                     <select class="form-select" id="chartFoldFilter" onchange="updateCapitalChart()">
                                         <option value="">전체 Fold</option>
                                     </select>
                                 </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">체제 필터</label>
+                                    <select class="form-select" id="chartRegimeFilter" onchange="updateCapitalChart()">
+                                        <option value="">전체</option>
+                                        <option value="CUSUM">CUSUM만</option>
+                                        <option value="NON_CUSUM">기존 백테스팅만</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">최대 표시 개수</label>
+                                    <select class="form-select" id="chartMaxLines" onchange="updateCapitalChart()">
+                                        <option value="5">상위 5개</option>
+                                        <option value="10" selected>상위 10개</option>
+                                        <option value="20">상위 20개</option>
+                                        <option value="0">전체 (주의)</option>
+                                    </select>
+                                </div>
                             </div>
+
+                            <!-- CUSUM 전용 필터 (CUSUM 결과가 있을 때만 표시) -->
+                            <div class="row mb-3" id="cusumChartFilters" style="display: none;">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold"><i class="fas fa-chess-knight me-1"></i>CUSUM 전략</label>
+                                    <select class="form-select" id="chartCusumStrategy" onchange="updateCapitalChart()">
+                                        <option value="">전체 전략</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold"><i class="fas fa-robot me-1"></i>CUSUM ML 모델</label>
+                                    <select class="form-select" id="chartCusumMlModel" onchange="updateCapitalChart()">
+                                        <option value="">전체 ML 모델</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold"><i class="fas fa-clock me-1"></i>타임프레임</label>
+                                    <select class="form-select" id="chartCusumTimeframe" onchange="updateCapitalChart()">
+                                        <option value="">전체</option>
+                                        <option value="4h">4시간</option>
+                                        <option value="12h">12시간</option>
+                                        <option value="24h">24시간</option>
+                                        <option value="48h">48시간</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- 경고 메시지 -->
+                            <div class="alert alert-warning mb-3" id="chartWarning" style="display: none;">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <span id="chartWarningMessage"></span>
+                            </div>
+
+                            <!-- 차트 옵션 -->
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <span class="text-muted" id="chartResultCount">0개 결과 표시 중</span>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="chartShowLegend" checked onchange="updateCapitalChart()">
+                                    <label class="form-check-label" for="chartShowLegend">레전드 표시</label>
+                                </div>
+                            </div>
+
                             <div style="position: relative; height: 500px;">
                                 <canvas id="capitalChart"></canvas>
                             </div>
@@ -1480,6 +1549,9 @@
     }
 
     function displayCapitalTracking() {
+        // CUSUM 결과가 있는지 확인
+        const hasCusumResults = backtestResults.some(r => r.regime === 'CUSUM');
+
         // Populate model filter
         const modelFilter = document.getElementById('chartModelFilter');
         const uniqueModels = [...new Set(backtestResults.map(r => r.modelName))];
@@ -1496,6 +1568,31 @@
             foldFilter.innerHTML += `<option value="${fold}">Fold ${fold}</option>`;
         });
 
+        // CUSUM 전용 필터 (CUSUM 결과가 있을 때만 표시)
+        const cusumFiltersDiv = document.getElementById('cusumChartFilters');
+        if (hasCusumResults) {
+            cusumFiltersDiv.style.display = 'flex';
+
+            // CUSUM 전략 필터
+            const cusumResults = backtestResults.filter(r => r.regime === 'CUSUM');
+            const cusumStrategiesSet = [...new Set(cusumResults.map(r => r.strategy).filter(Boolean))];
+            const strategySelect = document.getElementById('chartCusumStrategy');
+            strategySelect.innerHTML = '<option value="">전체 전략</option>';
+            cusumStrategiesSet.sort().forEach(s => {
+                strategySelect.innerHTML += `<option value="${s}">${s}</option>`;
+            });
+
+            // CUSUM ML 모델 필터
+            const cusumMlModelsSet = [...new Set(cusumResults.map(r => r.mlModel).filter(Boolean))];
+            const mlModelSelect = document.getElementById('chartCusumMlModel');
+            mlModelSelect.innerHTML = '<option value="">전체 ML 모델</option>';
+            cusumMlModelsSet.sort().forEach(m => {
+                mlModelSelect.innerHTML += `<option value="${m}">${m}</option>`;
+            });
+        } else {
+            cusumFiltersDiv.style.display = 'none';
+        }
+
         // Initialize chart
         updateCapitalChart();
     }
@@ -1503,15 +1600,68 @@
     function updateCapitalChart() {
         const modelFilter = document.getElementById('chartModelFilter').value;
         const foldFilter = document.getElementById('chartFoldFilter').value;
+        const regimeFilter = document.getElementById('chartRegimeFilter').value;
+        const maxLines = parseInt(document.getElementById('chartMaxLines').value) || 0;
+        const showLegend = document.getElementById('chartShowLegend').checked;
+
+        // CUSUM 전용 필터
+        const cusumStrategy = document.getElementById('chartCusumStrategy')?.value || '';
+        const cusumMlModel = document.getElementById('chartCusumMlModel')?.value || '';
+        const cusumTimeframe = document.getElementById('chartCusumTimeframe')?.value || '';
 
         // Filter results
         let filteredResults = backtestResults;
+
+        // 기본 필터
         if (modelFilter) {
             filteredResults = filteredResults.filter(r => r.modelName === modelFilter);
         }
         if (foldFilter) {
             filteredResults = filteredResults.filter(r => r.foldNumber == foldFilter);
         }
+
+        // 체제 필터
+        if (regimeFilter === 'CUSUM') {
+            filteredResults = filteredResults.filter(r => r.regime === 'CUSUM');
+        } else if (regimeFilter === 'NON_CUSUM') {
+            filteredResults = filteredResults.filter(r => r.regime !== 'CUSUM');
+        }
+
+        // CUSUM 전용 필터 적용
+        if (cusumStrategy) {
+            filteredResults = filteredResults.filter(r => r.strategy === cusumStrategy);
+        }
+        if (cusumMlModel) {
+            filteredResults = filteredResults.filter(r => r.mlModel === cusumMlModel);
+        }
+        if (cusumTimeframe) {
+            filteredResults = filteredResults.filter(r => r.strategyTimeframe === cusumTimeframe);
+        }
+
+        // 거래 내역이 있는 결과만 필터링
+        filteredResults = filteredResults.filter(r => r.tradeHistory && r.tradeHistory.length > 0);
+
+        // 수익률 기준 정렬 (상위 N개 선택용)
+        filteredResults.sort((a, b) => parseFloat(b.totalReturnPct) - parseFloat(a.totalReturnPct));
+
+        // 경고 메시지 처리
+        const warningDiv = document.getElementById('chartWarning');
+        const warningMsg = document.getElementById('chartWarningMessage');
+        const totalCount = filteredResults.length;
+
+        if (maxLines > 0 && totalCount > maxLines) {
+            warningDiv.style.display = 'block';
+            warningMsg.textContent = `총 ${totalCount}개 결과 중 수익률 상위 ${maxLines}개만 표시됩니다. 더 많은 결과를 보려면 '최대 표시 개수'를 조정하거나 필터를 사용하세요.`;
+            filteredResults = filteredResults.slice(0, maxLines);
+        } else if (totalCount > 20) {
+            warningDiv.style.display = 'block';
+            warningMsg.textContent = `${totalCount}개의 그래프가 표시됩니다. 가독성을 위해 필터를 사용하거나 표시 개수를 제한하는 것을 권장합니다.`;
+        } else {
+            warningDiv.style.display = 'none';
+        }
+
+        // 결과 개수 표시
+        document.getElementById('chartResultCount').textContent = `${filteredResults.length}개 결과 표시 중 (전체 ${totalCount}개)`;
 
         // Prepare datasets
         const datasets = [];
@@ -1525,9 +1675,15 @@
         ];
 
         filteredResults.forEach((result, idx) => {
-            if (!result.tradeHistory || result.tradeHistory.length === 0) return;
+            // 라벨 생성 (CUSUM인 경우 간결하게)
+            let label;
+            if (result.regime === 'CUSUM') {
+                const strategyShort = result.strategy ? result.strategy.replace('target_', '') : '';
+                label = `${strategyShort} (${result.mlModel || ''}) F${result.foldNumber}`;
+            } else {
+                label = `${result.modelName} - Fold ${result.foldNumber}`;
+            }
 
-            const label = `${result.modelName} - Fold ${result.foldNumber}`;
             const color = colorPalette[idx % colorPalette.length];
 
             // Prepare data points
@@ -1561,10 +1717,11 @@
                 backgroundColor: color + '33', // Semi-transparent
                 pointBackgroundColor: pointBackgroundColors,
                 pointBorderColor: pointBackgroundColors,
-                pointRadius: 5,
+                pointRadius: filteredResults.length > 10 ? 3 : 5, // 많으면 포인트 작게
                 pointHoverRadius: 7,
                 tension: 0.1,
-                fill: false
+                fill: false,
+                borderWidth: filteredResults.length > 10 ? 1.5 : 2 // 많으면 선 얇게
             });
         });
 
@@ -1587,17 +1744,20 @@
                 },
                 plugins: {
                     legend: {
+                        display: showLegend,
                         position: 'top',
                         labels: {
-                            font: { size: 12, family: 'Segoe UI' },
-                            color: '#313647'
+                            font: { size: 11, family: 'Segoe UI' },
+                            color: '#313647',
+                            boxWidth: 12,
+                            padding: 8
                         }
                     },
                     tooltip: {
                         callbacks: {
                             title: function(context) {
                                 const point = context[0].raw;
-                                const modelInfo = context[0].dataset.label; // "ModelName - Fold N"
+                                const modelInfo = context[0].dataset.label;
                                 if (!point.trade) return `${modelInfo} - 시작 시점`;
                                 return `${modelInfo} - 거래 #${point.trade.tradeNumber}`;
                             },
@@ -1607,17 +1767,16 @@
                                     return `초기 자본: ${point.y.toLocaleString('ko-KR')}원`;
                                 }
                                 const trade = point.trade;
-                                return [
+                                const lines = [
                                     `거래 후 자본: ${point.y.toLocaleString('ko-KR')}원`,
-                                    `진입: ${new Date(trade.entryDateTime).toLocaleString('ko-KR')}`,
-                                    `청산: ${new Date(trade.exitDateTime).toLocaleString('ko-KR')}`,
-                                    `진입가: ${parseFloat(trade.entryPrice).toLocaleString('ko-KR')}원`,
-                                    `청산가: ${parseFloat(trade.exitPrice).toLocaleString('ko-KR')}원`,
                                     `손익: ${parseFloat(trade.profit).toLocaleString('ko-KR')}원 (${parseFloat(trade.returnPct).toFixed(2)}%)`,
-                                    `청산 사유: ${trade.exitReason === 'TAKE_PROFIT' ? '익절' : trade.exitReason === 'STOP_LOSS' ? '손절' : '타임아웃'}`,
-                                    `AI 상승 확률: ${(parseFloat(trade.predProbaUp) * 100).toFixed(2)}%`,
-                                    `신뢰도: ${(parseFloat(trade.confidence) * 100).toFixed(2)}%`
+                                    `청산 사유: ${trade.exitReason === 'TAKE_PROFIT' ? '익절' : trade.exitReason === 'STOP_LOSS' ? '손절' : '타임아웃'}`
                                 ];
+                                // CUSUM 거래인 경우 추가 정보
+                                if (trade.strategy || trade.mlModel) {
+                                    lines.push(`확신도: ${trade.confidence ? (parseFloat(trade.confidence) * 100).toFixed(1) + '%' : '-'}`);
+                                }
+                                return lines;
                             }
                         },
                         backgroundColor: 'rgba(49, 54, 71, 0.95)',
@@ -2326,15 +2485,16 @@
         const strategy = document.getElementById('cusumStrategy').value;
         const model = document.getElementById('cusumModel').value;
         const fold = document.getElementById('cusumFold').value;
-        const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 10000;
+        const initialCapital = parseFloat(document.getElementById('cusumInitialCapital').value) || 10000;
 
-        // 요청 파라미터 구성
+        // 요청 파라미터 구성 (백엔드 CusumBatchRequest 형식에 맞춤)
         const requestBody = {
             initialCapital: initialCapital
         };
-        if (strategy) requestBody.strategy = strategy;
-        if (model) requestBody.model = model;
-        if (fold) requestBody.foldId = parseInt(fold);
+        // 백엔드는 List를 기대하므로 단일 값을 배열로 감싸서 전송
+        if (strategy) requestBody.strategies = [strategy];
+        if (model) requestBody.models = [model];
+        if (fold) requestBody.foldNumbers = [parseInt(fold)];
 
         // 스피너 표시
         document.getElementById('spinnerOverlay').classList.add('active');
@@ -2363,10 +2523,11 @@
             addLog(`CUSUM 백테스팅 완료! ${results.length}건의 결과`);
 
             // 결과를 기존 backtestResults에 추가 (CUSUM 태그 추가)
+            // 백엔드 Response 필드: strategy, mlModel, foldNumber, strategyTimeframe, strategyType 등
             const cusumResults = results.map(r => ({
                 ...r,
-                modelName: `[CUSUM] ${r.strategy || ''} - ${r.model || ''}`,
-                foldNumber: r.foldId || 0,
+                modelName: `[CUSUM] ${r.strategy || ''} - ${r.mlModel || ''}`,
+                foldNumber: r.foldNumber || 0,
                 regime: 'CUSUM',
                 // 기본값 설정 (API 응답에 없는 경우)
                 takeProfitExits: r.takeProfitExits || 0,
