@@ -2,6 +2,7 @@ package com.coinreaders.engine.adapter.in.web;
 
 import com.coinreaders.engine.application.backtest.AsyncBacktestService;
 import com.coinreaders.engine.application.backtest.BuyAndHoldBacktestService;
+import com.coinreaders.engine.application.backtest.CusumSignalBacktestService;
 import com.coinreaders.engine.application.backtest.RuleBasedBacktestService;
 import com.coinreaders.engine.application.backtest.TakeProfitStopLossBacktestService;
 import com.coinreaders.engine.application.backtest.dto.BuyAndHoldBacktestRequest;
@@ -25,6 +26,7 @@ public class BacktestController {
     private final BuyAndHoldBacktestService buyAndHoldBacktestService;
     private final RuleBasedBacktestService ruleBasedBacktestService;
     private final AsyncBacktestService asyncBacktestService;
+    private final CusumSignalBacktestService cusumSignalBacktestService;
 
     /**
      * Take Profit / Stop Loss 백테스팅 실행 API (단일 모델/Fold)
@@ -408,5 +410,188 @@ public class BacktestController {
     record BuyHoldBatchRequest(
         java.util.List<Integer> foldNumbers,
         BigDecimal initialCapital
+    ) {}
+
+    // ===== CUSUM 신호 기반 백테스팅 API =====
+
+    /**
+     * CUSUM 신호 데이터 상태 조회 API
+     * - 로드 여부, 신호 개수, 사용 가능한 전략/모델 목록 확인
+     */
+    @GetMapping("/cusum/status")
+    public ResponseEntity<?> getCusumStatus() {
+        log.info("CUSUM 신호 상태 조회 API 호출");
+
+        java.util.Map<String, Object> status = new java.util.LinkedHashMap<>();
+        status.put("dataLoaded", cusumSignalBacktestService.isDataLoaded());
+        status.put("totalSignals", cusumSignalBacktestService.getSignalCount());
+
+        if (cusumSignalBacktestService.isDataLoaded()) {
+            status.put("availableStrategies", cusumSignalBacktestService.getAvailableStrategies());
+            status.put("availableModels", cusumSignalBacktestService.getAvailableModels());
+            status.put("availableFolds", cusumSignalBacktestService.getAvailableFolds());
+        }
+
+        return ResponseEntity.ok(status);
+    }
+
+    /**
+     * CUSUM 신호 CSV 데이터 수동 로드 API
+     */
+    @PostMapping("/cusum/load")
+    public ResponseEntity<?> loadCusumData() {
+        log.info("CUSUM 신호 CSV 로드 API 호출");
+
+        try {
+            int count = cusumSignalBacktestService.loadCsvData();
+            return ResponseEntity.ok(java.util.Map.of(
+                "success", true,
+                "loadedSignals", count,
+                "message", "CUSUM 신호 데이터 로드 완료"
+            ));
+        } catch (Exception e) {
+            log.error("CUSUM CSV 로드 실패", e);
+            return ResponseEntity.internalServerError().body(java.util.Map.of(
+                "success", false,
+                "error", e.getMessage(),
+                "hint", "파일 경로: src/main/resources/cusum_signals/backend_signals_master.csv"
+            ));
+        }
+    }
+
+    /**
+     * CUSUM 신호 전략별 요약 통계 조회 API
+     */
+    @GetMapping("/cusum/summary")
+    public ResponseEntity<?> getCusumSummary() {
+        log.info("CUSUM 전략 요약 조회 API 호출");
+        return ResponseEntity.ok(cusumSignalBacktestService.getStrategySummary());
+    }
+
+    /**
+     * CUSUM 신호 기반 백테스팅 실행 API (단일 전략)
+     *
+     * @param request 백테스팅 요청 파라미터
+     * @return 백테스팅 결과 (기존 TakeProfitStopLossBacktestResponse와 동일 형식)
+     */
+    @PostMapping("/cusum/run")
+    public ResponseEntity<?> runCusumBacktest(@RequestBody CusumBacktestRequest request) {
+        log.info("CUSUM 백테스팅 API 호출: Fold={}, Strategy={}, Model={}",
+            request.foldNumber, request.strategy, request.model);
+
+        if (!cusumSignalBacktestService.isDataLoaded()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                "error", "CUSUM 신호 데이터가 로드되지 않았습니다",
+                "hint", "POST /api/backtest/cusum/load 를 먼저 호출하거나 CSV 파일을 배치해주세요"
+            ));
+        }
+
+        try {
+            BigDecimal initialCapital = request.initialCapital != null ?
+                request.initialCapital : new BigDecimal("10000000");
+
+            TakeProfitStopLossBacktestResponse response = cusumSignalBacktestService.runBacktest(
+                request.foldNumber,
+                request.strategy,
+                request.model,
+                initialCapital
+            );
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("CUSUM 백테스팅 실패", e);
+            return ResponseEntity.internalServerError().body("CUSUM Backtest failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * CUSUM 신호 기반 백테스팅 배치 실행 API
+     * - 여러 전략/모델에 대해 순차적으로 실행
+     * - 기존 ML 모델 결과와 함께 반환하여 비교 가능
+     *
+     * @param batchRequest 배치 요청 파라미터
+     * @return 모든 백테스팅 결과 리스트
+     */
+    @PostMapping("/cusum/run-batch")
+    public ResponseEntity<?> runCusumBatchBacktest(@RequestBody CusumBatchRequest batchRequest) {
+        log.info("CUSUM 배치 백테스팅 API 호출: Strategies={}, Models={}, Folds={}",
+            batchRequest.strategies, batchRequest.models, batchRequest.foldNumbers);
+
+        if (!cusumSignalBacktestService.isDataLoaded()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                "error", "CUSUM 신호 데이터가 로드되지 않았습니다",
+                "hint", "POST /api/backtest/cusum/load 를 먼저 호출하거나 CSV 파일을 배치해주세요"
+            ));
+        }
+
+        try {
+            java.util.List<TakeProfitStopLossBacktestResponse> results = new java.util.ArrayList<>();
+            BigDecimal initialCapital = batchRequest.initialCapital != null ?
+                batchRequest.initialCapital : new BigDecimal("10000000");
+
+            // 전략 목록 결정
+            java.util.List<String> strategies = batchRequest.strategies;
+            if (strategies == null || strategies.isEmpty()) {
+                strategies = cusumSignalBacktestService.getAvailableStrategies();
+            }
+
+            // Fold 목록 결정
+            java.util.List<Integer> folds = batchRequest.foldNumbers;
+            if (folds == null || folds.isEmpty()) {
+                folds = cusumSignalBacktestService.getAvailableFolds();
+            }
+
+            // 모델 (현재는 전략 내에서 null로 처리 - 전체 모델 대상)
+            String model = (batchRequest.models != null && !batchRequest.models.isEmpty())
+                ? batchRequest.models.get(0) : null;
+
+            // 배치 실행
+            for (String strategy : strategies) {
+                BigDecimal currentCapital = initialCapital;
+
+                for (Integer fold : folds) {
+                    log.info("▶ CUSUM 실행: Strategy={}, Fold={}, Capital={}",
+                        strategy, fold, currentCapital);
+
+                    try {
+                        TakeProfitStopLossBacktestResponse response =
+                            cusumSignalBacktestService.runBacktest(fold, strategy, model, currentCapital);
+
+                        results.add(response);
+                        currentCapital = response.getFinalCapital();
+
+                        log.info("✓ 완료: Strategy={}, Fold={}, {}원 → {}원 ({}%)",
+                            strategy, fold,
+                            response.getInitialCapital(),
+                            response.getFinalCapital(),
+                            response.getTotalReturnPct());
+                    } catch (Exception e) {
+                        log.error("✗ 실패: Strategy={}, Fold={}, Error={}",
+                            strategy, fold, e.getMessage());
+                    }
+                }
+            }
+
+            log.info("=== CUSUM 배치 백테스팅 완료: 총 {}건 ===", results.size());
+            return ResponseEntity.ok(results);
+        } catch (Exception e) {
+            log.error("CUSUM 배치 백테스팅 실패", e);
+            return ResponseEntity.internalServerError().body("CUSUM Batch backtest failed: " + e.getMessage());
+        }
+    }
+
+    // CUSUM 백테스팅 요청 DTO
+    record CusumBacktestRequest(
+        Integer foldNumber,          // Fold 번호 (null이면 전체)
+        String strategy,             // 전략명 (예: "target_4h_LGBM", null이면 전체)
+        String model,                // 모델명 (예: "LGBM", null이면 전체)
+        BigDecimal initialCapital    // 초기 자본 (기본값: 1000만원)
+    ) {}
+
+    // CUSUM 배치 요청 DTO
+    record CusumBatchRequest(
+        java.util.List<String> strategies,      // 전략 목록 (null이면 전체)
+        java.util.List<String> models,          // 모델 목록 (null이면 전체)
+        java.util.List<Integer> foldNumbers,    // Fold 목록 (null이면 전체)
+        BigDecimal initialCapital               // 초기 자본
     ) {}
 }
