@@ -71,6 +71,10 @@ public class CusumSignalBacktestService {
     private List<CusumSignalData> allSignals = new ArrayList<>();
     private boolean dataLoaded = false;
 
+    // 1분봉 데이터 유효 기간 (CSV 필터링용)
+    private LocalDateTime minuteDataStart = null;
+    private LocalDateTime minuteDataEnd = null;
+
     // 날짜 포맷터들
     private static final DateTimeFormatter[] DATE_TIME_FORMATTERS = {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
@@ -99,6 +103,25 @@ public class CusumSignalBacktestService {
     public int loadCsvData() throws IOException, CsvValidationException {
         log.info("CUSUM 신호 CSV 로딩 시작: {}", CSV_PATH);
 
+        // 1분봉 데이터 유효 기간 조회
+        HistoricalMinuteOhlcv oldest = minuteOhlcvRepository
+            .findFirstByMarketOrderByCandleDateTimeKstAsc(MARKET)
+            .orElse(null);
+        HistoricalMinuteOhlcv latest = minuteOhlcvRepository
+            .findFirstByMarketOrderByCandleDateTimeKstDesc(MARKET)
+            .orElse(null);
+
+        if (oldest != null && latest != null) {
+            minuteDataStart = oldest.getCandleDateTimeKst();
+            minuteDataEnd = latest.getCandleDateTimeKst();
+            log.info("1분봉 데이터 기간: {} ~ {} (총 {}일)",
+                minuteDataStart.toLocalDate(),
+                minuteDataEnd.toLocalDate(),
+                java.time.temporal.ChronoUnit.DAYS.between(minuteDataStart, minuteDataEnd));
+        } else {
+            log.warn("1분봉 데이터가 없습니다. CSV 필터링 없이 로드합니다.");
+        }
+
         ClassPathResource resource = new ClassPathResource(CSV_PATH);
         List<CusumSignalData> signals = new ArrayList<>();
 
@@ -125,14 +148,20 @@ public class CusumSignalBacktestService {
             int lineNumber = 1;
             int successCount = 0;
             int failCount = 0;
+            int filteredByDate = 0; // 날짜 필터링된 개수
 
             while ((line = reader.readNext()) != null) {
                 lineNumber++;
                 try {
                     CusumSignalData signal = parseCsvLine(line, columnIndex);
                     if (signal != null) {
-                        signals.add(signal);
-                        successCount++;
+                        // 1분봉 데이터 기간 내에 있는 신호만 추가
+                        if (isWithinMinuteDataRange(signal.getSignalTime())) {
+                            signals.add(signal);
+                            successCount++;
+                        } else {
+                            filteredByDate++;
+                        }
                     }
                 } catch (Exception e) {
                     failCount++;
@@ -145,9 +174,25 @@ public class CusumSignalBacktestService {
             allSignals = signals;
             dataLoaded = true;
 
-            log.info("CUSUM 신호 CSV 로딩 완료: 성공 {}건, 실패 {}건", successCount, failCount);
+            if (filteredByDate > 0) {
+                log.warn("1분봉 데이터 기간 외 신호 필터링: {}건 (전체의 {}%)",
+                    filteredByDate,
+                    String.format("%.1f", filteredByDate * 100.0 / (successCount + filteredByDate)));
+            }
+            log.info("CUSUM 신호 CSV 로딩 완료: 유효 {}건, 필터링 {}건, 파싱 실패 {}건",
+                successCount, filteredByDate, failCount);
             return successCount;
         }
+    }
+
+    /**
+     * 신호 시간이 1분봉 데이터 기간 내에 있는지 확인
+     */
+    private boolean isWithinMinuteDataRange(LocalDateTime signalTime) {
+        if (minuteDataStart == null || minuteDataEnd == null || signalTime == null) {
+            return true; // 1분봉 데이터가 없으면 모두 통과
+        }
+        return !signalTime.isBefore(minuteDataStart) && !signalTime.isAfter(minuteDataEnd);
     }
 
     /**
