@@ -470,7 +470,7 @@ public class CusumSignalBacktestService {
 
             // 3. 1분봉 추적하여 TP/SL 도달 확인 (Look-ahead Bias 제거)
             int holdingHours = signal.getHoldingHours();
-            LocalDateTime exitCheckStart = actualEntryTime.plusMinutes(1);
+            LocalDateTime exitCheckStart = actualEntryTime; // 진입 봉부터 체크 (수정)
             LocalDateTime exitCheckEnd = actualEntryTime.plusHours(holdingHours);
 
             String exitReason = null;
@@ -489,8 +489,35 @@ public class CusumSignalBacktestService {
                     hasData = true;
                     lastCandle = candle;
 
-                    // Take Profit 체크 (고가가 TP 이상)
-                    if (candle.getHighPrice().compareTo(takeProfit) >= 0) {
+                    boolean tpReached = candle.getHighPrice().compareTo(takeProfit) >= 0;
+                    boolean slReached = candle.getLowPrice().compareTo(stopLoss) <= 0;
+
+                    // 진입 봉에서 TP/SL 둘 다 도달한 경우: 시가 대비 거리로 판단
+                    boolean isEntryCandle = candle.getCandleDateTimeKst().equals(actualEntryTime);
+                    if (isEntryCandle && tpReached && slReached) {
+                        // 시가 대비 거리 계산
+                        BigDecimal distanceToTP = takeProfit.subtract(entryPrice).abs();
+                        BigDecimal distanceToSL = entryPrice.subtract(stopLoss).abs();
+
+                        if (distanceToTP.compareTo(distanceToSL) <= 0) {
+                            // TP가 더 가까움 → TP 먼저 도달 가능성 높음
+                            exitReason = "TAKE_PROFIT";
+                            exitPrice = takeProfit;
+                            takeProfitExits++;
+                        } else {
+                            // SL이 더 가까움 → SL 먼저 도달 가능성 높음
+                            exitReason = "STOP_LOSS";
+                            exitPrice = stopLoss;
+                            stopLossExits++;
+                        }
+                        exitTime = candle.getCandleDateTimeKst();
+                        log.debug("진입 봉에서 TP/SL 둘 다 도달: {} (TP거리: {}, SL거리: {})",
+                            exitReason, distanceToTP, distanceToSL);
+                        break;
+                    }
+
+                    // 일반적인 경우: TP 먼저 체크
+                    if (tpReached) {
                         exitReason = "TAKE_PROFIT";
                         exitPrice = takeProfit;
                         exitTime = candle.getCandleDateTimeKst();
@@ -498,8 +525,8 @@ public class CusumSignalBacktestService {
                         break;
                     }
 
-                    // Stop Loss 체크 (저가가 SL 이하)
-                    if (candle.getLowPrice().compareTo(stopLoss) <= 0) {
+                    // Stop Loss 체크
+                    if (slReached) {
                         exitReason = "STOP_LOSS";
                         exitPrice = stopLoss;
                         exitTime = candle.getCandleDateTimeKst();
