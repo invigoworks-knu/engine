@@ -805,4 +805,33 @@ public class CusumSignalBacktestService {
 
         return summary;
     }
+
+    /**
+     * CSV 신호 데이터의 날짜 범위 조회
+     * @return Map with "startDate" and "endDate" as LocalDate, or empty map if no data
+     */
+    public Map<String, LocalDate> getSignalDateRange() {
+        if (!isDataLoaded() || allSignals.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        LocalDate minDate = allSignals.stream()
+            .map(s -> s.getSignalTime().toLocalDate())
+            .min(LocalDate::compareTo)
+            .orElse(null);
+
+        LocalDate maxDate = allSignals.stream()
+            .map(s -> s.getSignalTime().toLocalDate())
+            .max(LocalDate::compareTo)
+            .orElse(null);
+
+        if (minDate == null || maxDate == null) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, LocalDate> range = new HashMap<>();
+        range.put("startDate", minDate);
+        range.put("endDate", maxDate);
+        return range;
+    }
 }

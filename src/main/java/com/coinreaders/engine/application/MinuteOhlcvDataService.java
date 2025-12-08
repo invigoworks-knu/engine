@@ -1,6 +1,7 @@
 package com.coinreaders.engine.application;
 
 import com.coinreaders.engine.adapter.out.api.UpbitApiClient;
+import com.coinreaders.engine.application.backtest.CusumSignalBacktestService;
 import com.coinreaders.engine.domain.entity.HistoricalMinuteOhlcv;
 import com.coinreaders.engine.domain.repository.HistoricalMinuteOhlcvRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,6 +29,7 @@ public class MinuteOhlcvDataService {
 
     private final UpbitApiClient upbitApiClient;
     private final HistoricalMinuteOhlcvRepository minuteOhlcvRepository;
+    private final CusumSignalBacktestService cusumSignalBacktestService;
 
     private static final String MARKET = "KRW-ETH";
     private static final int BATCH_SIZE = 200; // API 최대 반환 개수
@@ -228,5 +231,94 @@ public class MinuteOhlcvDataService {
             totalCount,
             oldest.getCandleDateTimeKst(),
             latest.getCandleDateTimeKst());
+    }
+
+    /**
+     * CSV 신호 기간을 커버하도록 1분봉 데이터 자동 수집
+     * CSV 신호의 최소/최대 날짜를 확인하고, 현재 1분봉 데이터 범위와 비교하여 부족한 과거 데이터를 자동으로 수집
+     */
+    @Transactional
+    public String collectMinuteCandlesToCoverSignals() {
+        log.info("CSV 신호 기간 기반 1분봉 자동 수집 시작");
+
+        // 1. CSV 신호 날짜 범위 조회
+        Map<String, LocalDate> signalRange = cusumSignalBacktestService.getSignalDateRange();
+        if (signalRange.isEmpty()) {
+            String msg = "CSV 신호 데이터가 로드되지 않았습니다. 먼저 백테스팅을 실행하거나 CSV를 로드하세요.";
+            log.warn(msg);
+            return msg;
+        }
+
+        LocalDate csvStartDate = signalRange.get("startDate");
+        LocalDate csvEndDate = signalRange.get("endDate");
+        log.info("CSV 신호 기간: {} ~ {}", csvStartDate, csvEndDate);
+
+        // 2. 현재 1분봉 데이터 범위 조회
+        HistoricalMinuteOhlcv oldestCandle = minuteOhlcvRepository
+            .findFirstByMarketOrderByCandleDateTimeKstAsc(MARKET)
+            .orElse(null);
+
+        HistoricalMinuteOhlcv latestCandle = minuteOhlcvRepository
+            .findFirstByMarketOrderByCandleDateTimeKstDesc(MARKET)
+            .orElse(null);
+
+        if (oldestCandle == null || latestCandle == null) {
+            // 1분봉 데이터가 전혀 없는 경우, CSV 전체 기간 수집
+            log.info("1분봉 데이터 없음. CSV 전체 기간 수집: {} ~ {}", csvStartDate, csvEndDate);
+            loadAllMinuteCandles(csvStartDate.toString(), csvEndDate.toString());
+            return String.format("1분봉 데이터 수집 완료: %s ~ %s", csvStartDate, csvEndDate);
+        }
+
+        LocalDate candleStartDate = oldestCandle.getCandleDateTimeKst().toLocalDate();
+        LocalDate candleEndDate = latestCandle.getCandleDateTimeKst().toLocalDate();
+        log.info("현재 1분봉 기간: {} ~ {}", candleStartDate, candleEndDate);
+
+        // 3. 갭 분석 및 수집
+        StringBuilder result = new StringBuilder();
+
+        // 3-1. 과거 데이터 부족 확인 (CSV 시작 < 1분봉 시작)
+        if (csvStartDate.isBefore(candleStartDate)) {
+            long gapDays = java.time.temporal.ChronoUnit.DAYS.between(csvStartDate, candleStartDate);
+            log.info("과거 데이터 부족 감지: CSV 시작({})이 1분봉 시작({})보다 {}일 빠름",
+                csvStartDate, candleStartDate, gapDays);
+
+            result.append(String.format("과거 데이터 수집 중: %s ~ %s (%d일)\n",
+                csvStartDate, candleStartDate.minusDays(1), gapDays));
+
+            // 과거 데이터 수집 (CSV 시작 ~ 현재 1분봉 시작 -1일)
+            loadAllMinuteCandles(csvStartDate.toString(), candleStartDate.minusDays(1).toString());
+
+            result.append("과거 데이터 수집 완료\n");
+        } else {
+            log.info("과거 데이터 충분: 1분봉 시작({})이 CSV 시작({}) 이전 또는 같음",
+                candleStartDate, csvStartDate);
+            result.append("과거 데이터 충분 (추가 수집 불필요)\n");
+        }
+
+        // 3-2. 미래 데이터 부족 확인 (CSV 종료 > 1분봉 종료)
+        if (csvEndDate.isAfter(candleEndDate)) {
+            long gapDays = java.time.temporal.ChronoUnit.DAYS.between(candleEndDate, csvEndDate);
+            log.info("미래 데이터 부족 감지: CSV 종료({})가 1분봉 종료({})보다 {}일 늦음",
+                csvEndDate, candleEndDate, gapDays);
+
+            result.append(String.format("미래 데이터 수집 중: %s ~ %s (%d일)\n",
+                candleEndDate.plusDays(1), csvEndDate, gapDays));
+
+            // 미래 데이터 수집 (현재 1분봉 종료 +1일 ~ CSV 종료)
+            // 참고: loadAllMinuteCandles는 과거로 가는 로직이므로, 미래 데이터는 별도 처리 필요
+            // 현재는 과거 데이터만 수집하도록 구현됨
+            result.append("주의: 현재 수집 로직은 과거 방향만 지원. 미래 데이터는 수동으로 수집하세요.\n");
+        } else {
+            log.info("미래 데이터 충분: 1분봉 종료({})가 CSV 종료({}) 이후 또는 같음",
+                candleEndDate, csvEndDate);
+            result.append("미래 데이터 충분 (추가 수집 불필요)\n");
+        }
+
+        // 4. 최종 상태 보고
+        String finalStats = getMinuteCandleStats();
+        result.append("\n").append(finalStats);
+
+        log.info("CSV 신호 기간 기반 1분봉 자동 수집 완료");
+        return result.toString();
     }
 }

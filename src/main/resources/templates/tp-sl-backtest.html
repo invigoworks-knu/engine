@@ -137,8 +137,11 @@
                             <button class="btn btn-warning btn-sm me-2 mb-2" onclick="loadAiPredictions()" id="btnAi">
                                 <i class="fas fa-brain me-1"></i> AI 예측값 적재
                             </button>
-                            <button class="btn btn-primary btn-sm mb-2" onclick="loadMinuteCandles()" id="btnMinute">
+                            <button class="btn btn-primary btn-sm me-2 mb-2" onclick="loadMinuteCandles()" id="btnMinute">
                                 <i class="fas fa-download me-1"></i> 1분봉 적재
+                            </button>
+                            <button class="btn btn-success btn-sm mb-2" onclick="autoFillMinuteCandles()" id="btnAutoFill">
+                                <i class="fas fa-sync me-1"></i> CSV 기간 자동 수집
                             </button>
                         </div>
                     </div>
@@ -582,6 +585,30 @@
         .catch(e => {
             console.error(e);
             showToast('1분봉 데이터 적재 중 오류가 발생했습니다.', false);
+            checkDataStatus();
+        });
+    }
+
+    function autoFillMinuteCandles() {
+        const btn = document.getElementById('btnAutoFill');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 자동 수집 중...';
+
+        showToast('CSV 신호 기간을 확인하고 부족한 1분봉 데이터를 자동으로 수집합니다.', true);
+
+        fetch('/api/v1/data/minute-candles/auto-fill', {method:'POST'})
+        .then(r=>r.text())
+        .then(m=>{
+            showToast(m, true);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync me-1"></i> CSV 기간 자동 수집';
+            checkDataStatus();
+        })
+        .catch(e => {
+            console.error(e);
+            showToast('1분봉 자동 수집 중 오류가 발생했습니다.', false);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync me-1"></i> CSV 기간 자동 수집';
             checkDataStatus();
         });
     }

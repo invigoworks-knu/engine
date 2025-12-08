@@ -392,6 +392,27 @@ public class DataPipelineController {
     }
 
     /**
+     * (신규) CSV 신호 기간을 커버하도록 1분봉 데이터 자동 수집
+     * - CSV 신호의 최소/최대 날짜를 확인하고, 현재 1분봉 데이터 범위와 비교
+     * - 부족한 과거 데이터를 자동으로 수집
+     * - 기존 데이터는 건너뛰고 누락된 구간만 수집
+     */
+    @PostMapping("/minute-candles/auto-fill")
+    public ResponseEntity<String> autoFillMinuteCandlesForSignals() {
+        try {
+            log.info("=== CSV 신호 기간 기반 1분봉 자동 수집 API 호출 ===");
+
+            String result = minuteOhlcvDataService.collectMinuteCandlesToCoverSignals();
+
+            log.info("=== CSV 신호 기간 기반 1분봉 자동 수집 완료 ===");
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Failed to auto-fill minute candles", e);
+            return ResponseEntity.internalServerError().body("Failed to auto-fill minute candles: " + e.getMessage());
+        }
+    }
+
+    /**
      * 데이터 적재 상태 DTO
      */
     public record DataStatus(
