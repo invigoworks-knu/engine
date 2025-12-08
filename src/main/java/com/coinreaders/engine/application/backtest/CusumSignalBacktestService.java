@@ -71,10 +71,6 @@ public class CusumSignalBacktestService {
     private List<CusumSignalData> allSignals = new ArrayList<>();
     private boolean dataLoaded = false;
 
-    // 1분봉 데이터 유효 기간 (CSV 필터링용)
-    private LocalDateTime minuteDataStart = null;
-    private LocalDateTime minuteDataEnd = null;
-
     // 날짜 포맷터들
     private static final DateTimeFormatter[] DATE_TIME_FORMATTERS = {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
@@ -99,28 +95,10 @@ public class CusumSignalBacktestService {
 
     /**
      * CSV 데이터 로드 (수동 트리거용)
+     * 전체 CSV 데이터를 필터링 없이 로드합니다.
      */
     public int loadCsvData() throws IOException, CsvValidationException {
-        log.info("CUSUM 신호 CSV 로딩 시작: {}", CSV_PATH);
-
-        // 1분봉 데이터 유효 기간 조회
-        HistoricalMinuteOhlcv oldest = minuteOhlcvRepository
-            .findFirstByMarketOrderByCandleDateTimeKstAsc(MARKET)
-            .orElse(null);
-        HistoricalMinuteOhlcv latest = minuteOhlcvRepository
-            .findFirstByMarketOrderByCandleDateTimeKstDesc(MARKET)
-            .orElse(null);
-
-        if (oldest != null && latest != null) {
-            minuteDataStart = oldest.getCandleDateTimeKst();
-            minuteDataEnd = latest.getCandleDateTimeKst();
-            log.info("1분봉 데이터 기간: {} ~ {} (총 {}일)",
-                minuteDataStart.toLocalDate(),
-                minuteDataEnd.toLocalDate(),
-                java.time.temporal.ChronoUnit.DAYS.between(minuteDataStart, minuteDataEnd));
-        } else {
-            log.warn("1분봉 데이터가 없습니다. CSV 필터링 없이 로드합니다.");
-        }
+        log.info("CUSUM 신호 CSV 로딩 시작 (전체 데이터 로드): {}", CSV_PATH);
 
         ClassPathResource resource = new ClassPathResource(CSV_PATH);
         List<CusumSignalData> signals = new ArrayList<>();
@@ -148,20 +126,14 @@ public class CusumSignalBacktestService {
             int lineNumber = 1;
             int successCount = 0;
             int failCount = 0;
-            int filteredByDate = 0; // 날짜 필터링된 개수
 
             while ((line = reader.readNext()) != null) {
                 lineNumber++;
                 try {
                     CusumSignalData signal = parseCsvLine(line, columnIndex);
                     if (signal != null) {
-                        // 1분봉 데이터 기간 내에 있는 신호만 추가
-                        if (isWithinMinuteDataRange(signal.getSignalTime())) {
-                            signals.add(signal);
-                            successCount++;
-                        } else {
-                            filteredByDate++;
-                        }
+                        signals.add(signal);
+                        successCount++;
                     }
                 } catch (Exception e) {
                     failCount++;
@@ -174,25 +146,10 @@ public class CusumSignalBacktestService {
             allSignals = signals;
             dataLoaded = true;
 
-            if (filteredByDate > 0) {
-                log.warn("1분봉 데이터 기간 외 신호 필터링: {}건 (전체의 {}%)",
-                    filteredByDate,
-                    String.format("%.1f", filteredByDate * 100.0 / (successCount + filteredByDate)));
-            }
-            log.info("CUSUM 신호 CSV 로딩 완료: 유효 {}건, 필터링 {}건, 파싱 실패 {}건",
-                successCount, filteredByDate, failCount);
+            log.info("CUSUM 신호 CSV 로딩 완료: 총 {}건, 파싱 실패 {}건",
+                successCount, failCount);
             return successCount;
         }
-    }
-
-    /**
-     * 신호 시간이 1분봉 데이터 기간 내에 있는지 확인
-     */
-    private boolean isWithinMinuteDataRange(LocalDateTime signalTime) {
-        if (minuteDataStart == null || minuteDataEnd == null || signalTime == null) {
-            return true; // 1분봉 데이터가 없으면 모두 통과
-        }
-        return !signalTime.isBefore(minuteDataStart) && !signalTime.isAfter(minuteDataEnd);
     }
 
     /**
@@ -443,11 +400,16 @@ public class CusumSignalBacktestService {
         int selectivityCount = 0;
         int investmentRatioCount = 0;
 
+        // 스킵 카운터
+        int skippedNoMinuteData = 0; // 1분봉 없어서 스킵
+        int skippedOverlap = 0; // 포지션 중복으로 스킵
+
         LocalDateTime currentPositionEnd = null; // 현재 포지션 종료 시각 (중복 진입 방지)
 
         for (CusumSignalData signal : signals) {
             // 이미 포지션이 있으면 스킵 (중복 진입 방지)
             if (currentPositionEnd != null && signal.getSignalTime().isBefore(currentPositionEnd)) {
+                skippedOverlap++;
                 continue;
             }
 
@@ -458,7 +420,7 @@ public class CusumSignalBacktestService {
                 );
 
             if (entryCandle.isEmpty()) {
-                log.warn("진입 시각 1분봉 없음: signalTime={}", signal.getSignalTime());
+                skippedNoMinuteData++;
                 continue;
             }
 
@@ -690,6 +652,14 @@ public class CusumSignalBacktestService {
 
         log.info("CUSUM 백테스팅 완료: {} trades, {} → {} ({}%)",
             totalTrades, initialCapital, capital, totalReturnPct);
+        log.info("신호 처리: 전체 {}건 → 거래 {}건, 1분봉 없음 {}건, 포지션 중복 {}건",
+            signals.size(), totalTrades, skippedNoMinuteData, skippedOverlap);
+
+        if (skippedNoMinuteData > 0) {
+            double skipRatio = (skippedNoMinuteData * 100.0) / signals.size();
+            log.warn("⚠️  1분봉 부족으로 {}건({}%) 신호를 사용하지 못했습니다. '/api/v1/data/minute-candles/auto-fill'로 추가 수집하세요.",
+                skippedNoMinuteData, String.format("%.1f", skipRatio));
+        }
 
         return TakeProfitStopLossBacktestResponse.builder()
             .modelName(modelName)
