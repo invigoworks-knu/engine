@@ -137,8 +137,11 @@
                             <button class="btn btn-warning btn-sm me-2 mb-2" onclick="loadAiPredictions()" id="btnAi">
                                 <i class="fas fa-brain me-1"></i> AI 예측값 적재
                             </button>
-                            <button class="btn btn-primary btn-sm mb-2" onclick="loadMinuteCandles()" id="btnMinute">
+                            <button class="btn btn-primary btn-sm me-2 mb-2" onclick="loadMinuteCandles()" id="btnMinute">
                                 <i class="fas fa-download me-1"></i> 1분봉 적재
+                            </button>
+                            <button class="btn btn-success btn-sm mb-2" onclick="autoFillMinuteCandles()" id="btnAutoFill">
+                                <i class="fas fa-sync me-1"></i> CSV 기간 자동 수집
                             </button>
                         </div>
                     </div>
@@ -582,6 +585,30 @@
         .catch(e => {
             console.error(e);
             showToast('1분봉 데이터 적재 중 오류가 발생했습니다.', false);
+            checkDataStatus();
+        });
+    }
+
+    function autoFillMinuteCandles() {
+        const btn = document.getElementById('btnAutoFill');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 자동 수집 중...';
+
+        showToast('CSV 신호 기간을 확인하고 부족한 1분봉 데이터를 자동으로 수집합니다.', true);
+
+        fetch('/api/v1/data/minute-candles/auto-fill', {method:'POST'})
+        .then(r=>r.text())
+        .then(m=>{
+            showToast(m, true);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync me-1"></i> CSV 기간 자동 수집';
+            checkDataStatus();
+        })
+        .catch(e => {
+            console.error(e);
+            showToast('1분봉 자동 수집 중 오류가 발생했습니다.', false);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync me-1"></i> CSV 기간 자동 수집';
             checkDataStatus();
         });
     }
@@ -1641,6 +1668,56 @@
         // 거래 내역이 있는 결과만 필터링
         filteredResults = filteredResults.filter(r => r.tradeHistory && r.tradeHistory.length > 0);
 
+        // 같은 전략/모델의 폴드들을 하나로 그룹화
+        const groupedResults = new Map();
+        filteredResults.forEach(result => {
+            let groupKey;
+            if (result.regime === 'CUSUM') {
+                // CUSUM인 경우: strategy + mlModel로 그룹화
+                groupKey = `CUSUM_${result.strategy || 'unknown'}_${result.mlModel || 'unknown'}`;
+            } else {
+                // 비CUSUM인 경우: modelName으로 그룹화
+                groupKey = `${result.modelName}`;
+            }
+
+            if (!groupedResults.has(groupKey)) {
+                // 첫 번째 결과를 기반으로 그룹 생성
+                groupedResults.set(groupKey, {
+                    ...result,
+                    foldNumbers: [result.foldNumber], // 포함된 폴드 번호들
+                    tradeHistory: [...result.tradeHistory]
+                });
+            } else {
+                // 기존 그룹에 거래 내역 추가
+                const group = groupedResults.get(groupKey);
+                group.foldNumbers.push(result.foldNumber);
+                group.tradeHistory.push(...result.tradeHistory);
+            }
+        });
+
+        // 그룹화된 결과로 변환하고 각 그룹의 통계 재계산
+        filteredResults = Array.from(groupedResults.values()).map(group => {
+            // 거래 내역을 시간순으로 정렬
+            group.tradeHistory.sort((a, b) => new Date(a.exitDateTime) - new Date(b.exitDateTime));
+
+            // 통계 재계산
+            let currentCapital = parseFloat(group.initialCapital);
+            group.tradeHistory.forEach(trade => {
+                currentCapital += parseFloat(trade.profit);
+                trade.capitalAfter = currentCapital;
+            });
+
+            group.finalCapital = currentCapital;
+            group.totalReturnPct = ((currentCapital - parseFloat(group.initialCapital)) / parseFloat(group.initialCapital)) * 100;
+            group.totalTrades = group.tradeHistory.length;
+
+            // 승률 재계산
+            const winningTrades = group.tradeHistory.filter(t => parseFloat(t.profit) > 0).length;
+            group.winRate = group.totalTrades > 0 ? (winningTrades / group.totalTrades * 100) : 0;
+
+            return group;
+        });
+
         // 수익률 기준 정렬 (상위 N개 선택용)
         filteredResults.sort((a, b) => parseFloat(b.totalReturnPct) - parseFloat(a.totalReturnPct));
 
@@ -1677,11 +1754,22 @@
         filteredResults.forEach((result, idx) => {
             // 라벨 생성 (CUSUM인 경우 간결하게)
             let label;
+            // 폴드 정보 생성 (여러 폴드가 합쳐진 경우 표시)
+            const foldInfo = result.foldNumbers && result.foldNumbers.length > 1
+                ? `F${result.foldNumbers.sort((a, b) => a - b).join(',')}`
+                : `F${result.foldNumber}`;
+
             if (result.regime === 'CUSUM') {
                 const strategyShort = result.strategy ? result.strategy.replace('target_', '') : '';
-                label = `${strategyShort} (${result.mlModel || ''}) F${result.foldNumber}`;
+                label = `${strategyShort} (${result.mlModel || ''})`;
+                if (result.foldNumbers && result.foldNumbers.length === 1) {
+                    label += ` ${foldInfo}`;
+                }
             } else {
-                label = `${result.modelName} - Fold ${result.foldNumber}`;
+                label = `${result.modelName}`;
+                if (result.foldNumbers && result.foldNumbers.length === 1) {
+                    label += ` - Fold ${result.foldNumber}`;
+                }
             }
 
             const color = colorPalette[idx % colorPalette.length];
@@ -1758,8 +1846,24 @@
                             title: function(context) {
                                 const point = context[0].raw;
                                 const modelInfo = context[0].dataset.label;
-                                if (!point.trade) return `${modelInfo} - 시작 시점`;
-                                return `${modelInfo} - 거래 #${point.trade.tradeNumber}`;
+                                if (!point.trade) {
+                                    const startTime = new Date(point.x).toLocaleString('ko-KR', {
+                                        year: 'numeric',
+                                        month: '2-digit',
+                                        day: '2-digit',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    });
+                                    return `${modelInfo} - 시작 시점 (${startTime})`;
+                                }
+                                const exitTime = new Date(point.trade.exitDateTime).toLocaleString('ko-KR', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                });
+                                return `${modelInfo} - 거래 #${point.trade.tradeNumber} (${exitTime})`;
                             },
                             label: function(context) {
                                 const point = context.raw;
@@ -1767,7 +1871,20 @@
                                     return `초기 자본: ${point.y.toLocaleString('ko-KR')}원`;
                                 }
                                 const trade = point.trade;
+                                const entryTime = new Date(trade.entryDateTime).toLocaleString('ko-KR', {
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                });
+                                const exitTime = new Date(trade.exitDateTime).toLocaleString('ko-KR', {
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                });
                                 const lines = [
+                                    `진입: ${entryTime} → 청산: ${exitTime}`,
                                     `거래 후 자본: ${point.y.toLocaleString('ko-KR')}원`,
                                     `손익: ${parseFloat(trade.profit).toLocaleString('ko-KR')}원 (${parseFloat(trade.returnPct).toFixed(2)}%)`,
                                     `청산 사유: ${trade.exitReason === 'TAKE_PROFIT' ? '익절' : trade.exitReason === 'STOP_LOSS' ? '손절' : '타임아웃'}`
