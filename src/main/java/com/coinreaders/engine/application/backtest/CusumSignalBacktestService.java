@@ -384,13 +384,17 @@ public class CusumSignalBacktestService {
         int takeProfitExits = 0;
         int stopLossExits = 0;
         int timeoutExits = 0;
-        int winCount = 0;
 
         BigDecimal totalHoldingHours = BigDecimal.ZERO;
         BigDecimal peakCapital = initialCapital;
         BigDecimal maxDrawdown = BigDecimal.ZERO;
-        BigDecimal totalWin = BigDecimal.ZERO;
-        BigDecimal totalLoss = BigDecimal.ZERO;
+
+        // TP/SL 손익 집계 (전략 예측력 평가용)
+        BigDecimal tpWinSum = BigDecimal.ZERO;
+        BigDecimal slLossSum = BigDecimal.ZERO;
+
+        // Timeout 손익 집계 (별도 참고용)
+        BigDecimal timeoutProfitSum = BigDecimal.ZERO;
 
         // CUSUM 집계용 변수
         BigDecimal totalConfidence = BigDecimal.ZERO;
@@ -637,12 +641,16 @@ public class CusumSignalBacktestService {
             // 자본 업데이트
             capital = capital.add(profit);
 
-            // 승/패 누적
-            if (profit.compareTo(BigDecimal.ZERO) > 0) {
-                totalWin = totalWin.add(profit);
-                winCount++;
-            } else {
-                totalLoss = totalLoss.add(profit.abs());
+            // 승/패 누적 (전략 예측력 평가: TP=승, SL=패, Timeout=제외)
+            if ("TAKE_PROFIT".equals(exitReason)) {
+                // TP 도달 = 예측 성공
+                tpWinSum = tpWinSum.add(profit);
+            } else if ("STOP_LOSS".equals(exitReason)) {
+                // SL 도달 = 예측 실패
+                slLossSum = slLossSum.add(profit.abs());
+            } else if ("TIMEOUT".equals(exitReason)) {
+                // Timeout = 승률 계산 제외 (하지만 수익은 집계)
+                timeoutProfitSum = timeoutProfitSum.add(profit);
             }
 
             // 최대 낙폭 계산
@@ -700,21 +708,25 @@ public class CusumSignalBacktestService {
             .divide(initialCapital, 6, RoundingMode.HALF_UP)
             .multiply(new BigDecimal("100"));
 
-        BigDecimal winRate = totalTrades > 0 ?
-            BigDecimal.valueOf(winCount).divide(BigDecimal.valueOf(totalTrades), 4, RoundingMode.HALF_UP)
+        // 승률: TP / (TP + SL) * 100 (Timeout 제외!)
+        int decidedTrades = takeProfitExits + stopLossExits; // TP/SL만 카운트
+        BigDecimal winRate = decidedTrades > 0 ?
+            BigDecimal.valueOf(takeProfitExits).divide(BigDecimal.valueOf(decidedTrades), 4, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100")) : BigDecimal.ZERO;
 
         BigDecimal avgHoldingDays = totalTrades > 0 ?
             totalHoldingHours.divide(BigDecimal.valueOf(totalTrades), 2, RoundingMode.HALF_UP)
                 .divide(new BigDecimal("24"), 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
-        BigDecimal avgWin = winCount > 0 ?
-            totalWin.divide(BigDecimal.valueOf(winCount), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        // TP 거래의 평균 이익
+        BigDecimal avgWin = takeProfitExits > 0 ?
+            tpWinSum.divide(BigDecimal.valueOf(takeProfitExits), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
-        int lossCount = totalTrades - winCount;
-        BigDecimal avgLoss = lossCount > 0 ?
-            totalLoss.divide(BigDecimal.valueOf(lossCount), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        // SL 거래의 평균 손실
+        BigDecimal avgLoss = stopLossExits > 0 ?
+            slLossSum.divide(BigDecimal.valueOf(stopLossExits), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
+        // 손익비 (TP 평균 이익 / SL 평균 손실)
         BigDecimal winLossRatio = avgLoss.compareTo(BigDecimal.ZERO) > 0 ?
             avgWin.divide(avgLoss, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
@@ -751,6 +763,11 @@ public class CusumSignalBacktestService {
 
         log.info("CUSUM 백테스팅 완료: {} trades, {} → {} ({}%)",
             totalTrades, initialCapital, capital, totalReturnPct);
+        log.info("청산 유형: TP {}건({}%), SL {}건({}%), Timeout {}건({}%)",
+            takeProfitExits, decidedTrades > 0 ? String.format("%.1f", takeProfitExits * 100.0 / decidedTrades) : "N/A",
+            stopLossExits, decidedTrades > 0 ? String.format("%.1f", stopLossExits * 100.0 / decidedTrades) : "N/A",
+            timeoutExits, totalTrades > 0 ? String.format("%.1f", timeoutExits * 100.0 / totalTrades) : "N/A");
+        log.info("승률 (TP/SL만): {}% (TP {} / 전체 TP+SL {})", winRate, takeProfitExits, decidedTrades);
         log.info("신호 처리: 전체 {}건 → 거래 {}건, 1분봉 없음 {}건, 포지션 중복 {}건",
             signals.size(), totalTrades, skippedNoMinuteData, skippedOverlap);
 
