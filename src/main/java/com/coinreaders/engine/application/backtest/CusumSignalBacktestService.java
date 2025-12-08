@@ -428,19 +428,39 @@ public class CusumSignalBacktestService {
             BigDecimal entryPrice = entryCandle.get().getOpeningPrice();
             LocalDateTime actualEntryTime = entryCandle.get().getCandleDateTimeKst();
 
-            // TP/SL 가격 (CSV에서 제공)
-            BigDecimal takeProfit = signal.getTakeProfit();
-            BigDecimal stopLoss = signal.getStopLoss();
-
             if (entryPrice == null || entryPrice.compareTo(BigDecimal.ZERO) <= 0) {
                 log.warn("진입 가격 오류: entryPrice={}", entryPrice);
                 continue;
             }
 
-            if (takeProfit == null || stopLoss == null) {
-                log.warn("TP/SL 없음: signal={}", signal.getSignalTime());
+            // TP/SL 가격 (실제 진입가 기준으로 재계산)
+            // CSV의 TP/SL은 CSV 진입가(entry_price_ref) 기준이므로
+            // 실제 진입가로 동일한 비율(%)을 적용하여 재계산
+            BigDecimal csvEntryPrice = signal.getEntryPriceRef();
+            BigDecimal csvTakeProfit = signal.getTakeProfit();
+            BigDecimal csvStopLoss = signal.getStopLoss();
+
+            if (csvEntryPrice == null || csvTakeProfit == null || csvStopLoss == null ||
+                csvEntryPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("CSV TP/SL 없음: signal={}", signal.getSignalTime());
                 continue;
             }
+
+            // CSV 기준 TP/SL 비율(%) 계산
+            BigDecimal takeProfitPct = csvTakeProfit.subtract(csvEntryPrice)
+                .divide(csvEntryPrice, 6, RoundingMode.HALF_UP);
+            BigDecimal stopLossPct = csvStopLoss.subtract(csvEntryPrice)
+                .divide(csvEntryPrice, 6, RoundingMode.HALF_UP);
+
+            // 실제 진입가 기준으로 TP/SL 재계산
+            BigDecimal takeProfit = entryPrice.multiply(BigDecimal.ONE.add(takeProfitPct))
+                .setScale(0, RoundingMode.HALF_UP);
+            BigDecimal stopLoss = entryPrice.multiply(BigDecimal.ONE.add(stopLossPct))
+                .setScale(0, RoundingMode.HALF_UP);
+
+            log.debug("TP/SL 재계산: CSV 진입가={}, 실제 진입가={}, TP={}({}%), SL={}({}%)",
+                csvEntryPrice, entryPrice, takeProfit, takeProfitPct.multiply(new BigDecimal("100")),
+                stopLoss, stopLossPct.multiply(new BigDecimal("100")));
 
             // 2. 포지션 크기 계산 (suggested_weight 사용)
             BigDecimal investmentRatio = signal.getInvestmentRatio();
@@ -469,9 +489,16 @@ public class CusumSignalBacktestService {
             investmentRatioCount++;
 
             // 3. 1분봉 추적하여 TP/SL 도달 확인 (Look-ahead Bias 제거)
-            int holdingHours = signal.getHoldingHours();
-            LocalDateTime exitCheckStart = actualEntryTime; // 진입 봉부터 체크 (수정)
-            LocalDateTime exitCheckEnd = actualEntryTime.plusHours(holdingHours);
+            // CSV의 정확한 만료 시각 사용 (전략명에서 추출하지 않음)
+            LocalDateTime exitCheckStart = actualEntryTime; // 진입 봉부터 체크
+            LocalDateTime exitCheckEnd = signal.getExpiration(); // CSV의 정확한 만료 시각!
+
+            if (exitCheckEnd == null) {
+                // CSV에 만료 시각이 없는 경우만 폴백 (전략명에서 추출)
+                int holdingHours = signal.getHoldingHours();
+                exitCheckEnd = actualEntryTime.plusHours(holdingHours);
+                log.warn("CSV에 만료 시각 없음. 전략명({})에서 {}시간 추출", signal.getStrategy(), holdingHours);
+            }
 
             String exitReason = null;
             BigDecimal exitPrice = null;
@@ -546,8 +573,11 @@ public class CusumSignalBacktestService {
             if (exitReason == null && lastCandle != null) {
                 exitReason = "TIMEOUT";
                 exitPrice = lastCandle.getTradePrice(); // 마지막 1분봉의 종가
-                exitTime = lastCandle.getCandleDateTimeKst();
+                exitTime = exitCheckEnd; // CSV의 정확한 만료 시각 사용 (HH:59 문제 해결)
                 timeoutExits++;
+
+                log.debug("TIMEOUT: 마지막 1분봉={}, 만료 시각={}",
+                    lastCandle.getCandleDateTimeKst(), exitCheckEnd);
             }
 
             if (exitPrice == null || exitTime == null) {
