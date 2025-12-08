@@ -912,9 +912,11 @@
                 }
             });
 
-            // 4. 전체 승률 계산
-            const winningTrades = allTrades.filter(t => parseFloat(t.profit) > 0).length;
-            const totalWinRate = allTrades.length > 0 ? (winningTrades / allTrades.length) * 100 : 0;
+            // 4. 전체 승률 계산 (TP/SL만, Timeout 제외)
+            const tpTrades = allTrades.filter(t => t.exitReason === 'TAKE_PROFIT').length;
+            const slTrades = allTrades.filter(t => t.exitReason === 'STOP_LOSS').length;
+            const decidedTrades = tpTrades + slTrades;
+            const totalWinRate = decidedTrades > 0 ? (tpTrades / decidedTrades) * 100 : 0;
 
             // 5. 전체 MDD 계산 (모든 거래의 자본 변화 추적)
             let peak = initialCapital;
@@ -1711,9 +1713,11 @@
             group.totalReturnPct = ((currentCapital - parseFloat(group.initialCapital)) / parseFloat(group.initialCapital)) * 100;
             group.totalTrades = group.tradeHistory.length;
 
-            // 승률 재계산
-            const winningTrades = group.tradeHistory.filter(t => parseFloat(t.profit) > 0).length;
-            group.winRate = group.totalTrades > 0 ? (winningTrades / group.totalTrades * 100) : 0;
+            // 승률 재계산 (TP/SL만, Timeout 제외)
+            const tpCount = group.tradeHistory.filter(t => t.exitReason === 'TAKE_PROFIT').length;
+            const slCount = group.tradeHistory.filter(t => t.exitReason === 'STOP_LOSS').length;
+            const decidedCount = tpCount + slCount;
+            group.winRate = decidedCount > 0 ? (tpCount / decidedCount * 100) : 0;
 
             return group;
         });
@@ -2274,34 +2278,37 @@
             // 모델별
             const modelKey = r.mlModel || 'Unknown';
             if (!modelStats[modelKey]) {
-                modelStats[modelKey] = { results: [], totalReturn: 0, totalTrades: 0, wins: 0, count: 0 };
+                modelStats[modelKey] = { results: [], totalReturn: 0, totalTrades: 0, tpExits: 0, slExits: 0, count: 0 };
             }
             modelStats[modelKey].results.push(r);
             modelStats[modelKey].totalReturn += parseFloat(r.totalReturnPct) || 0;
             modelStats[modelKey].totalTrades += r.totalTrades || 0;
-            modelStats[modelKey].wins += r.takeProfitExits || 0;
+            modelStats[modelKey].tpExits += r.takeProfitExits || 0;
+            modelStats[modelKey].slExits += r.stopLossExits || 0;
             modelStats[modelKey].count++;
 
             // 타임프레임별
             const tfKey = r.strategyTimeframe || '4h';
             if (!timeframeStats[tfKey]) {
-                timeframeStats[tfKey] = { results: [], totalReturn: 0, totalTrades: 0, wins: 0, count: 0 };
+                timeframeStats[tfKey] = { results: [], totalReturn: 0, totalTrades: 0, tpExits: 0, slExits: 0, count: 0 };
             }
             timeframeStats[tfKey].results.push(r);
             timeframeStats[tfKey].totalReturn += parseFloat(r.totalReturnPct) || 0;
             timeframeStats[tfKey].totalTrades += r.totalTrades || 0;
-            timeframeStats[tfKey].wins += r.takeProfitExits || 0;
+            timeframeStats[tfKey].tpExits += r.takeProfitExits || 0;
+            timeframeStats[tfKey].slExits += r.stopLossExits || 0;
             timeframeStats[tfKey].count++;
 
             // 전략 타입별
             const typeKey = r.strategyType || 'Unknown';
             if (!strategyTypeStats[typeKey]) {
-                strategyTypeStats[typeKey] = { results: [], totalReturn: 0, totalTrades: 0, wins: 0, count: 0 };
+                strategyTypeStats[typeKey] = { results: [], totalReturn: 0, totalTrades: 0, tpExits: 0, slExits: 0, count: 0 };
             }
             strategyTypeStats[typeKey].results.push(r);
             strategyTypeStats[typeKey].totalReturn += parseFloat(r.totalReturnPct) || 0;
             strategyTypeStats[typeKey].totalTrades += r.totalTrades || 0;
-            strategyTypeStats[typeKey].wins += r.takeProfitExits || 0;
+            strategyTypeStats[typeKey].tpExits += r.takeProfitExits || 0;
+            strategyTypeStats[typeKey].slExits += r.stopLossExits || 0;
             strategyTypeStats[typeKey].count++;
         });
 
@@ -2389,7 +2396,8 @@
             const stats = strategyTypeStats[type];
             if (stats) {
                 const avgReturn = stats.count > 0 ? stats.totalReturn / stats.count : 0;
-                const winRate = stats.totalTrades > 0 ? (stats.wins / stats.totalTrades) * 100 : 0;
+                const decidedTrades = stats.tpExits + stats.slExits;
+                const winRate = decidedTrades > 0 ? (stats.tpExits / decidedTrades) * 100 : 0;
                 html += `
                     <tr>
                         <td class="fw-bold">${type}</td>
@@ -2429,7 +2437,8 @@
         // ML 모델별 테이블 행
         Object.entries(modelStats).sort((a, b) => b[1].totalReturn - a[1].totalReturn).forEach(([model, stats]) => {
             const avgReturn = stats.count > 0 ? stats.totalReturn / stats.count : 0;
-            const winRate = stats.totalTrades > 0 ? (stats.wins / stats.totalTrades) * 100 : 0;
+            const decidedTrades = stats.tpExits + stats.slExits;
+            const winRate = decidedTrades > 0 ? (stats.tpExits / decidedTrades) * 100 : 0;
             html += `
                 <tr>
                     <td class="fw-bold"><span class="badge bg-primary">${model}</span></td>
