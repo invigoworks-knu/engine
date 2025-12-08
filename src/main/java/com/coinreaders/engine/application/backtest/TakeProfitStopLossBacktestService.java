@@ -178,8 +178,9 @@ public class TakeProfitStopLossBacktestService {
         BigDecimal entryAmount = positionSize.subtract(entryFee);
         BigDecimal quantity = entryAmount.divide(entryPrice, SCALE, RoundingMode.DOWN);
 
-        // 4. 8일 동안 1분봉 추적 (Stream 방식으로 메모리 최적화)
-        LocalDateTime exitCheckStart = actualEntryTime.plusMinutes(1); // 다음 분봉부터 체크
+        // 4. 보유 기간 동안 1분봉 추적 (Stream 방식으로 메모리 최적화)
+        // 진입 봉부터 체크 (진입 봉에서도 TP/SL 도달 가능)
+        LocalDateTime exitCheckStart = actualEntryTime;
         LocalDateTime exitCheckEnd = actualEntryTime.plusDays(holdingPeriodDays);
 
         // 5. TP/SL 체크 (Stream 사용)
@@ -200,16 +201,52 @@ public class TakeProfitStopLossBacktestService {
                 hasData = true;
                 lastCandle = candle;
 
-                // Take Profit 체크 (고가가 TP 이상)
-                if (candle.getHighPrice().compareTo(takeProfitPrice) >= 0) {
+                boolean tpReached = candle.getHighPrice().compareTo(takeProfitPrice) >= 0;
+                boolean slReached = candle.getLowPrice().compareTo(stopLossPrice) <= 0;
+
+                // 진입 봉에서 TP/SL 둘 다 도달한 경우: 종가 기준으로 판단
+                boolean isEntryCandle = candle.getCandleDateTimeKst().equals(actualEntryTime);
+                if (isEntryCandle && tpReached && slReached) {
+                    BigDecimal closePrice = candle.getTradePrice();
+
+                    // 양봉이면 TP 먼저, 음봉이면 SL 먼저 도달 가능성
+                    if (closePrice.compareTo(entryPrice) >= 0) {
+                        exitReason = "TAKE_PROFIT";
+                        exitPrice = takeProfitPrice;
+                    } else {
+                        exitReason = "STOP_LOSS";
+                        exitPrice = stopLossPrice;
+                    }
+                    exitTime = candle.getCandleDateTimeKst();
+                    break;
+                }
+
+                // 일반 봉에서 TP/SL 둘 다 도달한 경우
+                if (tpReached && slReached) {
+                    BigDecimal closePrice = candle.getTradePrice();
+                    BigDecimal openPrice = candle.getOpeningPrice();
+
+                    if (closePrice.compareTo(openPrice) >= 0) {
+                        exitReason = "TAKE_PROFIT";
+                        exitPrice = takeProfitPrice;
+                    } else {
+                        exitReason = "STOP_LOSS";
+                        exitPrice = stopLossPrice;
+                    }
+                    exitTime = candle.getCandleDateTimeKst();
+                    break;
+                }
+
+                // TP만 도달
+                if (tpReached) {
                     exitReason = "TAKE_PROFIT";
                     exitPrice = takeProfitPrice;
                     exitTime = candle.getCandleDateTimeKst();
                     break;
                 }
 
-                // Stop Loss 체크 (저가가 SL 이하)
-                if (candle.getLowPrice().compareTo(stopLossPrice) <= 0) {
+                // SL만 도달
+                if (slReached) {
                     exitReason = "STOP_LOSS";
                     exitPrice = stopLossPrice;
                     exitTime = candle.getCandleDateTimeKst();

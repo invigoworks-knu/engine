@@ -519,31 +519,55 @@ public class CusumSignalBacktestService {
                     boolean tpReached = candle.getHighPrice().compareTo(takeProfit) >= 0;
                     boolean slReached = candle.getLowPrice().compareTo(stopLoss) <= 0;
 
-                    // 진입 봉에서 TP/SL 둘 다 도달한 경우: 시가 대비 거리로 판단
+                    // 진입 봉에서 TP/SL 둘 다 도달한 경우:
+                    // 1분봉 내에서 실제 순서를 알 수 없으므로 종가 기준으로 판단
+                    // - 종가 >= 진입가: 상승 추세 → TP 먼저 도달 가능성
+                    // - 종가 < 진입가: 하락 추세 → SL 먼저 도달 가능성
                     boolean isEntryCandle = candle.getCandleDateTimeKst().equals(actualEntryTime);
                     if (isEntryCandle && tpReached && slReached) {
-                        // 시가 대비 거리 계산
-                        BigDecimal distanceToTP = takeProfit.subtract(entryPrice).abs();
-                        BigDecimal distanceToSL = entryPrice.subtract(stopLoss).abs();
+                        BigDecimal closePrice = candle.getTradePrice(); // 종가
 
-                        if (distanceToTP.compareTo(distanceToSL) <= 0) {
-                            // TP가 더 가까움 → TP 먼저 도달 가능성 높음
+                        // 종가와 시가(진입가)의 관계로 방향 판단
+                        if (closePrice.compareTo(entryPrice) >= 0) {
+                            // 양봉 또는 동일 → 상승 후 하락한 경우로 TP 먼저 도달 가능성
                             exitReason = "TAKE_PROFIT";
                             exitPrice = takeProfit;
                             takeProfitExits++;
                         } else {
-                            // SL이 더 가까움 → SL 먼저 도달 가능성 높음
+                            // 음봉 → 하락 후 상승한 경우로 SL 먼저 도달 가능성
                             exitReason = "STOP_LOSS";
                             exitPrice = stopLoss;
                             stopLossExits++;
                         }
                         exitTime = candle.getCandleDateTimeKst();
-                        log.debug("진입 봉에서 TP/SL 둘 다 도달: {} (TP거리: {}, SL거리: {})",
-                            exitReason, distanceToTP, distanceToSL);
+                        log.debug("진입 봉에서 TP/SL 둘 다 도달: {} (시가: {}, 종가: {}, TP: {}, SL: {})",
+                            exitReason, entryPrice, closePrice, takeProfit, stopLoss);
                         break;
                     }
 
-                    // 일반적인 경우: TP 먼저 체크
+                    // 일반 봉에서 TP/SL 둘 다 도달한 경우 (변동성이 큰 봉)
+                    // 진입 봉과 동일한 로직 적용: 종가 기준으로 판단
+                    if (tpReached && slReached) {
+                        BigDecimal closePrice = candle.getTradePrice();
+                        BigDecimal openPrice = candle.getOpeningPrice();
+
+                        // 양봉이면 상승 추세 → TP 먼저, 음봉이면 하락 추세 → SL 먼저
+                        if (closePrice.compareTo(openPrice) >= 0) {
+                            exitReason = "TAKE_PROFIT";
+                            exitPrice = takeProfit;
+                            takeProfitExits++;
+                        } else {
+                            exitReason = "STOP_LOSS";
+                            exitPrice = stopLoss;
+                            stopLossExits++;
+                        }
+                        exitTime = candle.getCandleDateTimeKst();
+                        log.debug("일반 봉에서 TP/SL 둘 다 도달: {} (시가: {}, 종가: {})",
+                            exitReason, openPrice, closePrice);
+                        break;
+                    }
+
+                    // TP만 도달
                     if (tpReached) {
                         exitReason = "TAKE_PROFIT";
                         exitPrice = takeProfit;
@@ -552,7 +576,7 @@ public class CusumSignalBacktestService {
                         break;
                     }
 
-                    // Stop Loss 체크
+                    // SL만 도달
                     if (slReached) {
                         exitReason = "STOP_LOSS";
                         exitPrice = stopLoss;
@@ -586,11 +610,29 @@ public class CusumSignalBacktestService {
             }
 
             // 5. 손익 계산
+            // - positionSize: 투자한 총 금액 (진입 수수료 포함)
+            // - entryFee: 이미 positionSize에서 차감되어 entryAmount가 됨
+            // - exitAmount: 청산 금액
+            // - exitFee: 청산 수수료
+            // profit = (청산 후 받는 금액) - (투자한 총 금액)
+            //        = (exitAmount - exitFee) - positionSize
+            // 주의: entryFee는 positionSize의 일부이므로 따로 빼면 안 됨!
             BigDecimal exitAmount = quantity.multiply(exitPrice);
             BigDecimal exitFee = exitAmount.multiply(FEE_RATE).setScale(2, RoundingMode.UP);
-            BigDecimal profit = exitAmount.subtract(exitFee).subtract(positionSize).subtract(entryFee);
+            BigDecimal profit = exitAmount.subtract(exitFee).subtract(positionSize);
             BigDecimal returnPct = profit.divide(positionSize, 6, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
+
+            // 청산 유형과 손익의 일관성 검증 (디버깅용)
+            // - TP: 청산가 > 진입가 → 이익이어야 정상 (수수료 제외 시)
+            // - SL: 청산가 < 진입가 → 손실이어야 정상 (수수료 제외 시)
+            if ("TAKE_PROFIT".equals(exitReason) && exitPrice.compareTo(entryPrice) < 0) {
+                log.warn("⚠️ 비정상: TP인데 청산가({}) < 진입가({})! 재계산 오류 의심. signal={}, TP={}, SL={}",
+                    exitPrice, entryPrice, signal.getSignalTime(), takeProfit, stopLoss);
+            } else if ("STOP_LOSS".equals(exitReason) && exitPrice.compareTo(entryPrice) > 0) {
+                log.warn("⚠️ 비정상: SL인데 청산가({}) > 진입가({})! 재계산 오류 의심. signal={}, TP={}, SL={}",
+                    exitPrice, entryPrice, signal.getSignalTime(), takeProfit, stopLoss);
+            }
 
             // 자본 업데이트
             capital = capital.add(profit);
