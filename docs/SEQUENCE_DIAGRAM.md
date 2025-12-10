@@ -1,398 +1,286 @@
-# System Sequence Diagrams
+# 트레이딩 엔진 시퀀스 다이어그램
 
-이 문서는 트레이딩 엔진의 주요 흐름을 시퀀스 다이어그램으로 표현합니다.
-
-## 1. CUSUM Signal Backtesting Flow
-
-AI가 생성한 매매 신호(CSV)를 기반으로 백테스팅을 수행하는 흐름입니다.
-
-```mermaid
-sequenceDiagram
-    autonumber
-
-    actor User
-    participant Controller as BacktestController
-    participant Service as CusumSignalBacktestService
-    participant CSV as CSV Signal File
-    participant MinuteRepo as MinuteOhlcvRepository
-    participant Calculator as Kelly Position Sizer
-    participant Tracker as TP/SL Tracker
-
-    User->>Controller: POST /api/backtest/cusum<br/>(strategy, model, fold)
-    activate Controller
-
-    Controller->>Service: runCusumBacktest(request)
-    activate Service
-
-    Service->>CSV: Load backend_signals_master.csv
-    CSV-->>Service: All trading signals
-
-    Service->>Service: Filter BUY signals<br/>(by strategy/model/fold)
-
-    loop For each BUY signal
-        Service->>MinuteRepo: Find entry candle<br/>(signal timestamp)
-        MinuteRepo-->>Service: Entry price candle
-
-        Service->>Calculator: Calculate position size<br/>(suggested_weight, capital)
-        Calculator-->>Service: Position size (Kelly)
-
-        Service->>MinuteRepo: Stream minute candles<br/>(entry → expiration)
-        MinuteRepo-->>Service: Stream of OHLCV data
-
-        loop Minute-by-minute tracking
-            Service->>Tracker: Check TP/SL/Timeout
-            alt Take Profit hit
-                Tracker-->>Service: TP exit (profit)
-            else Stop Loss hit
-                Tracker-->>Service: SL exit (loss)
-            else Expiration reached
-                Tracker-->>Service: Timeout exit
-            end
-        end
-
-        Service->>Service: Update capital<br/>Record trade result
-    end
-
-    Service->>Service: Calculate statistics<br/>(Win rate, Sharpe, MDD)
-    Service-->>Controller: BacktestResponse<br/>(trades, metrics)
-    deactivate Service
-
-    Controller-->>User: 200 OK + Results
-    deactivate Controller
-```
-
-### 핵심 포인트
-- **CSV 기반**: AI가 미리 생성한 신호 (entry time, TP/SL prices, confidence)
-- **1분봉 정밀도**: Look-ahead bias 방지를 위한 분 단위 추적
-- **Kelly Criterion**: 신뢰도 기반 포지션 사이징
-- **승률 계산**: Timeout은 제외하고 TP/(TP+SL)로 계산
+암호화폐 트레이딩 엔진의 핵심 흐름을 시퀀스 다이어그램으로 표현합니다.
 
 ---
 
-## 2. Real Trading Execution Flow
+## 1. CUSUM 신호 백테스팅
 
-실제 Upbit 거래소에서 매매를 실행하는 흐름입니다.
+AI가 생성한 CSV 신호를 기반으로 과거 데이터에서 백테스팅을 수행합니다.
 
 ```mermaid
 sequenceDiagram
     autonumber
 
-    actor User
-    participant Controller as TradingController
-    participant Service as TradingService
-    participant SettingsService as TradingSettingsService
-    participant AccountService as AccountService
-    participant UpbitAPI as Upbit API Client
-    participant DB as TradeOrderRepository
-    participant Upbit as Upbit Exchange
+    actor 사용자
+    participant 컨트롤러
+    participant 백테스팅서비스
+    participant 신호데이터
+    participant 가격데이터
 
-    User->>Controller: POST /api/v1/trading/market-buy<br/>(market, amount)
-    activate Controller
+    사용자->>컨트롤러: 백테스팅 요청<br/>(전략, 모델, 파라미터)
+    activate 컨트롤러
 
-    Controller->>Service: executeBuy(market, amount)
-    activate Service
+    컨트롤러->>백테스팅서비스: 백테스팅 실행
+    activate 백테스팅서비스
 
-    %% Safety Validation Phase
+    백테스팅서비스->>신호데이터: CSV 신호 로드
+    신호데이터-->>백테스팅서비스: 매수/매도 신호 목록
+
+    loop 각 거래 신호마다
+        백테스팅서비스->>가격데이터: 1분봉 데이터 조회
+        가격데이터-->>백테스팅서비스: 시계열 가격 데이터
+
+        백테스팅서비스->>백테스팅서비스: 포지션 진입/청산 시뮬레이션<br/>(TP/SL 추적, Kelly 포지션 사이징)
+    end
+
+    백테스팅서비스->>백테스팅서비스: 성과 지표 계산<br/>(수익률, 샤프지수, MDD, 승률)
+
+    백테스팅서비스-->>컨트롤러: 백테스팅 결과
+    deactivate 백테스팅서비스
+
+    컨트롤러-->>사용자: 결과 반환
+    deactivate 컨트롤러
+```
+
+### 핵심 특징
+- **AI 신호 기반**: CSV 파일에 저장된 AI 예측 신호 활용
+- **1분봉 정밀 추적**: 분 단위로 TP/SL 도달 여부 확인
+- **Kelly Criterion**: 신뢰도 기반 포지션 크기 결정
+
+---
+
+## 2. 실시간 거래 실행
+
+Upbit 거래소에서 실제 매매를 실행합니다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    actor 사용자
+    participant 컨트롤러
+    participant 거래서비스
+    participant 안전검증
+    participant 거래소API
+    participant 데이터베이스
+
+    사용자->>컨트롤러: 매수/매도 요청<br/>(마켓, 금액)
+    activate 컨트롤러
+
+    컨트롤러->>거래서비스: 거래 실행
+    activate 거래서비스
+
     rect rgb(255, 245, 230)
-        Note over Service,SettingsService: Safety Validation
-        Service->>SettingsService: Get trading settings
-        SettingsService-->>Service: Settings (enabled, limits)
+        Note over 거래서비스,안전검증: 안전성 검증
+        거래서비스->>안전검증: 거래 가능 여부 확인
+        안전검증-->>거래서비스: 설정 검증 완료<br/>(마켓 허용, 금액 범위, 일일 한도)
 
-        Service->>Service: Validate safety rules<br/>- Market allowed?<br/>- Amount in range?<br/>- Daily limit OK?
-
-        alt Safety check failed
-            Service-->>Controller: Error: Safety violation
-            Controller-->>User: 400 Bad Request
-        end
+        거래서비스->>거래소API: 잔고 조회
+        거래소API-->>거래서비스: KRW 잔고
     end
 
-    %% Balance Check Phase
-    Service->>AccountService: Get KRW balance
-    activate AccountService
-    AccountService->>UpbitAPI: fetchAccounts()
-    UpbitAPI->>Upbit: GET /v1/accounts<br/>(with JWT auth)
-    Upbit-->>UpbitAPI: Account list
-    UpbitAPI-->>AccountService: Parsed balances
-    AccountService-->>Service: KRW balance
-    deactivate AccountService
-
-    alt Insufficient balance
-        Service-->>Controller: Error: Insufficient funds
-        Controller-->>User: 400 Bad Request
-    end
-
-    %% Order Execution Phase
     rect rgb(230, 245, 255)
-        Note over Service,Upbit: Order Execution
-        Service->>UpbitAPI: placeOrder(MARKET_BUY)
-        activate UpbitAPI
-        UpbitAPI->>UpbitAPI: Generate JWT token<br/>(with query hash)
-        UpbitAPI->>Upbit: POST /v1/orders<br/>(market, side, price)
-        Upbit-->>UpbitAPI: Order UUID + status
-        UpbitAPI-->>Service: Order response
-        deactivate UpbitAPI
+        Note over 거래서비스,거래소API: 주문 실행
+        거래서비스->>거래소API: 시장가 주문 전송
+        거래소API-->>거래서비스: 주문 체결 결과
     end
 
-    %% Persistence Phase
-    Service->>DB: Save TradeOrder entity<br/>(uuid, market, amount, status)
-    DB-->>Service: Saved order
+    거래서비스->>데이터베이스: 거래 내역 저장
+    데이터베이스-->>거래서비스: 저장 완료
 
-    Service-->>Controller: OrderResponse<br/>(uuid, executed_volume)
-    deactivate Service
+    거래서비스-->>컨트롤러: 거래 완료
+    deactivate 거래서비스
 
-    Controller-->>User: 200 OK + Order details
-    deactivate Controller
-
-    %% Async order sync (optional)
-    Note over Service,Upbit: Later: Sync order status
-    Service->>UpbitAPI: fetchOrder(uuid)
-    UpbitAPI->>Upbit: GET /v1/order?uuid=...
-    Upbit-->>UpbitAPI: Latest order state
-    UpbitAPI-->>Service: Updated status
-    Service->>DB: Update order status
+    컨트롤러-->>사용자: 거래 결과 반환
+    deactivate 컨트롤러
 ```
 
-### 핵심 포인트
-- **다층 안전장치**: Settings validation → Balance check → Execution
-- **인증**: JWT 토큰 기반 Upbit API 호출
-- **추적성**: 모든 주문을 DB에 저장 및 동기화
-- **비동기 동기화**: 주문 상태를 나중에 업데이트 가능
+### 핵심 특징
+- **다층 안전장치**: 설정 검증 → 잔고 확인 → 주문 실행
+- **거래 추적**: 모든 주문 내역을 DB에 저장
+- **실시간 동기화**: 주문 상태를 주기적으로 업데이트
 
 ---
 
-## 3. Historical Data Pipeline Flow
+## 3. 과거 데이터 수집
 
-Upbit에서 과거 캔들 데이터를 수집하는 흐름입니다.
+Upbit에서 과거 캔들 데이터를 수집하여 저장합니다.
 
 ```mermaid
 sequenceDiagram
     autonumber
 
-    actor Admin
-    participant Controller as DataPipelineController
-    participant Service as DataPipelineService
-    participant UpbitAPI as Upbit API Client
-    participant Upbit as Upbit Public API
-    participant DB as HistoricalOhlcvRepository
+    actor 관리자
+    participant 컨트롤러
+    participant 데이터서비스
+    participant 거래소API
+    participant 데이터베이스
 
-    Admin->>Controller: POST /api/v1/data/load-historical<br/>(market, startDate)
-    activate Controller
+    관리자->>컨트롤러: 데이터 수집 요청<br/>(마켓, 기간)
+    activate 컨트롤러
 
-    Controller->>Service: loadAllHistoricalOhlcv(market, startDate)
-    activate Service
+    컨트롤러->>데이터서비스: 과거 데이터 로드
+    activate 데이터서비스
 
-    Service->>Service: Initialize<br/>currentDate = today<br/>stopDate = startDate
+    loop 목표 날짜까지 반복
+        데이터서비스->>거래소API: 캔들 데이터 요청<br/>(배치 단위: 200개)
+        거래소API-->>데이터서비스: 캔들 데이터
 
-    loop While currentDate > stopDate
-        Service->>UpbitAPI: fetchDayCandles(market, 200, currentDate)
-        activate UpbitAPI
-        UpbitAPI->>Upbit: GET /v1/candles/days<br/>?market={market}&count=200&to={date}
-        Upbit-->>UpbitAPI: 200 candles (JSON)
-        UpbitAPI-->>Service: List<CandleDto>
-        deactivate UpbitAPI
+        데이터서비스->>데이터베이스: 배치 저장
+        데이터베이스-->>데이터서비스: 저장 완료
 
-        Service->>Service: Convert DTO → Entity
-
-        Service->>DB: saveAll(candles)
-        DB-->>Service: Saved 200 candles
-
-        Service->>Service: Update currentDate<br/>(oldest candle date)
-
-        Service->>Service: Sleep 200ms<br/>(rate limit)
-
-        Note over Service: Progress: {currentDate}
+        Note over 데이터서비스: Rate Limiting<br/>(200ms 대기)
     end
 
-    Service-->>Controller: Loaded {totalCount} candles
-    deactivate Service
+    데이터서비스-->>컨트롤러: 수집 완료
+    deactivate 데이터서비스
 
-    Controller-->>Admin: 200 OK<br/>"Data loaded successfully"
-    deactivate Controller
+    컨트롤러-->>관리자: 결과 반환
+    deactivate 컨트롤러
 ```
 
-### 핵심 포인트
-- **배치 수집**: 한 번에 200개 캔들씩 페이지네이션
-- **역방향 수집**: 최신 → 과거 방향으로 수집
-- **Rate Limiting**: API 호출 간 200ms 대기
-- **동일 흐름**: 분봉(MinuteOhlcv)도 동일한 패턴
+### 핵심 특징
+- **배치 처리**: 200개씩 페이지네이션으로 수집
+- **Rate Limiting**: API 호출 간격 제어
+- **역방향 수집**: 최신 데이터부터 과거로 수집
 
 ---
 
-## 4. AI Model Backtesting Flow (TP/SL)
+## 4. AI 모델 백테스팅
 
-DB에 저장된 AI 예측을 기반으로 백테스팅하는 흐름입니다.
+데이터베이스에 저장된 AI 예측을 기반으로 백테스팅을 수행합니다.
 
 ```mermaid
 sequenceDiagram
     autonumber
 
-    actor User
-    participant Controller as BacktestController
-    participant Service as TpSlBacktestService
-    participant PredRepo as AiPredictionRepository
-    participant MinuteRepo as MinuteOhlcvRepository
-    participant PositionMgr as Position Manager
+    actor 사용자
+    participant 컨트롤러
+    participant 백테스팅서비스
+    participant AI예측DB
+    participant 가격데이터
 
-    User->>Controller: POST /api/backtest/tp-sl<br/>(model, fold, threshold)
-    activate Controller
+    사용자->>컨트롤러: 백테스팅 요청<br/>(모델, 임계값)
+    activate 컨트롤러
 
-    Controller->>Service: runTpSlBacktest(request)
-    activate Service
+    컨트롤러->>백테스팅서비스: 백테스팅 실행
+    activate 백테스팅서비스
 
-    Service->>PredRepo: Find predictions<br/>(model, fold, proba >= threshold)
-    PredRepo-->>Service: List of AI predictions
+    백테스팅서비스->>AI예측DB: AI 예측 조회<br/>(임계값 이상)
+    AI예측DB-->>백테스팅서비스: 예측 목록
 
-    Service->>Service: Sort by prediction date
+    loop 각 예측마다
+        백테스팅서비스->>가격데이터: 1분봉 데이터 조회
+        가격데이터-->>백테스팅서비스: 시계열 가격 데이터
 
-    loop For each prediction
-        Service->>PositionMgr: Check existing position
-        alt Position already open
-            PositionMgr-->>Service: Skip (prevent overlap)
-        else No position
-            Service->>MinuteRepo: Get entry candle<br/>(next day 9:00 AM)
-            MinuteRepo-->>Service: Entry price
-
-            Service->>Service: Calculate position size<br/>(Kelly × confidence)
-
-            Service->>MinuteRepo: Stream 8-day candles<br/>(1-minute resolution)
-            MinuteRepo-->>Service: Minute candles stream
-
-            loop Minute tracking (max 8 days)
-                Service->>Service: Check TP/SL conditions
-
-                alt TP reached
-                    Service->>PositionMgr: Close position (profit)
-                    Note over Service: Exit loop
-                else SL reached
-                    Service->>PositionMgr: Close position (loss)
-                    Note over Service: Exit loop
-                else 8 days passed
-                    Service->>PositionMgr: Force close (timeout)
-                    Note over Service: Exit loop
-                end
-            end
-
-            Service->>Service: Apply fees (0.05% × 2)<br/>Update capital
+        alt 포지션 중복 없음
+            백테스팅서비스->>백테스팅서비스: 거래 시뮬레이션<br/>(진입 → TP/SL 추적 → 청산)
+        else 기존 포지션 존재
+            백테스팅서비스->>백테스팅서비스: 신호 스킵
         end
     end
 
-    Service->>Service: Calculate metrics<br/>(Sharpe, MDD, win rate)
-    Service-->>Controller: BacktestResponse
-    deactivate Service
+    백테스팅서비스->>백테스팅서비스: 성과 지표 계산
 
-    Controller-->>User: 200 OK + Results
-    deactivate Controller
+    백테스팅서비스-->>컨트롤러: 백테스팅 결과
+    deactivate 백테스팅서비스
+
+    컨트롤러-->>사용자: 결과 반환
+    deactivate 컨트롤러
 ```
 
-### 핵심 포인트
-- **DB 기반**: HistoricalAiPrediction 테이블에서 예측 로드
-- **포지션 중복 방지**: 기존 포지션 열려있으면 새 진입 스킵
-- **8일 홀딩**: 최대 보유 기간 후 강제 청산
-- **수수료 적용**: 진입/청산 각 0.05%
+### 핵심 특징
+- **DB 기반 예측**: 미리 저장된 AI 예측 활용
+- **포지션 관리**: 중복 포지션 방지
+- **홀딩 기간 제한**: 최대 8일 보유 후 강제 청산
 
 ---
 
-## Architecture Overview
+## 시스템 아키텍처
 
 ```mermaid
 graph TB
-    subgraph "Presentation Layer"
-        BC[BacktestController]
-        TC[TradingController]
-        DC[DataPipelineController]
+    subgraph "프레젠테이션 계층"
+        API[REST API Controllers]
     end
 
-    subgraph "Application Layer"
-        CBS[CusumSignalBacktestService]
-        TBS[TpSlBacktestService]
-        TS[TradingService]
-        DPS[DataPipelineService]
+    subgraph "애플리케이션 계층"
+        BS[백테스팅 서비스]
+        TS[거래 서비스]
+        DS[데이터 서비스]
     end
 
-    subgraph "Domain Layer"
-        ER[Entity Repositories]
-        E[Entities<br/>AiPrediction, MinuteOhlcv, TradeOrder]
+    subgraph "도메인 계층"
+        DB[(데이터베이스)]
     end
 
-    subgraph "Infrastructure Layer"
-        UA[UpbitApiClient]
-        CSV[CSV Loader]
+    subgraph "인프라 계층"
+        UPBIT[Upbit API 클라이언트]
+        CSV[CSV 로더]
     end
 
-    subgraph "External"
-        UP[Upbit Exchange API]
-        FS[File System]
+    subgraph "외부 시스템"
+        EXCHANGE[Upbit 거래소]
+        FILES[파일 시스템]
     end
 
-    BC --> CBS
-    BC --> TBS
-    TC --> TS
-    DC --> DPS
+    API --> BS
+    API --> TS
+    API --> DS
 
-    CBS --> ER
-    TBS --> ER
-    TS --> ER
-    DPS --> ER
+    BS --> DB
+    TS --> DB
+    DS --> DB
 
-    CBS --> CSV
-    TS --> UA
-    DPS --> UA
+    BS --> CSV
+    TS --> UPBIT
+    DS --> UPBIT
 
-    UA --> UP
-    CSV --> FS
-    ER --> E
+    UPBIT --> EXCHANGE
+    CSV --> FILES
 
-    style BC fill:#e1f5ff
-    style TC fill:#e1f5ff
-    style DC fill:#e1f5ff
-    style CBS fill:#fff4e1
-    style TBS fill:#fff4e1
+    style API fill:#e1f5ff
+    style BS fill:#fff4e1
     style TS fill:#fff4e1
-    style DPS fill:#fff4e1
-    style UA fill:#ffe1f5
+    style DS fill:#fff4e1
+    style UPBIT fill:#ffe1f5
     style CSV fill:#ffe1f5
 ```
 
 ---
 
-## 주요 설계 특징
+## 주요 설계 원칙
 
-### 1. **Hexagonal Architecture (Ports & Adapters)**
-- **Domain**: 비즈니스 로직 (포지션 사이징, 위험 계산)
-- **Inbound Adapters**: REST Controllers
-- **Outbound Adapters**: Upbit API, JPA Repositories
-- **Application Services**: 오케스트레이션 레이어
+### 1️⃣ 헥사고날 아키텍처
+- **도메인 중심**: 비즈니스 로직이 핵심
+- **포트와 어댑터**: 외부 시스템과의 결합도 최소화
+- **테스트 용이성**: 각 계층 독립적으로 테스트 가능
 
-### 2. **백테스팅 정밀도**
-- 1분봉 사용으로 Look-ahead bias 방지
-- TP/SL 동시 도달 시 캔들 방향성으로 판단 (open vs close)
-- 수수료 반영 (0.05% 양방향)
+### 2️⃣ 백테스팅 정밀도
+- **1분봉 활용**: 실제 거래와 유사한 시뮬레이션
+- **Look-ahead Bias 방지**: 미래 정보 사용 금지
+- **수수료 반영**: 실제 거래 비용 고려
 
-### 3. **안전 장치**
-- 다층 검증 (TradingSettings → Balance → Execution)
-- 일일 거래 횟수 제한
-- 최소/최대 거래 금액 설정
-- 허용 마켓 화이트리스트
+### 3️⃣ 안전성 우선
+- **다층 검증**: 설정 → 잔고 → 실행 순차 확인
+- **거래 제한**: 일일 한도, 금액 범위 설정
+- **추적 가능성**: 모든 거래 기록 저장
 
-### 4. **데이터 파이프라인**
-- Pagination (200개씩)
-- Rate limiting (200ms 대기)
-- 역방향 수집 (최신 → 과거)
-- 스트림 기반 메모리 효율성
-
-### 5. **Kelly Criterion 포지션 사이징**
-- Conservative Kelly
-- Estimation Risk Kelly
-- Half/Quarter Kelly
-- Confidence-weighted variants
+### 4️⃣ 확장성
+- **비동기 처리**: 대용량 백테스팅 지원
+- **배치 처리**: 효율적인 데이터 수집
+- **스트림 처리**: 메모리 효율적인 데이터 처리
 
 ---
 
 ## 기술 스택
 
-- **Framework**: Spring Boot 3.x
-- **Database**: PostgreSQL (JPA/Hibernate)
-- **HTTP Client**: WebClient (Reactive)
-- **Authentication**: JWT (Upbit API)
-- **Data Processing**: Stream API
-- **Backtesting**: Custom engine (minute-level precision)
+| 계층 | 기술 |
+|------|------|
+| **프레임워크** | Spring Boot 3.x |
+| **데이터베이스** | PostgreSQL |
+| **HTTP 클라이언트** | WebClient (Reactive) |
+| **인증** | JWT (Upbit API) |
+| **데이터 처리** | Java Stream API |
+| **백테스팅** | Custom Engine |
